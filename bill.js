@@ -114,10 +114,10 @@ function sendBillViaWhatsApp() {
   const downloadLink = `https://ganeshagribilling.web.app/download.html?billId=${billId}`;
 
   const message =
-    `*Bill No:* ${billNo}\n` +
-    `*નામ (Name) : * ${customerName}\n` +
-    `*ફાઇનલ ટોટલ : * ₹${finalTotal}\n` +
-    `*નેટ વજન : * ${netWeight} kg\n\n` +
+    `Bill No : ${billNo}\n` +
+    `નામ (Name) : ${customerName}\n` +
+    `ફાઇનલ ટોટલ : ₹${finalTotal}\n` +
+    `નેટ વજન : ${netWeight} kg\n\n` +
     `*--- Details ---*${vakalDetails}\n\n` +
     `*Click here to download your bill:*` +
     `\n${downloadLink}`;
