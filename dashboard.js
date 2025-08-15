@@ -16,6 +16,8 @@ const billsCollection = db.collection("bills");
 let allBillsData = [];
 let currentlyDisplayedBills = [];
 let currentBillIdInModal = null;
+let currentPage = 1;
+const itemsPerPage = 20;
 
 // --- 2. MAIN INITIALIZATION ---
 document.addEventListener("DOMContentLoaded", function () {
@@ -35,6 +37,11 @@ function initializeDashboard() {
       downloadFormattedBill(currentBillIdInModal);
     }
   });
+  document.getElementById("search_input").addEventListener("input", (event) => filterData(null, event.target.value));
+
+  // Pagination event listeners
+  document.getElementById("prev_page_btn").addEventListener("click", goToPreviousPage);
+  document.getElementById("next_page_btn").addEventListener("click", goToNextPage);
 }
 
 // --- 3. DATA FETCHING & FILTERING ---
@@ -43,41 +50,25 @@ async function fetchAllBills() {
     const snapshot = await billsCollection.orderBy("Serial No", "desc").get();
     allBillsData = snapshot.docs.map((doc) => {
       const data = doc.data();
-      const dateParts = data.Date.split("/");
-      const isoDate = `${dateParts[2]}-${dateParts[1]}-${dateParts[0]}`;
-      return { id: doc.id, ...data, jsDate: new Date(isoDate) };
+      return { id: doc.id, ...data };
     });
     updateDashboard(allBillsData);
   } catch (error) {
     console.error("Error fetching bills:", error);
     alert("Could not load bill data.");
   } finally {
-    // This will run whether the fetch was successful or not
     updateSyncTime();
   }
 }
 
-// Add this function somewhere in your dashboard.js file
-function updateSyncTime() {
-  const syncStatusElement = document.getElementById("dashboard_sync_status");
-  if (syncStatusElement) {
-    const now = new Date();
-    const formattedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(
-      2,
-      "0"
-    )}:${String(now.getSeconds()).padStart(2, "0")}`;
-    syncStatusElement.textContent = `Last synced: ${formattedTime}`;
-    syncStatusElement.style.color = `green`;
-    syncStatusElement.style.fontSize = `28px`;
-    syncStatusElement.style.textAlign = `center`;
-    syncStatusElement.style.fontWeight = `600`;
-  }
-}
+function filterData(period, searchTerm = null) {
+  let filteredBills = allBillsData;
+  currentPage = 1; // Reset to page 1 for new filters
 
-function filterData(period) {
+  // 1. Filter by Date
   const now = new Date();
   let startDate, endDate;
-  const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const today = resetTime(new Date());
 
   if (period === "today") {
     startDate = today;
@@ -99,11 +90,42 @@ function filterData(period) {
       alert("Please select both a start and end date.");
       return;
     }
-    startDate = new Date(startValue);
-    endDate = new Date(endValue);
+    startDate = resetTime(new Date(startValue));
+    endDate = resetTime(new Date(endValue));
   }
 
-  const filteredBills = allBillsData.filter((bill) => bill.jsDate >= startDate && bill.jsDate <= endDate);
+  // Apply date filter if a period is selected
+  if (period) {
+    filteredBills = allBillsData.filter((bill) => {
+      const dateParts = bill.Date.split("/");
+      const billDate = new Date(dateParts[2], dateParts[1] - 1, dateParts[0]);
+      const billDateMidnight = resetTime(billDate);
+      return billDateMidnight >= startDate && billDateMidnight <= endDate;
+    });
+  }
+
+  // 2. Filter by Search Term
+  if (searchTerm) {
+    const lowerCaseSearch = searchTerm.toLowerCase();
+    filteredBills = filteredBills.filter((bill) => {
+      const name = bill["Customer Name"] ? bill["Customer Name"].toLowerCase() : "";
+      const village = bill["Village"] ? bill["Village"].toLowerCase() : "";
+      const broker = bill["Broker"] ? bill["Broker"].toLowerCase() : "";
+      const billType = bill["Bill Type"] ? bill["Bill Type"].toLowerCase() : "";
+      const serialNo = String(bill["Serial No"]);
+      const WeighbridgeWeight = String(bill["Weighbridge Weight"]);
+
+      return (
+        name.includes(lowerCaseSearch) ||
+        village.includes(lowerCaseSearch) ||
+        broker.includes(lowerCaseSearch) ||
+        billType.includes(lowerCaseSearch) ||
+        serialNo.includes(lowerCaseSearch) ||
+        WeighbridgeWeight.includes(lowerCaseSearch)
+      );
+    });
+  }
+
   updateDashboard(filteredBills);
 }
 
@@ -111,7 +133,8 @@ function filterData(period) {
 function updateDashboard(billsToDisplay) {
   currentlyDisplayedBills = billsToDisplay;
   recalculateKPIs();
-  renderBillList(billsToDisplay);
+  renderBillList();
+  renderPaginationControls();
 }
 
 function recalculateKPIs() {
@@ -157,10 +180,15 @@ function calculateAveragePrice(bills) {
 }
 
 // --- 5. UI RENDERING AND MODAL FUNCTIONS ---
-function renderBillList(docs) {
+function renderBillList() {
   const tableBody = document.getElementById("dashboard_bill_list_body");
   tableBody.innerHTML = "";
-  docs.forEach((bill) => {
+
+  const start = (currentPage - 1) * itemsPerPage;
+  const end = start + itemsPerPage;
+  const billsOnPage = currentlyDisplayedBills.slice(start, end);
+
+  billsOnPage.forEach((bill) => {
     const row = document.createElement("tr");
     row.innerHTML = `
               <td><input type="checkbox" class="bill-checkbox" value="${bill.id}" onchange="recalculateKPIs()"></td>
@@ -182,6 +210,32 @@ function toggleSelectAll(source) {
   const checkboxes = document.querySelectorAll(".bill-checkbox");
   checkboxes.forEach((checkbox) => (checkbox.checked = source.checked));
   recalculateKPIs();
+}
+
+// --- PAGINATION FUNCTIONS ---
+function renderPaginationControls() {
+  const totalPages = Math.ceil(currentlyDisplayedBills.length / itemsPerPage);
+  document.getElementById("page_info").textContent = `Page ${currentPage} of ${totalPages}`;
+
+  document.getElementById("prev_page_btn").disabled = currentPage === 1;
+  document.getElementById("next_page_btn").disabled = currentPage === totalPages;
+}
+
+function goToNextPage() {
+  const totalPages = Math.ceil(currentlyDisplayedBills.length / itemsPerPage);
+  if (currentPage < totalPages) {
+    currentPage++;
+    renderBillList();
+    renderPaginationControls();
+  }
+}
+
+function goToPreviousPage() {
+  if (currentPage > 1) {
+    currentPage--;
+    renderBillList();
+    renderPaginationControls();
+  }
 }
 
 async function viewBillInModal(docId) {
@@ -254,9 +308,9 @@ function generateBillHtmlForView(data) {
     }
   }
   const customerDetailsHtml = `<div class="detail-line"><span class="detail-label-enter">નામ :</span><span class="detail-value-line">${data["Customer Name"]}</span><span class="detail-label-enter">ગાડી નં :</span><span class="detail-value-line">${data["Vehicle No"]}</span></div><div class="detail-line"><span class="detail-label-enter">ગામ :</span><span class="detail-value-line">${data["Village"]}</span><span class="detail-label-enter">દલાલ :</span><span class="detail-value-line">${data["Broker"]}</span></div>`;
-  return `<div class="container" style="margin:0;box-shadow:none;border:none;"><div class="header"><h1>Final Bill</h1></div><div class="bill-meta"><div class="meta-item"><span>Bill No:</span> <span>${
+  return `<div class="container" style="margin:0;box-shadow:none;border:none;"><div class="header"><h1>Final Bill</h1></div><div class="bill-meta"><div class="meta-item"><span class="meta-label bill-label">Bill No:</span> <span class="meta-value bill-no" id="display_serial_no">${
     data["Serial No"]
-  }</span></div><div class="meta-item"><span>Date:</span> <span>${
+  }</span></div><div class="meta-item"><span>Date:</span> <span class="meta-value bill-no">${
     data["Date"]
   }</span></div></div><div class="print-only-details" style="display:block;">${customerDetailsHtml}</div><div class="details-grid"><div class="detail-item"><span class="detail-label">વેબ્રીજ વજન</span><span class="detail-value">${
     data["Weighbridge Weight"]
@@ -277,4 +331,23 @@ function generateBillHtmlForView(data) {
   )}</span></div><div class="detail-item final-total-box"><span class="detail-label">ફાઇનલ ટોટલ</span><span class="detail-value" style="font-weight:bolder;">${Number(
     data["Final Total"]
   ).toLocaleString("en-IN")}</span></div></div></div>`;
+}
+
+function updateSyncTime() {
+  const syncStatusElement = document.getElementById("dashboard_sync_status");
+  if (syncStatusElement) {
+    const now = new Date();
+    const formattedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(
+      2,
+      "0"
+    )}:${String(now.getSeconds()).padStart(2, "0")}`;
+    syncStatusElement.textContent = `Last synced: ${formattedTime}`;
+  }
+}
+
+function resetTime(date) {
+  if (!date) return null;
+  const newDate = new Date(date);
+  newDate.setHours(0, 0, 0, 0);
+  return newDate;
 }

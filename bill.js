@@ -36,6 +36,116 @@ function hideLoading() {
   }
 }
 
+function generateBillHtmlForView(data) {
+  let vakalRows = "";
+  if (data["Bill Type"] === "Loose") {
+    vakalRows = `<tr><td>Loose Supply</td><td>-</td><td>${data["Vakal 1 Kilo"]}</td><td>${
+      data["Vakal 1 Bhav"]
+    }</td><td style="font-weight:bolder;">${Number(data["Vakal 1 Amount"]).toLocaleString("en-IN")}</td></tr>`;
+  } else {
+    for (let i = 1; i <= 5; i++) {
+      if (data[`Vakal ${i} Katta`] > 0) {
+        vakalRows += `<tr><td>વકલ ${i}</td><td>${data[`Vakal ${i} Katta`]}</td><td>${data[`Vakal ${i} Kilo`]}</td><td>${
+          data[`Vakal ${i} Bhav`]
+        }</td><td style="font-weight:bolder;">${Number(data[`Vakal ${i} Amount`]).toLocaleString("en-IN")}</td></tr>`;
+      }
+    }
+  }
+  const customerDetailsHtml = `<div class="detail-line"><span class="detail-label-enter">નામ :</span><span class="detail-value-line">${data["Customer Name"]}</span><span class="detail-label-enter">ગાડી નં :</span><span class="detail-value-line">${data["Vehicle No"]}</span></div><div class="detail-line"><span class="detail-label-enter">ગામ :</span><span class="detail-value-line">${data["Village"]}</span><span class="detail-label-enter">દલાલ :</span><span class="detail-value-line">${data["Broker"]}</span></div>`;
+  return `<div class="container" style="margin:0;box-shadow:none;border:none;"><div class="header"><h1>Final Bill</h1></div><div class="bill-meta"><div class="meta-item"><span>Bill No:</span> <span>${
+    data["Serial No"]
+  }</span></div><div class="meta-item"><span>Date:</span> <span>${
+    data["Date"]
+  }</span></div></div><div class="print-only-details" style="display:block;">${customerDetailsHtml}</div><div class="details-grid"><div class="detail-item"><span class="detail-label">વેબ્રીજ વજન</span><span class="detail-value">${
+    data["Weighbridge Weight"]
+  }</span></div><div class="detail-item"><span class="detail-label">કાંટા કસર</span><span class="detail-value">${
+    data["Kasar"]
+  }</span></div><div class="detail-item"><span class="detail-label">બારદાન વજન</span><span class="detail-value">${
+    data["Bardan Weight"]
+  }</span></div><div class="detail-item summary-item"><span class="detail-label">નેટ વજન</span><span class="detail-value" style="font-weight:bolder;">${
+    data["Net Weight"]
+  }</span></div></div><table class="final-bill-table"><thead><tr><th>વકલ</th><th>કટ્ટા</th><th>કિલો</th><th>ભાવ</th><th>રૂપિયા</th></tr></thead><tbody>${vakalRows}</tbody></table><div class="totals-grid"><div class="detail-item"><span class="detail-label">ટોટલ રૂપિયા</span><span class="detail-value">${Number(
+    data["Total Amount"]
+  ).toLocaleString(
+    "en-IN"
+  )}</span></div><div class="detail-item"><span class="detail-label">ઉતરાઈ</span><span class="detail-value">${Number(
+    data["Utrāī"]
+  ).toLocaleString(
+    "en-IN"
+  )}</span></div><div class="detail-item final-total-box"><span class="detail-label">ફાઇનલ ટોટલ</span><span class="detail-value" style="font-weight:bolder;">${Number(
+    data["Final Total"]
+  ).toLocaleString("en-IN")}</span></div></div></div>`;
+}
+// Replace your existing sendBillViaWhatsApp function with this code
+function sendBillViaWhatsApp() {
+  let storedData = localStorage.getItem("currentBill");
+  if (!storedData) {
+    alert("Bill data not found in local storage.");
+    return;
+  }
+  let data = JSON.parse(storedData);
+
+  const customerName = data["Customer Name"];
+  const billNo = data["Serial No"];
+  const finalTotal = Number(data["Final Total"]).toLocaleString("en-IN");
+  const netWeight = Number(data["Net Weight"]).toLocaleString("en-IN");
+  const billId = data.id; // Get the unique bill ID from the data
+
+  let vakalDetails = "";
+  if (data["Bill Type"] === "Loose") {
+    vakalDetails = `\n- Kilo: ${data["Vakal 1 Kilo"]} kg\n- Price: ₹${data["Vakal 1 Bhav"]}\n- Amount: ₹${Number(
+      data["Vakal 1 Amount"]
+    ).toLocaleString("en-IN")}`;
+  } else {
+    for (let i = 1; i <= 5; i++) {
+      const kattaValue = data[`Vakal ${i} Katta`];
+      if (kattaValue > 0) {
+        vakalDetails +=
+          `\n*વકલ ${i}:*\n` +
+          `  - Bags: ${kattaValue}\n` +
+          `  - Kilos: ${data[`Vakal ${i} Kilo`]} kg\n` +
+          `  - Price: ₹${data[`Vakal ${i} Bhav`]}\n` +
+          `  - Amount: ₹${Number(data[`Vakal ${i} Amount`]).toLocaleString("en-IN")}`;
+      }
+    }
+  }
+
+  // The link now points to the new download page with the bill's ID
+  const downloadLink = `https://ganeshagribilling.web.app/download.html?billId=${billId}`;
+
+  const message =
+    `*Bill No:* ${billNo}\n` +
+    `*નામ (Name) : * ${customerName}\n` +
+    `*ફાઇનલ ટોટલ : * ₹${finalTotal}\n` +
+    `*નેટ વજન : * ${netWeight} kg\n\n` +
+    `*--- Details ---*${vakalDetails}\n\n` +
+    `*Click here to download your bill:*` +
+    `\n${downloadLink}`;
+
+  const encodedMessage = encodeURIComponent(message);
+  const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
+
+  window.open(whatsappUrl, "_blank");
+}
+// Add this new function to bill.js
+async function fetchBillAndDownload(docId) {
+  showLoading("Fetching bill details...");
+  try {
+    const doc = await billsCollection.doc(docId).get();
+    if (doc.exists) {
+      // Save the fetched data to local storage so the download function can use it
+      localStorage.setItem("currentBill", JSON.stringify({ ...doc.data(), id: doc.id }));
+      downloadBillAsPDF();
+    } else {
+      alert("Could not find this bill.");
+      hideLoading();
+    }
+  } catch (error) {
+    console.error("Error fetching bill for download:", error);
+    alert("Could not load the bill. Please try again.");
+    hideLoading();
+  }
+}
 // Enable offline persistence
 db.enablePersistence().catch((err) => {
   if (err.code == "failed-precondition") {
@@ -356,6 +466,7 @@ async function collectData() {
     await billsCollection.add(data);
     localStorage.setItem("currentBill", JSON.stringify(data));
     window.location.href = "final.html";
+    window.location.href = "download.html"; // This is the line to change
   } catch (error) {
     console.error("Transaction failed or error adding document: ", error);
     alert("Could not save the bill. Please try again.");
@@ -531,6 +642,7 @@ async function updateData(docId) {
     await billRef.update(data);
     localStorage.setItem("currentBill", JSON.stringify({ ...data, id: docId }));
     window.location.href = "final.html";
+    window.location.href = "download.html"; // This is the line to change
   } catch (error) {
     console.error("Error updating document: ", error);
     alert("Could not update the bill. Please try again.");
@@ -857,34 +969,36 @@ function displayData() {
 }
 
 // --- NEW: Download single bill as PDF ---
-function downloadBillAsPDF() {
+// Replace your existing downloadBillAsPDF function with this code
+async function downloadBillAsPDF() {
   showLoading("Generating PDF...");
-  const billContainer = document.getElementById("container-original");
   const billData = JSON.parse(localStorage.getItem("currentBill"));
+  if (!billData) {
+    alert("No bill data found to download.");
+    hideLoading();
+    return;
+  }
   const billNo = billData["Serial No"];
   const billName = billData["Customer Name"];
 
-  // Add a temporary class to the body to activate print styles
-  document.body.classList.add("print-mode");
+  const billHtml = generateBillHtmlForView(billData);
 
-  // Temporarily make the print-only details visible and hide the buttons
-  const printDetails = billContainer.querySelectorAll(".print-only-details");
-  printDetails.forEach((el) => (el.style.display = "block"));
-  const buttonContainer = billContainer.querySelector(".button-container");
-  if (buttonContainer) {
-    buttonContainer.style.display = "none";
-  }
+  // Temporarily create a div to hold the bill HTML for PDF generation
+  const tempContainer = document.createElement("div");
+  tempContainer.style.position = "absolute";
+  tempContainer.style.left = "-9999px";
+  tempContainer.innerHTML = `<style>${await (await fetch("html.css")).text()}</style>${billHtml}`;
+  document.body.appendChild(tempContainer);
 
-  setTimeout(() => {
-    html2canvas(billContainer, { scale: 2 }).then((canvas) => {
+  setTimeout(async () => {
+    try {
+      const canvas = await html2canvas(tempContainer.querySelector(".container"), { scale: 2 });
       const imgData = canvas.toDataURL("image/png");
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
       const pdfHeight = pdf.internal.pageSize.getHeight();
-      const canvasWidth = canvas.width;
-      const canvasHeight = canvas.height;
-      const canvasAspectRatio = canvasWidth / canvasHeight;
+      const canvasAspectRatio = canvas.width / canvas.height;
 
       let finalWidth = pdfWidth;
       let finalHeight = pdfWidth / canvasAspectRatio;
@@ -897,20 +1011,16 @@ function downloadBillAsPDF() {
 
       pdf.addImage(imgData, "PNG", x, y, finalWidth, finalHeight);
 
-      // Update the pdf.save() line to include only Bill Number and Name
       pdf.save(`Bill No-${billNo}-${billName}.pdf`);
-
-      // Clean up: revert changes and show buttons again
-      document.body.classList.remove("print-mode");
-      printDetails.forEach((el) => (el.style.display = "none"));
-      if (buttonContainer) {
-        buttonContainer.style.display = "flex";
-      }
+    } catch (error) {
+      console.error("Failed to generate PDF:", error);
+      alert("Could not create PDF. Please try again.");
+    } finally {
+      document.body.removeChild(tempContainer);
       hideLoading();
-    });
+    }
   }, 100);
 }
-
 function formatNumber(num) {
   if (isNaN(num) || num === "") {
     return num;

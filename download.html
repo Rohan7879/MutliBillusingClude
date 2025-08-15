@@ -1,0 +1,50 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Download Bill</title>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
+
+    <script src="bill.js"></script>
+    <script>
+      // This script will now check if there is a billId in the URL
+      document.addEventListener("DOMContentLoaded", () => {
+        const urlParams = new URLSearchParams(window.location.search);
+        const billId = urlParams.get("billId");
+
+        if (billId) {
+          // If a billId is found, fetch the bill data from Firebase
+          fetchBillAndDownload(billId);
+        } else {
+          // If not, it assumes the data is already in localStorage (from index.html)
+          downloadBillAsPDF();
+        }
+      });
+    </script>
+    <link rel="stylesheet" href="html.css" />
+  </head>
+  <body>
+    <div class="container" style="text-align: center">
+      <div class="header">
+        <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
+        <h1>Download Bill</h1>
+      </div>
+      <p style="margin-top: 20px; font-size: 1.2em; color: #343a40">Your PDF download should begin automatically.</p>
+      <p style="margin-top: 10px; font-size: 1em; color: #6c757d">If it doesn't, click the button below.</p>
+      <button onclick="downloadBillAsPDF()" class="button" style="margin-top: 20px; width: auto">Download Again</button>
+    </div>
+
+    <script>
+      // Automatically trigger the download when the page loads
+      document.addEventListener("DOMContentLoaded", () => {
+        downloadBillAsPDF();
+      });
+    </script>
+  </body>
+</html>
