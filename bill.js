@@ -290,6 +290,7 @@ function customRound(num) {
 
 // --- DATA HANDLING (FIREBASE) ---
 
+// Replace your existing collectData function with this code
 async function collectData() {
   showLoading();
   const form = document.getElementById("estimateForm");
@@ -311,12 +312,12 @@ async function collectData() {
     });
 
     data["Serial No"] = newSerialNo;
-
     data["Customer Name"] = formData.get("customer_name");
     data["Vehicle No"] = formData.get("vehicle_no");
     data["Village"] = formData.get("village");
     data["Broker"] = formData.get("broker");
 
+    // --- (rest of the data collection logic remains the same) ---
     const isLooseSupply = formData.get("is_loose_supply") !== null;
     const deductKantan = formData.get("deduct_kantan") !== null;
     const deductPlastic = formData.get("deduct_plastic") !== null;
@@ -463,10 +464,10 @@ async function collectData() {
     };
     // --- END OF NEW CODE ---
 
-    await billsCollection.add(data);
-    localStorage.setItem("currentBill", JSON.stringify(data));
+    // NEW: Capture the ID of the new document and add it to the data
+    const docRef = await billsCollection.add(data);
+    localStorage.setItem("currentBill", JSON.stringify({ ...data, id: docRef.id }));
     window.location.href = "final.html";
-    window.location.href = "download.html"; // This is the line to change
   } catch (error) {
     console.error("Transaction failed or error adding document: ", error);
     alert("Could not save the bill. Please try again.");
@@ -474,7 +475,6 @@ async function collectData() {
     hideLoading();
   }
 }
-
 // NEW: Function to update an existing bill
 async function updateData(docId) {
   showLoading("Updating bill...");
@@ -642,7 +642,6 @@ async function updateData(docId) {
     await billRef.update(data);
     localStorage.setItem("currentBill", JSON.stringify({ ...data, id: docId }));
     window.location.href = "final.html";
-    window.location.href = "download.html"; // This is the line to change
   } catch (error) {
     console.error("Error updating document: ", error);
     alert("Could not update the bill. Please try again.");
