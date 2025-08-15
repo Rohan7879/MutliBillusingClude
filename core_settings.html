@@ -1,0 +1,72 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Core Settings</title>
+    <!-- Firebase Libraries -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script src="bill.js"></script>
+    <link rel="stylesheet" href="html.css" />
+    <link rel="stylesheet" href="core_settings.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
+        <h1>Core Settings</h1>
+      </div>
+
+      <div id="settings-form-container">
+        <h2>Deduction Values</h2>
+        <p>Update the values below to change the calculation for all new bills.</p>
+
+        <form id="settingsForm">
+          <table>
+            <tbody>
+              <tr>
+                <td><strong>Kasar Percentage (0.3% = 0.003)</strong></td>
+                <td>
+                  <input type="number" name="kasarPercentage" step="0.001" min="0" required />
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Kantan Bag Weight (in kg)</strong></td>
+                <td>
+                  <input type="number" name="kantanWeight" step="0.1" min="0" required />
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Plastic Bag Weight (in kg)</strong></td>
+                <td>
+                  <input type="number" name="plasticWeight" step="0.1" min="0" required />
+                </td>
+              </tr>
+              <tr>
+                <td><strong>Utrāī Percentage (%)</strong></td>
+                <td>
+                  <input type="number" name="utraiPercentage" step="1" min="0" required />
+                </td>
+              </tr>
+            </tbody>
+          </table>
+          <button type="submit">Save Settings</button>
+        </form>
+      </div>
+
+      <button
+        type="submit"
+        onclick="window.location.href='index.html';"
+        id="view_all_bills_btn"
+        class="button"
+        style="width: 100%; margin-top: 20px; background-color: #6c757d"
+      >
+        Back to Bill Creation
+      </button>
+    </div>
+
+    <script src="core_settings.js"></script>
+  </body>
+</html>

@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Business Dashboard</title>
+
+    <link rel="stylesheet" href="html.css" />
+    <link rel="stylesheet" href="dashboard.css" />
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
+
+    <script src="dashboard.js" defer></script>
+    <link rel="stylesheet" href="dashboard.css" />
+  </head>
+  <body>
+    <div class="container">
+      <div class="header">
+        <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
+        <h1>Business Dashboard</h1>
+      </div>
+
+      <div
+        id="dashboard_sync_status"
+        style="text-align: right; font-size: 14px; color: #6c757d; margin-bottom: 10px"
+      ></div>
+
+      <button
+        type="submit"
+        onclick="window.location.href='index.html';"
+        id="view_all_bills_btn"
+        class="button"
+        style="width: 100%; margin-top: 20px; background-color: #6c757d"
+      >
+        Back to Bill Creation
+      </button>
+
+      <div class="dashboard-filters">
+        <center>
+          <div class="filter-presets">
+            <button class="filter-btn" id="today_btn">Today</button>
+            <button class="filter-btn" id="last7days_btn">Last 7 Days</button>
+            <button class="filter-btn" id="month_btn">This Month</button>
+            <button class="filter-btn" id="year_btn">This Year</button>
+          </div>
+        </center>
+        <div class="filter-custom-range">
+          <input type="date" id="start_date" />
+          <span>to</span>
+          <input type="date" id="end_date" />
+          <button class="filter-btn" id="custom_date_filter_btn">Apply</button>
+        </div>
+      </div>
+
+      <div class="kpi-grid">
+        <div class="kpi-card">
+          <div class="kpi-label">Total Purchases</div>
+          <div class="kpi-value" id="kpi-total-purchases">₹0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Net Weight</div>
+          <div class="kpi-value" id="kpi-total-weight">0 kg</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Bills</div>
+          <div class="kpi-value" id="kpi-total-bills">0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Avg. Price (per 20kg)</div>
+          <div class="kpi-value" id="kpi-avg-price">₹0</div>
+        </div>
+      </div>
+
+      <div id="bill-list-section">
+        <h2>Purchase Bills</h2>
+        <table class="bill-list-table">
+          <thead>
+            <tr>
+              <th><input type="checkbox" id="select_all_bills" onchange="toggleSelectAll(this)" /></th>
+              <th>Bill No.</th>
+              <th>Date</th>
+              <th>Name</th>
+              <th>Bill Type</th>
+              <th>Final Total</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="dashboard_bill_list_body"></tbody>
+        </table>
+      </div>
+    </div>
+
+    <div id="view-bill-modal" class="modal-overlay" style="display: none">
+      <div class="modal-content">
+        <div id="modal-bill-content"></div>
+        <div class="modal-button-container">
+          <button id="modal-download-btn" class="button">Download PDF</button>
+          <button onclick="closeBillView()" class="button close-modal-btn">Close</button>
+        </div>
+      </div>
+    </div>
+
+    <div id="pdf-render-container" style="display: none"></div>
+  </body>
+</html>

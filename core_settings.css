@@ -1,0 +1,15 @@
+/* Custom styles for the Core Settings page */
+
+#settings-form-container {
+  margin-top: 30px;
+}
+
+#settings-form-container h2 {
+  color: #005a9e;
+  margin-bottom: 10px;
+}
+
+#settings-form-container p {
+  color: #6c757d;
+  margin-bottom: 20px;
+}

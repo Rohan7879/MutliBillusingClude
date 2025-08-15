@@ -1,0 +1,10 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      // WARNING: This allows anyone to read and write to your database.
+      // This is okay for testing, but you should secure it later.
+      allow read, write: if true;
+    }
+  }
+}

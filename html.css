@@ -125,7 +125,7 @@ table td {
   vertical-align: middle;
 }
 
-table td:first-child {
+table td {
   font-weight: 600;
   color: #005a9e;
   width: 120px;
@@ -441,15 +441,15 @@ button[type="submit"] {
   .bill-no {
     position: absolute;
     top: 10px;
-    right: 86%;
+    right: 82%;
     font-size: 20pt;
     font-weight: bolder;
     margin: 0;
   }
   .bill-label {
     position: absolute;
-    top: 10px;
-    right: 88%;
+    top: 11px;
+    right: 86%;
     font-size: 20pt;
     font-weight: bolder;
     margin: 0;
@@ -632,14 +632,14 @@ input:checked + .slider:before {
   align-items: center;
   margin-bottom: 20px;
   padding-bottom: 15px;
-  border-bottom: 1px solid #e9ecef;
+  /* border-bottom: 1px solid #e9ecef; */
 }
 .print-mode .bill-meta .meta-item {
   font-size: 18pt;
   font-weight: bold;
 }
 .bill-meta {
-  border-bottom: 1px solid rgb(193, 198, 207);
+  /* border-bottom: 1px solid rgb(193, 198, 207); */
   padding-bottom: 0;
   margin-bottom: 7px; /* Adjust spacing as needed */
 }
@@ -734,7 +734,9 @@ input:checked + .slider:before {
 
 /* Sync Status and Create New Bill Button */
 #sync_status {
-  font-size: 14px;
+  font-size: 28px;
+  text-align: center;
+  font-weight: 600;
   padding: 5px 10px;
   border-radius: 5px;
   margin-left: auto; /* Push to the right */
@@ -795,4 +797,24 @@ input:checked + .slider:before {
 }
 #connection_status.checking {
   color: orange;
+}
+/* --- Progress Bar Loading Animation --- */
+#loading-bar {
+  position: fixed;
+  top: 0;
+  left: 0;
+  height: 4px;
+  background-color: #007bff;
+  z-index: 9999;
+  width: 0; /* Starts at 0% width */
+  transition: width 1.5s linear; /* Smooth transition over 1.5 seconds */
+}
+
+#loading-bar.active {
+  width: 100%; /* Animate to full width when active */
+}
+
+/* This class makes the element not take up any space and be invisible */
+.hidden {
+  display: none;
 }

@@ -22,6 +22,8 @@
         <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
         <h1>Bill Details</h1>
       </div>
+      <!-- Loading Progress Bar -->
+      <div id="loading-bar" class="loading-bar hidden"></div>
 
       <!-- Bill Creation Form -->
       <div id="bill_creation_form">
@@ -40,15 +42,43 @@
               <tbody>
                 <tr>
                   <td><strong>નામ (Name)</strong></td>
-                  <td><input type="text" name="customer_name" /></td>
+                  <td>
+                    <input
+                      type="text"
+                      name="customer_name"
+                      oninput="this.value = this.value.toUpperCase()"
+                      style="text-transform: uppercase"
+                    />
+                  </td>
                   <td><strong>ગાડી નં (Vehicle No.)</strong></td>
-                  <td><input type="text" name="vehicle_no" /></td>
+                  <td>
+                    <input
+                      type="text"
+                      name="vehicle_no"
+                      oninput="this.value = this.value.toUpperCase()"
+                      style="text-transform: uppercase"
+                    />
+                  </td>
                 </tr>
                 <tr>
                   <td><strong>ગામ (Village)</strong></td>
-                  <td><input type="text" name="village" /></td>
+                  <td>
+                    <input
+                      type="text"
+                      name="village"
+                      oninput="this.value = this.value.toUpperCase()"
+                      style="text-transform: uppercase"
+                    />
+                  </td>
                   <td><strong>દલાલ (Broker)</strong></td>
-                  <td><input type="text" name="broker" /></td>
+                  <td>
+                    <input
+                      type="text"
+                      name="broker"
+                      oninput="this.value = this.value.toUpperCase()"
+                      style="text-transform: uppercase"
+                    />
+                  </td>
                 </tr>
               </tbody>
             </table>
@@ -171,10 +201,15 @@
       <!-- View for listing all saved bills -->
       <div id="bill_list_view" style="display: none">
         <center><h2>Saved Bills</h2></center>
-        <button onclick="showBillCreationForm()" class="button back-button" style="margin-bottom: 15px">
+        <div id="sync_status" style="margin-bottom: 10px">Syncing...</div>
+        <button
+          type="submit"
+          onclick="showBillCreationForm()"
+          class="button"
+          style="width: 100%; margin-top: 20px; background-color: #6c757d"
+        >
           Create New Bill
         </button>
-        <div id="sync_status" style="text-align: right; margin-bottom: 10px; font-weight: bold">Syncing...</div>
 
         <!-- NEW: Import Section -->
         <div class="import-section">
@@ -224,6 +259,24 @@
         style="width: 100%; margin-top: 20px; background-color: #6c757d"
       >
         View Saved Bills
+      </button>
+      <button
+        type="submit"
+        onclick="window.location.href='core_settings.html';"
+        id="view_all_bills_btn"
+        class="button"
+        style="width: 100%; margin-top: 20px; background-color: #6c757d"
+      >
+        Change Core Settings
+      </button>
+      <button
+        type="submit"
+        onclick="window.location.href='Dashboard.html';"
+        id="view_all_bills_btn"
+        class="button"
+        style="width: 100%; margin-top: 20px; background-color: #6c757d"
+      >
+        Dashboard
       </button>
     </div>
   </body>

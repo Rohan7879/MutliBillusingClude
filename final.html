@@ -23,7 +23,6 @@
         align-items: center;
         margin-bottom: 20px;
         padding-bottom: 15px;
-        border-bottom: 1px solid #e9ecef;
       }
       .meta-item {
         font-size: 1.2em;
@@ -39,14 +38,13 @@
   </head>
   <body>
     <div class="container" id="container-original">
-      <div class="print-header">
-        <h2 class="bill-name">Ganesh Agri Industries</h2>
-        <p class="bill-num">Mo: 7080904510</p>
-      </div>
       <div class="header">
         <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
         <h1>Final Bill</h1>
       </div>
+
+      <!-- Loading Progress Bar -->
+      <div id="loading-bar" class="loading-bar hidden"></div>
 
       <div class="bill-meta">
         <div class="meta-item">
@@ -81,7 +79,7 @@
           <span class="detail-label">વેબ્રીજ વજન</span>
           <span class="detail-value" id="display_weighbridge_weight">0</span>
         </div>
-        <div class="detail-item">
+        <div class="detail-item" id="kasar_box">
           <span class="detail-label">કાંટા કસર (૦.૩%)</span>
           <span class="detail-value" id="display_kasar">0</span>
         </div>
