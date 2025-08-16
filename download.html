@@ -24,11 +24,18 @@
       <p style="margin-top: 10px; font-size: 1em; color: #6c757d">If it doesn't, click the button below.</p>
       <button onclick="downloadBillAsPDF()" class="button" style="margin-top: 20px; width: auto">Download Again</button>
     </div>
-
     <script>
-      // Automatically trigger the download when the page loads
       document.addEventListener("DOMContentLoaded", () => {
-        downloadBillAsPDF();
+        const urlParams = new URLSearchParams(window.location.search);
+        const billId = urlParams.get("billId");
+
+        if (billId) {
+          // Fetch the bill data and trigger the download
+          fetchBillAndDownload(billId);
+        } else {
+          // Assume the data is already in localStorage (from index.html)
+          downloadBillAsPDF();
+        }
       });
     </script>
   </body>
