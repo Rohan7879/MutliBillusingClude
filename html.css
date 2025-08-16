@@ -639,9 +639,12 @@ input:checked + .slider:before {
   font-weight: bold;
 }
 .bill-meta {
-  /* border-bottom: 1px solid rgb(193, 198, 207); */
-  padding-bottom: 0;
-  margin-bottom: 7px; /* Adjust spacing as needed */
+  font-size: 25px;
+  border-bottom: 4px solid rgb(0, 0, 0);
+  display: flex;
+  margin-bottom: 25px;
+  font-weight: 700;
+  justify-content: space-between;
 }
 
 .detail-value-line {
@@ -650,6 +653,7 @@ input:checked + .slider:before {
   font-weight: 500;
   text-align: center;
   margin-bottom: 7px; /* Adjust spacing as needed */
+  border-bottom: solid;
 }
 .print-mode .detail-value-line {
   flex-grow: 1;
@@ -817,4 +821,9 @@ input:checked + .slider:before {
 /* This class makes the element not take up any space and be invisible */
 .hidden {
   display: none;
+}
+.detail-line {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
 }

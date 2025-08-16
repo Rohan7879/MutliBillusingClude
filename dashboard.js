@@ -300,17 +300,19 @@ function generateBillHtmlForView(data) {
     }</td><td style="font-weight:bolder;">${Number(data["Vakal 1 Amount"]).toLocaleString("en-IN")}</td></tr>`;
   } else {
     for (let i = 1; i <= 5; i++) {
-      if (data[`Vakal ${i} Katta`] > 0) {
+      const kattaValue = data[`Vakal ${i} Katta`];
+      const kiloValue = data[`Vakal ${i} Kilo`];
+      if (kattaValue > 0 || kiloValue > 0) {
         vakalRows += `<tr><td>વકલ ${i}</td><td>${data[`Vakal ${i} Katta`]}</td><td>${data[`Vakal ${i} Kilo`]}</td><td>${
           data[`Vakal ${i} Bhav`]
         }</td><td style="font-weight:bolder;">${Number(data[`Vakal ${i} Amount`]).toLocaleString("en-IN")}</td></tr>`;
       }
     }
   }
-  const customerDetailsHtml = `<div class="detail-line"><span class="detail-label-enter">નામ :</span><span class="detail-value-line">${data["Customer Name"]}</span><span class="detail-label-enter">ગાડી નં :</span><span class="detail-value-line">${data["Vehicle No"]}</span></div><div class="detail-line"><span class="detail-label-enter">ગામ :</span><span class="detail-value-line">${data["Village"]}</span><span class="detail-label-enter">દલાલ :</span><span class="detail-value-line">${data["Broker"]}</span></div>`;
-  return `<div class="container" style="margin:0;box-shadow:none;border:none;"><div class="header"><h1>Final Bill</h1></div><div class="bill-meta"><div class="meta-item"><span class="meta-label bill-label">Bill No:</span> <span class="meta-value bill-no" id="display_serial_no">${
+  const customerDetailsHtml = `<div class="detail-line" style="display: flex; justify-content: space-between; align-items: self-end;"><span class="detail-label-enter" style="width: auto;">નામ :</span><span class="detail-value-line" style="width: 30%;">${data["Customer Name"]}</span><span class="detail-label-enter" style="width: auto; margin-left: 20px;">ગાડી નં :</span><span class="detail-value-line" style="width: 30%;">${data["Vehicle No"]}</span></div><div class="detail-line" style="display: flex; justify-content: space-between; align-items: self-end;"><span class="detail-label-enter" style="width: auto;">ગામ :</span><span class="detail-value-line" style="width: 30%;">${data["Village"]}</span><span class="detail-label-enter" style="width: auto; margin-left: 20px;">દલાલ :</span><span class="detail-value-line" style="width: 30%;">${data["Broker"]}</span></div>`;
+  return `<div class="container " style="margin:0;box-shadow:none;border:none;"><div class="header"><h1>Final Bill</h1></div><div class="bill-meta"><div class="meta-item"><span>Bill No:</span> <span>${
     data["Serial No"]
-  }</span></div><div class="meta-item"><span>Date:</span> <span class="meta-value bill-no">${
+  }</span></div><div class="meta-item"><span>Date:</span> <span>${
     data["Date"]
   }</span></div></div><div class="print-only-details" style="display:block;">${customerDetailsHtml}</div><div class="details-grid"><div class="detail-item"><span class="detail-label">વેબ્રીજ વજન</span><span class="detail-value">${
     data["Weighbridge Weight"]
@@ -332,7 +334,6 @@ function generateBillHtmlForView(data) {
     data["Final Total"]
   ).toLocaleString("en-IN")}</span></div></div></div>`;
 }
-
 function updateSyncTime() {
   const syncStatusElement = document.getElementById("dashboard_sync_status");
   if (syncStatusElement) {
