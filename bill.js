@@ -987,29 +987,33 @@ function displayData() {
 
 // --- NEW: Download single bill as PDF ---
 // Replace your existing downloadBillAsPDF function with this code
-async function downloadBillAsPDF() {
+function downloadBillAsPDF() {
   showLoading("Generating PDF...");
+  // Get the container that holds the bill content
+  const billContainer = document.getElementById("container-original");
   const billData = JSON.parse(localStorage.getItem("currentBill"));
-  if (!billData) {
-    alert("No bill data found to download.");
+
+  if (!billData || !billContainer) {
+    alert("No bill data or container found to download.");
     hideLoading();
     return;
   }
   const billNo = billData["Serial No"];
   const billName = billData["Customer Name"];
 
-  const billHtml = generateBillHtmlForView(billData);
+  // Add a temporary class to the body to activate print styles
+  document.body.classList.add("print-mode");
 
-  // Temporarily create a div to hold the bill HTML for PDF generation
-  const tempContainer = document.createElement("div");
-  tempContainer.style.position = "absolute";
-  tempContainer.style.left = "-9999px";
-  tempContainer.innerHTML = `<style>${await (await fetch("html.css")).text()}</style>${billHtml}`;
-  document.body.appendChild(tempContainer);
+  // Make the print-only details visible and hide the buttons
+  const printDetails = billContainer.querySelectorAll(".print-only-details");
+  printDetails.forEach((el) => (el.style.display = "block"));
+  const buttonContainer = billContainer.querySelector(".button-container");
+  if (buttonContainer) {
+    buttonContainer.style.display = "none";
+  }
 
-  setTimeout(async () => {
-    try {
-      const canvas = await html2canvas(tempContainer.querySelector(".container"), { scale: 2 });
+  setTimeout(() => {
+    html2canvas(billContainer, { scale: 2 }).then((canvas) => {
       const imgData = canvas.toDataURL("image/png");
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF("p", "mm", "a4");
@@ -1029,13 +1033,15 @@ async function downloadBillAsPDF() {
       pdf.addImage(imgData, "PNG", x, y, finalWidth, finalHeight);
 
       pdf.save(`Bill No-${billNo}-${billName}.pdf`);
-    } catch (error) {
-      console.error("Failed to generate PDF:", error);
-      alert("Could not create PDF. Please try again.");
-    } finally {
-      document.body.removeChild(tempContainer);
+
+      // Clean up: revert changes and show buttons again
+      document.body.classList.remove("print-mode");
+      printDetails.forEach((el) => (el.style.display = "none"));
+      if (buttonContainer) {
+        buttonContainer.style.display = "flex";
+      }
       hideLoading();
-    }
+    });
   }, 100);
 }
 function formatNumber(num) {

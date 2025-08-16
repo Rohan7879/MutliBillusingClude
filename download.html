@@ -13,28 +13,170 @@
 
     <script src="bill.js"></script>
     <link rel="stylesheet" href="html.css" />
+    <style>
+      /* Styles for bill number and date layout */
+      .bill-meta {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 20px;
+        padding-bottom: 15px;
+      }
+      .meta-item {
+        font-size: 1.2em;
+        font-weight: bold;
+      }
+      .meta-label {
+        color: #6c757d;
+      }
+      .meta-value {
+        color: #343a40;
+      }
+    </style>
   </head>
   <body>
-    <div class="container" style="text-align: center">
+    <div class="container" id="container-original">
       <div class="header">
         <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
-        <h1>Download Bill</h1>
+        <h1>Final Bill</h1>
       </div>
-      <p style="margin-top: 20px; font-size: 1.2em; color: #343a40">Your PDF download should begin automatically.</p>
-      <p style="margin-top: 10px; font-size: 1em; color: #6c757d">If it doesn't, click the button below.</p>
-      <button onclick="downloadBillAsPDF()" class="button" style="margin-top: 20px; width: auto">Download Again</button>
+
+      <div id="loading-bar" class="loading-bar hidden"></div>
+
+      <div class="bill-meta">
+        <div class="meta-item">
+          <span class="meta-label bill-label">Bill No:</span>
+          <span class="meta-value bill-no" id="display_serial_no"></span>
+        </div>
+        <div class="meta-item">
+          <span class="meta-value bill-date" id="display_date"></span>
+        </div>
+      </div>
+
+      <div class="print-only-details">
+        <div class="detail-line">
+          <span class="detail-label-enter">નામ :</span>
+          <span class="detail-value-line" id="display_customer_name"></span>
+          <span class="detail-label-enter">ગાડી નં :</span>
+          <span class="detail-value-line" id="display_vehicle_no"></span>
+        </div>
+      </div>
+      <div class="print-only-details">
+        <div class="detail-line">
+          <span class="detail-label-enter">ગામ :</span>
+          <span class="detail-value-line" id="display_village"></span>
+          <span class="detail-label-enter">દલાલ :</span>
+          <span class="detail-value-line" id="display_broker"></span>
+        </div>
+      </div>
+
+      <div class="details-grid">
+        <div class="detail-item">
+          <span class="detail-label">વેબ્રીજ વજન</span>
+          <span class="detail-value" id="display_weighbridge_weight">0</span>
+        </div>
+        <div class="detail-item" id="kasar_box">
+          <span class="detail-label">કાંટા કસર (૦.૩%)</span>
+          <span class="detail-value" id="display_kasar">0</span>
+        </div>
+        <div class="detail-item" id="bardan_box">
+          <span class="detail-label">બારદાન વજન(0.6+0.2)</span>
+          <span class="detail-value" id="display_bardan_weight">0</span>
+        </div>
+        <div class="detail-item summary-item">
+          <span class="detail-label">નેટ વજન</span>
+          <span style="font-weight: bolder; font-size: 3em" class="detail-value" id="display_net_weight">0</span>
+        </div>
+      </div>
+
+      <table class="final-bill-table">
+        <thead>
+          <tr>
+            <th>વકલ <span class="print-hide">(Item)</span></th>
+            <th>કટ્ટા <span class="print-hide">(Bags)</span></th>
+            <th>કિલો <span class="print-hide">(Kg)</span></th>
+            <th>ભાવ <span class="print-hide">(Price)</span></th>
+            <th>રૂપિયા <span class="print-hide">(Amount)</span></th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr id="vakal_row_1">
+            <td>વકલ ૧</td>
+            <td id="display_vakal_1_katta">0</td>
+            <td id="display_vakal_1_kilo">0</td>
+            <td id="display_vakal_1_bhav">0</td>
+            <td style="font-weight: bolder; font-size: 2em" id="display_vakal_1_amount">0</td>
+          </tr>
+          <tr id="vakal_row_2" class="optional-vakal">
+            <td>વકલ ૨</td>
+            <td id="display_vakal_2_katta">0</td>
+            <td id="display_vakal_2_kilo">0</td>
+            <td id="display_vakal_2_bhav">0</td>
+            <td style="font-weight: bolder; font-size: 2em" id="display_vakal_2_amount">0</td>
+          </tr>
+          <tr id="vakal_row_3" class="optional-vakal">
+            <td>વકલ ૩</td>
+            <td id="display_vakal_3_katta">0</td>
+            <td id="display_vakal_3_kilo">0</td>
+            <td id="display_vakal_3_bhav">0</td>
+            <td style="font-weight: bolder; font-size: 2em" id="display_vakal_3_amount">0</td>
+          </tr>
+          <tr id="vakal_row_4" class="optional-vakal">
+            <td>વકલ ૪</td>
+            <td id="display_vakal_4_katta">0</td>
+            <td id="display_vakal_4_kilo">0</td>
+            <td id="display_vakal_4_bhav">0</td>
+            <td style="font-weight: bolder; font-size: 2em" id="display_vakal_4_amount">0</td>
+          </tr>
+          <tr id="vakal_row_5" class="optional-vakal">
+            <td>વકલ ૫</td>
+            <td id="display_vakal_5_katta">0</td>
+            <td id="display_vakal_5_kilo">0</td>
+            <td id="display_vakal_5_bhav">0</td>
+            <td style="font-weight: bolder; font-size: 2em" id="display_vakal_5_amount">0</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <div class="match-status">
+        <span id="display_match_message"></span>
+      </div>
+
+      <div class="totals-grid">
+        <div class="detail-item">
+          <span class="detail-label">ટોટલ રૂપિયા</span>
+          <span class="detail-value" id="display_total_amount">0</span>
+        </div>
+        <div class="detail-item" id="utrai_box">
+          <span class="detail-label">ઉતરાઈ</span>
+          <span class="detail-value" id="display_utrai">0</span>
+        </div>
+        <div class="final-total-box-container" id="final_total_box_container">
+          <div class="detail-item final-total-box">
+            <span class="detail-label">ફાઇનલ ટોટલ</span>
+            <span style="font-weight: bolder; font-size: 3em" class="detail-value" id="display_final_total">0</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="button-container">
+        <button onclick="downloadBillAsPDF()" class="button" style="background-color: #dc3545">Download PDF</button>
+        <button onclick="window.print()" class="button" id="printButton">Print Bill</button>
+      </div>
     </div>
+    <div class="container print-copy" id="container-copy"></div>
     <script>
+      // This script will now check if there is a billId in the URL
       document.addEventListener("DOMContentLoaded", () => {
         const urlParams = new URLSearchParams(window.location.search);
         const billId = urlParams.get("billId");
 
         if (billId) {
-          // Fetch the bill data and trigger the download
-          fetchBillAndDownload(billId);
+          // If a billId is found, fetch the bill data from Firebase and display it
+          fetchBillAndDisplay(billId);
         } else {
-          // Assume the data is already in localStorage (from index.html)
-          downloadBillAsPDF();
+          // If not, it assumes the data is already in localStorage (from index.html)
+          displayData();
         }
       });
     </script>
