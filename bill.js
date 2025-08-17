@@ -521,7 +521,8 @@ async function updateData(docId) {
 
     let expenses = [];
     const expenseRows = document.querySelectorAll(".expense-row");
-    expenses.forEach((row) => {
+    expenseRows.forEach((row) => {
+      // The typo is corrected here
       const name = row.querySelector(`input[name^="expense_name"]`).value;
       const amount = Number(row.querySelector(`input[name^="expense_amount"]`).value);
       if (name && amount > 0) {
@@ -948,18 +949,35 @@ function displayData() {
     bardanValueElement.textContent = data["Bardan Weight"];
   }
 
-  const finalTotalBoxContainer = document.getElementById("final_total_box_container");
-  if (finalTotalBoxContainer && data["Expenses"]) {
+  // It should be placed after all the other details are displayed.
+  const expensesContainer = document.getElementById("expenses_container");
+  if (expensesContainer && data["Expenses"]) {
     let expenses = JSON.parse(data["Expenses"]);
     if (expenses.length > 0) {
+      expensesContainer.style.display = "inherit"; // Make container visible
       expenses.forEach((exp) => {
         const expenseBox = document.createElement("div");
         expenseBox.classList.add("detail-item");
         expenseBox.innerHTML = `<span class="detail-label">${exp.name}</span><span class="detail-value">${exp.amount}</span>`;
-        finalTotalBoxContainer.before(expenseBox);
+        expensesContainer.appendChild(expenseBox);
       });
+    } else {
+      expensesContainer.style.display = "none"; // Hide container if empty
     }
   }
+
+  // const finalTotalBoxContainer = document.getElementById("final_total_box_container");
+  // if (finalTotalBoxContainer && data["Expenses"]) {
+  //   let expenses = JSON.parse(data["Expenses"]);
+  //   if (expenses.length > 0) {
+  //     expenses.forEach((exp) => {
+  //       const expenseBox = document.createElement("div");
+  //       expenseBox.classList.add("detail-item");
+  //       expenseBox.innerHTML = `<span class="detail-label">${exp.name}</span><span class="detail-value">${exp.amount}</span>`;
+  //       finalTotalBoxContainer.before(expenseBox);
+  //     });
+  //   }
+  // }
 
   if (data["Bill Type"] === "Loose") {
     document.getElementById("bardan_box").style.display = "none";
