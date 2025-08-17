@@ -178,6 +178,7 @@ input[type="date"]:focus {
   border-radius: 12px;
   text-align: center;
   border: 1px solid #e9ecef;
+  /* overflow-x: auto; */
 }
 
 .detail-label {
@@ -202,6 +203,7 @@ input[type="date"]:focus {
   font-weight: 500;
   color: #005a9e;
   line-height: 1.1;
+  line-break: anywhere;
 }
 
 .summary-item {

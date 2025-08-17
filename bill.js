@@ -1062,11 +1062,18 @@ function downloadBillAsPDF() {
     });
   }, 100);
 }
+// Replace the existing formatNumber function with this code
 function formatNumber(num) {
   if (isNaN(num) || num === "") {
     return num;
   }
-  return Number(num).toLocaleString("en-IN");
+  const numString = Number(num).toLocaleString("en-IN");
+
+  if (numString.length > 10) {
+    // Return a smaller font size for large numbers
+    return `<span style="font-size: 0.7em;">${numString}</span>`;
+  }
+  return numString;
 }
 function checkFirebaseConnection() {
   showLoading("Checking connection...");
