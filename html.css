@@ -126,7 +126,7 @@ table td {
 }
 
 table td {
-  font-weight: 600;
+  font-weight: 900;
   color: #005a9e;
   width: 120px;
 }
@@ -828,4 +828,8 @@ input:checked + .slider:before {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+.large-number {
+  font-size: 0.7em;
+  line-break: anywhere; /* The correct property name */
 }

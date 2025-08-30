@@ -105,3 +105,20 @@
 .modal-button-container .close-modal-btn {
   background: #6c757d;
 }
+/* --- Mobile Styles for Dashboard --- */
+@media (max-width: 600px) {
+  /* Arrange KPI cards into 2 columns */
+  .kpi-grid {
+    grid-template-columns: 1fr 1fr;
+  }
+
+  /* Stack the date filters vertically */
+  .dashboard-filters {
+    flex-direction: column;
+    align-items: stretch;
+  }
+  #search_input {
+    width: 100%;
+    box-sizing: border-box; /* Ensures padding is included in the width */
+  }
+}

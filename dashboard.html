@@ -10,11 +10,13 @@
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" defer></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js" defer></script>
+
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 
     <script src="dashboard.js" defer></script>
     <link rel="stylesheet" href="dashboard.css" />
+    <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
   </head>
   <body>
     <div class="container">
@@ -75,6 +77,11 @@
           <div class="kpi-label">Total Bills</div>
           <div class="kpi-value" id="kpi-total-bills">0</div>
         </div>
+         <!-- NEW: Total Utrāī Card -->
+         <div class="kpi-card">
+          <div class="kpi-label">Total Utrāī</div>
+          <div class="kpi-value" id="kpi-total-utrai">₹0</div>
+      </div>
         <div class="kpi-card">
           <div class="kpi-label">Avg. Price (per 20kg)</div>
           <div class="kpi-value" id="kpi-avg-price">₹0</div>

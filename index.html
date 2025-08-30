@@ -9,12 +9,18 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <!-- NEW: Libraries for PDF and Excel Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 
-    <script src="bill.js"></script>
+    <script src="firebase-init.js"></script>
+    <script src="utils.js"></script>
+
+    <script src="bill-form.js" defer></script>
+    <script src="bill-list.js" defer></script>
     <link rel="stylesheet" href="html.css" />
+    <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
   </head>
   <body>
     <div class="container">
@@ -137,6 +143,17 @@
             </tbody>
             <tbody>
               <tr>
+                <td colspan="5" class="checkbox-cell">
+                  <div class="toggle-container">
+                    <strong>કાંટા કસર કપાત કરવી (Deduct Kasar)</strong>
+                    <label class="switch">
+                      <input type="checkbox" name="deduct_kasar" checked />
+                      <span class="slider"></span>
+                    </label>
+                  </div>
+                </td>
+              </tr>
+              <tr>
                 <td style="border-bottom: 2px solid #dee2e6"></td>
                 <td colspan="4" class="checkbox-cell" style="border-bottom: 2px solid #dee2e6">
                   <div class="toggle-container">
@@ -188,9 +205,22 @@
             </tbody>
           </table>
 
+          <div
+            id="total-bags-container"
+            style="text-align: center; margin-bottom: 10px; font-weight: bold; font-size: 1.5em"
+          >
+            Total Bags: <span id="total-bags-count">0</span>
+          </div>
+
           <div class="expense-section">
             <h3>અન્ય ખર્ચ (Other Expenses)</h3>
             <div id="expense_list"></div>
+            <div
+              id="expense-subtotal-container"
+              style="text-align: right; margin-top: 10px; font-weight: bold; font-size: 1.2em"
+            >
+              Total Expenses: <span id="expenses-subtotal">₹0</span>
+            </div>
             <button type="button" class="add-expense-btn" onclick="addExpense()">+ ખર્ચ ઉમેરો (Add Expense)</button>
           </div>
 

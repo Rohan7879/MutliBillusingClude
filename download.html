@@ -8,11 +8,15 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-    <script src="bill.js"></script>
+    <script src="firebase-init.js"></script>
+    <script src="utils.js"></script>
+    <script src="bill-view.js"></script>
     <link rel="stylesheet" href="html.css" />
+    <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
     <style>
       /* Styles for bill number and date layout */
       .bill-meta {
@@ -20,7 +24,7 @@
         justify-content: space-between;
         align-items: center;
         margin-bottom: 20px;
-        padding-bottom: 15px;
+        padding-bottom: 25px;
       }
       .meta-item {
         font-size: 1.2em;
@@ -53,11 +57,11 @@
         </div>
       </div>
 
-      <div class="print-only-details">
+      <div class="print-only-details container">
         <div class="detail-line">
           <span class="detail-label-enter">નામ :</span>
           <span class="detail-value-line" id="display_customer_name"></span>
-          <span class="detail-label-enter">ગાડી નં :</span>
+          <span class="detail-label-enter" style="margin-left: 20px">ગાડી નં :</span>
           <span class="detail-value-line" id="display_vehicle_no"></span>
         </div>
       </div>
@@ -65,7 +69,7 @@
         <div class="detail-line">
           <span class="detail-label-enter">ગામ :</span>
           <span class="detail-value-line" id="display_village"></span>
-          <span class="detail-label-enter">દલાલ :</span>
+          <span class="detail-label-enter" style="margin-left: 20px">દલાલ :</span>
           <span class="detail-value-line" id="display_broker"></span>
         </div>
       </div>
@@ -151,6 +155,7 @@
           <span class="detail-label">ઉતરાઈ</span>
           <span class="detail-value" id="display_utrai">0</span>
         </div>
+        <div id="expenses_container"></div>
         <div class="final-total-box-container" id="final_total_box_container">
           <div class="detail-item final-total-box">
             <span class="detail-label">ફાઇનલ ટોટલ</span>
@@ -164,21 +169,5 @@
         <button onclick="window.print()" class="button" id="printButton">Print Bill</button>
       </div>
     </div>
-    <div class="container print-copy" id="container-copy"></div>
-    <script>
-      // This script will now check if there is a billId in the URL
-      document.addEventListener("DOMContentLoaded", () => {
-        const urlParams = new URLSearchParams(window.location.search);
-        const billId = urlParams.get("billId");
-
-        if (billId) {
-          // If a billId is found, fetch the bill data from Firebase and display it
-          fetchBillAndDisplay(billId);
-        } else {
-          // If not, it assumes the data is already in localStorage (from index.html)
-          displayData();
-        }
-      });
-    </script>
   </body>
 </html>

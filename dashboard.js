@@ -151,32 +151,32 @@ function recalculateKPIs() {
   const totalPurchases = billsToCalculate.reduce((sum, bill) => sum + bill["Final Total"], 0);
   const totalWeight = billsToCalculate.reduce((sum, bill) => sum + bill["Net Weight"], 0);
   const totalBills = billsToCalculate.length;
+  // NEW: Calculate the total Utrāī
+  const totalUtrai = billsToCalculate.reduce((sum, bill) => sum + bill["Utrāī"], 0);
   const avgPrice = calculateAveragePrice(billsToCalculate);
 
   document.getElementById("kpi-total-purchases").textContent = `₹${totalPurchases.toLocaleString("en-IN")}`;
   document.getElementById("kpi-total-weight").textContent = `${totalWeight.toLocaleString("en-IN")} kg`;
   document.getElementById("kpi-total-bills").textContent = totalBills;
+  // NEW: Update the Utrāī card with the total sum
+  document.getElementById("kpi-total-utrai").textContent = `₹${totalUtrai.toLocaleString("en-IN")}`;
   document.getElementById("kpi-avg-price").textContent = `₹${avgPrice.toFixed(2)}`;
 }
 
 function calculateAveragePrice(bills) {
-  let grandTotalAmount = 0,
-    grandTotalKilos = 0;
+  let grandFinalTotal = 0;
+  grandTotalKilos = 0;
   bills.forEach((bill) => {
-    if (bill["Bill Type"] === "Loose") {
-      grandTotalAmount += bill["Vakal 1 Amount"];
-      grandTotalKilos += bill["Vakal 1 Kilo"];
-    } else {
-      for (let i = 1; i <= 5; i++) {
-        if (bill[`Vakal ${i} Katta`] > 0) {
-          grandTotalAmount += bill[`Vakal ${i} Amount`];
-          grandTotalKilos += bill[`Vakal ${i} Kilo`];
-        }
-      }
-    }
+    // Sum the final total and net weight for each bill
+    grandFinalTotal += bill["Final Total"];
+    grandTotalKilos += bill["Net Weight"];
   });
+
+  // Check to avoid division by zero
   if (grandTotalKilos === 0) return 0;
-  return (grandTotalAmount / grandTotalKilos) * 20;
+
+  // Return the total price divided by total kilos, multiplied by 20
+  return (grandFinalTotal / grandTotalKilos) * 20;
 }
 
 // --- 5. UI RENDERING AND MODAL FUNCTIONS ---
@@ -293,7 +293,18 @@ async function downloadFormattedBill(docId) {
 }
 
 function generateBillHtmlForView(data) {
+  const deductionSettings = data.DeductionSettings || {
+    kasarPercentage: 0.003,
+    kantanWeight: 0.6,
+    plasticWeight: 0.2,
+    utraiPercentage: 7,
+  };
   let vakalRows = "";
+  // New variables are defined at the top of the function
+  const kasarLabel = `કાંટા કસર (${(deductionSettings.kasarPercentage * 100).toFixed(1)}%)`;
+  const bardanLabel = `બારદાન વજન(${deductionSettings.kantanWeight}+${deductionSettings.plasticWeight})`;
+  const utraiLabel = `ઉતરાઈ (${deductionSettings.utraiPercentage}₹/100kg)`;
+
   if (data["Bill Type"] === "Loose") {
     vakalRows = `<tr><td>Loose Supply</td><td>-</td><td>${data["Vakal 1 Kilo"]}</td><td>${
       data["Vakal 1 Bhav"]
@@ -309,16 +320,34 @@ function generateBillHtmlForView(data) {
       }
     }
   }
-  const customerDetailsHtml = `<div class="detail-line" style="display: flex; justify-content: space-between; align-items: self-end;"><span class="detail-label-enter" style="width: auto;">નામ :</span><span class="detail-value-line" style="width: 30%;">${data["Customer Name"]}</span><span class="detail-label-enter" style="width: auto; margin-left: 20px;">ગાડી નં :</span><span class="detail-value-line" style="width: 30%;">${data["Vehicle No"]}</span></div><div class="detail-line" style="display: flex; justify-content: space-between; align-items: self-end;"><span class="detail-label-enter" style="width: auto;">ગામ :</span><span class="detail-value-line" style="width: 30%;">${data["Village"]}</span><span class="detail-label-enter" style="width: auto; margin-left: 20px;">દલાલ :</span><span class="detail-value-line" style="width: 30%;">${data["Broker"]}</span></div>`;
-  return `<div class="container " style="margin:0;box-shadow:none;border:none;"><div class="header"><h1>Final Bill</h1></div><div class="bill-meta"><div class="meta-item"><span>Bill No:</span> <span>${
+
+  // Code to dynamically generate expenses HTML
+  let expensesHtml = "";
+  if (data["Expenses"]) {
+    try {
+      const expenses = JSON.parse(data["Expenses"]);
+      if (expenses.length > 0) {
+        expensesHtml = `<div class="totals-grid expenses-grid">`;
+        expenses.forEach((exp) => {
+          expensesHtml += `<div class="detail-item"><span class="detail-label">${exp.name}</span><span class="detail-value">-${exp.amount}</span></div>`;
+        });
+        expensesHtml += `</div>`;
+      }
+    } catch (e) {
+      console.error("Error parsing expenses:", e);
+    }
+  }
+
+  const customerDetailsHtml = `<div class="detail-line" style="display: flex; justify-content: space-between; align-items: center;"><span class="detail-label-enter" style="width: auto;">નામ :</span><span class="detail-value-line" style="width: 30%;">${data["Customer Name"]}</span><span class="detail-label-enter" style="width: auto; margin-left: 20px;">ગાડી નં :</span><span class="detail-value-line" style="width: 30%;">${data["Vehicle No"]}</span></div><div class="detail-line" style="display: flex; justify-content: space-between; align-items: center;"><span class="detail-label-enter" style="width: auto;">ગામ :</span><span class="detail-value-line" style="width: 30%;">${data["Village"]}</span><span class="detail-label-enter" style="width: auto; margin-left: 20px;">દલાલ :</span><span class="detail-value-line" style="width: 30%;">${data["Broker"]}</span></div>`;
+  return `<div class="container" style="margin:0;box-shadow:none;border:none;"><div class="header"><h1>Final Bill</h1></div><div class="bill-meta"><div class="meta-item"><span>Bill No:</span> <span>${
     data["Serial No"]
   }</span></div><div class="meta-item"><span>Date:</span> <span>${
     data["Date"]
   }</span></div></div><div class="print-only-details" style="display:block;">${customerDetailsHtml}</div><div class="details-grid"><div class="detail-item"><span class="detail-label">વેબ્રીજ વજન</span><span class="detail-value">${
     data["Weighbridge Weight"]
-  }</span></div><div class="detail-item"><span class="detail-label">કાંટા કસર</span><span class="detail-value">${
+  }</span></div><div class="detail-item"><span class="detail-label">${kasarLabel}</span><span class="detail-value">${
     data["Kasar"]
-  }</span></div><div class="detail-item"><span class="detail-label">બારદાન વજન</span><span class="detail-value">${
+  }</span></div><div class="detail-item"><span class="detail-label">${bardanLabel}</span><span class="detail-value">${
     data["Bardan Weight"]
   }</span></div><div class="detail-item summary-item"><span class="detail-label">નેટ વજન</span><span class="detail-value" style="font-weight:bolder;">${
     data["Net Weight"]
@@ -326,11 +355,11 @@ function generateBillHtmlForView(data) {
     data["Total Amount"]
   ).toLocaleString(
     "en-IN"
-  )}</span></div><div class="detail-item"><span class="detail-label">ઉતરાઈ</span><span class="detail-value">${Number(
+  )}</span></div><div class="detail-item"><span class="detail-label">${utraiLabel}</span><span class="detail-value">${Number(
     data["Utrāī"]
   ).toLocaleString(
     "en-IN"
-  )}</span></div><div class="detail-item final-total-box"><span class="detail-label">ફાઇનલ ટોટલ</span><span class="detail-value" style="font-weight:bolder;">${Number(
+  )}</span></div>${expensesHtml}<div class="detail-item final-total-box"><span class="detail-label">ફાઇનલ ટોટલ</span><span class="detail-value" style="font-weight:bolder;">${Number(
     data["Final Total"]
   ).toLocaleString("en-IN")}</span></div></div></div>`;
 }

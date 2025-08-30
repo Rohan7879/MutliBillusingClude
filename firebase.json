@@ -1,16 +1,16 @@
 {
-  "firestore": {
-    "database": "(default)",
-    "location": "nam5",
-    "rules": "firestore.rules",
-    "indexes": "firestore.indexes.json"
-  },
   "hosting": {
     "public": ".",
-    "ignore": [
-      "firebase.json",
-      "**/.*",
-      "**/node_modules/**"
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "rewrites": [
+      {
+        "source": "/d1j3h2k",
+        "destination": "/download.html"
+      },
+      {
+        "source": "/f7p4l9q",
+        "destination": "/final.html"
+      }
     ]
   }
 }
