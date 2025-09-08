@@ -28,24 +28,28 @@ document.addEventListener("DOMContentLoaded", function () {
   /**
    * Handles form submission, updating the settings document in Firebase.
    */
-  settingsForm.addEventListener("submit", async function (event) {
-    event.preventDefault();
+  settingsForm.addEventListener(
+    "submit",
+    async function (event) {
+      event.preventDefault();
 
-    const newSettings = {
-      kasarPercentage: Number(document.querySelector('input[name="kasarPercentage"]').value),
-      kantanWeight: Number(document.querySelector('input[name="kantanWeight"]').value),
-      plasticWeight: Number(document.querySelector('input[name="plasticWeight"]').value),
-      utraiPercentage: Number(document.querySelector('input[name="utraiPercentage"]').value),
-    };
+      const newSettings = {
+        kasarPercentage: Number(document.querySelector('input[name="kasarPercentage"]').value),
+        kantanWeight: Number(document.querySelector('input[name="kantanWeight"]').value),
+        plasticWeight: Number(document.querySelector('input[name="plasticWeight"]').value),
+        utraiPercentage: Number(document.querySelector('input[name="utraiPercentage"]').value),
+      };
 
-    try {
-      await settingsRef.set(newSettings); // Use .set() to overwrite or create
-      alert("Settings saved successfully!");
-    } catch (error) {
-      console.error("Error saving settings:", error);
-      alert("Could not save settings. Please try again.");
-    }
-  });
+      try {
+        await settingsRef.set(newSettings); // Use .set() to overwrite or create
+        alert("Settings saved successfully!");
+      } catch (error) {
+        console.error("Error saving settings:", error);
+        alert("Could not save settings. Please try again.");
+      }
+    },
+    { once: true }
+  );
 
   loadSettings();
 });

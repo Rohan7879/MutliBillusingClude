@@ -3,17 +3,20 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
     <title>Business Dashboard</title>
 
     <link rel="stylesheet" href="html.css" />
     <link rel="stylesheet" href="dashboard.css" />
 
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js" defer></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js" defer></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js" defer></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js" defer></script>
 
+    <script src="firebase-init.js"></script>
+    <script src="utils.js"></script>
     <script src="dashboard.js" defer></script>
     <link rel="stylesheet" href="dashboard.css" />
     <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
@@ -41,33 +44,40 @@
       </button>
 
       <div class="dashboard-filters">
-        <center></center><input
+        <input
           type="text"
           id="search_input"
           placeholder="Search by name, village, or vehicle..."
           style="width: 300px; padding: 8px; border-radius: 5px; border: 1px solid #ccc"
-        /> </center>
+        />
 
-      <center><div class="filter-custom-range">
+        <div class="filter-custom-range">
           <input type="date" id="start_date" />
           <span>to</span>
           <input type="date" id="end_date" />
           <button class="filter-btn" id="custom_date_filter_btn">Apply</button>
-          </div> </center>
-          
-        <center> <div class="filter-presets">
-              <button class="filter-btn" id="today_btn">Today</button>
-              <button class="filter-btn" id="last7days_btn">Last 7 Days</button>
-              <button class="filter-btn" id="month_btn">This Month</button>
-              <button class="filter-btn" id="year_btn">This Year</button>
-            </div></center>
-         
-      </div>
+        </div>
 
+        <div class="filter-month">
+          <input type="month" id="month_year_input" />
+          <button class="filter-btn" id="month_filter_btn">Filter by Month</button>
+        </div>
+
+        <div class="filter-presets">
+          <button class="filter-btn" id="today_btn">Today</button>
+          <button class="filter-btn" id="last7days_btn">Last 7 Days</button>
+          <button class="filter-btn" id="month_btn">This Month</button>
+          <button class="filter-btn" id="year_btn">This Year</button>
+        </div>
+      </div>
       <div class="kpi-grid">
         <div class="kpi-card">
           <div class="kpi-label">Total Purchases</div>
           <div class="kpi-value" id="kpi-total-purchases">₹0</div>
+        </div>
+        <div class="kpi-card">
+          <div class="kpi-label">Total Amount Due</div>
+          <div class="kpi-value" id="kpi-total-due">₹0</div>
         </div>
         <div class="kpi-card">
           <div class="kpi-label">Total Net Weight</div>
@@ -77,11 +87,17 @@
           <div class="kpi-label">Total Bills</div>
           <div class="kpi-value" id="kpi-total-bills">0</div>
         </div>
-         <!-- NEW: Total Utrāī Card -->
-         <div class="kpi-card">
+
+        <div class="kpi-card">
+          <div class="kpi-label">Total Bags (કટ્ટા)</div>
+          <div class="kpi-value" id="kpi-total-bags">0</div>
+        </div>
+
+        <div class="kpi-card">
           <div class="kpi-label">Total Utrāī</div>
           <div class="kpi-value" id="kpi-total-utrai">₹0</div>
-      </div>
+        </div>
+
         <div class="kpi-card">
           <div class="kpi-label">Avg. Price (per 20kg)</div>
           <div class="kpi-value" id="kpi-avg-price">₹0</div>
@@ -90,6 +106,9 @@
 
       <div id="bill-list-section">
         <h2>Purchase Bills</h2>
+        <button type="submit" class="button" onclick="printSelectedBills()" style="background-color: #007bff">
+          Print Selected
+        </button>
         <table class="bill-list-table">
           <thead>
             <tr>
@@ -97,6 +116,7 @@
               <th>Bill No.</th>
               <th>Date</th>
               <th>Name</th>
+              <th>Status</th>
               <th>Bill Type</th>
               <th>Final Total</th>
               <th>Actions</th>
@@ -104,9 +124,12 @@
           </thead>
           <tbody id="dashboard_bill_list_body"></tbody>
         </table>
-        <div class="pagination" style="display: flex; justify-content: center; align-items: center; margin-top: 20px; gap: 10px;">
+        <div
+          class="pagination"
+          style="display: flex; justify-content: center; align-items: center; margin-top: 20px; gap: 10px"
+        >
           <button id="prev_page_btn" class="filter-btn">Previous</button>
-          <span id="page_info" style="font-weight: bold; color: #005a9e;">Page 1 of 1</span>
+          <span id="page_info" style="font-weight: bold; color: #005a9e">Page 1 of 1</span>
           <button id="next_page_btn" class="filter-btn">Next</button>
         </div>
       </div>

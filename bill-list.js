@@ -4,6 +4,12 @@ function showBillListView() {
   document.getElementById("bill_list_view").style.display = "block";
   showLoading();
 
+  document
+    .getElementById("search_input_list")
+    .addEventListener("input", (event) => filterData(null, event.target.value));
+
+  document.getElementById("mark_paid_btn").addEventListener("click", markSelectedBillsAsPaid);
+
   billsCollection.orderBy("Serial No", "desc").onSnapshot((snapshot) => {
     const syncStatus = document.getElementById("sync_status");
     if (snapshot.metadata.hasPendingWrites) {
@@ -16,68 +22,140 @@ function showBillListView() {
       syncStatus.style.color = "green";
     }
 
-    const serverBills = snapshot.docs.map((doc) => doc.data());
-    const lastServerNo = serverBills.reduce((max, bill) => Math.max(max, bill["Serial No"]), 0);
-    if (lastServerNo > 0) {
-      localStorage.setItem("lastSerialNo", lastServerNo);
-    }
+    allBillsForList = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
 
     renderBillList(snapshot.docs);
     hideLoading();
   });
+}
+
+async function markSelectedBillsAsPaid() {
+  const selectedCheckboxes = document.querySelectorAll("#bill_list_view .bill-checkbox:checked");
+
+  if (selectedCheckboxes.length === 0) {
+    Swal.fire("No Bills Selected", "Please select one or more bills to mark as paid.", "info");
+    return;
+  }
+
+  const result = await Swal.fire({
+    title: "Are you sure?",
+    text: `You are about to mark ${selectedCheckboxes.length} bill(s) as Paid.`,
+    icon: "question",
+    showCancelButton: true,
+    confirmButtonColor: "#28a745",
+    confirmButtonText: "Yes, mark as Paid!",
+  });
+
+  if (result.isConfirmed) {
+    showLoading("Updating bills...");
+
+    try {
+      const batch = db.batch();
+      const selectedIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
+
+      // --- CORRECTED PART ---
+      // Ensure we use 'allBillsForList', which is the correct variable for this page
+      const billsToUpdate = allBillsForList.filter((bill) => selectedIds.includes(bill.id));
+
+      billsToUpdate.forEach((bill) => {
+        const billRef = billsCollection.doc(bill.id);
+        batch.update(billRef, {
+          paymentStatus: "Paid",
+          amountPaid: bill["Final Total"],
+          amountDue: 0,
+        });
+      });
+
+      await batch.commit();
+
+      Swal.fire("Success!", `${selectedCheckboxes.length} bill(s) have been marked as Paid.`, "success");
+    } catch (error) {
+      console.error("Error marking bills as paid:", error);
+      Swal.fire("Error", "Could not update the bills.", "error");
+    } finally {
+      hideLoading();
+    }
+  }
 }
 function showBillCreationForm() {
   document.getElementById("bill_list_view").style.display = "none";
   document.getElementById("bill_creation_form").style.display = "block";
   document.getElementById("view_all_bills_btn").style.display = "block";
 }
+// Add this new function to bill-list.js and dashboard.js
+
+function getStatusHtml(bill) {
+  const status = bill.paymentStatus || "Unpaid";
+  const amountPaid = bill.amountPaid || 0;
+  const finalTotal = bill["Final Total"] || 0;
+  // Use a helper function to format numbers, assuming you have one in utils.js
+  const formattedAmountPaid = typeof formatNumber === "function" ? formatNumber(amountPaid) : amountPaid;
+  const formattedFinalTotal = typeof formatNumber === "function" ? formatNumber(finalTotal) : finalTotal;
+
+  const dotClass = status.toLowerCase().replace(" ", "-");
+
+  switch (status) {
+    case "Paid":
+      return `<span class="status-dot ${dotClass}"></span> Paid`;
+    case "Partially Paid":
+      return `<span class="status-dot ${dotClass}"></span> Partial<br><small>(${formattedAmountPaid} / ${formattedFinalTotal})</small>`;
+    case "Unpaid":
+    default:
+      return `<span class="status-dot unpaid"></span> Unpaid`;
+  }
+}
 function renderBillList(docs) {
   const tableBody = document.getElementById("bill_list_body");
   tableBody.innerHTML = "";
   if (docs.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="7" style="text-align:center;">No bills saved yet.</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No bills saved yet.</td></tr>'; // colspan is now 8
     return;
   }
+
+  // REMOVED: The old, unnecessary code for creating a unique customer list
+  // and saving it to sessionStorage has been deleted.
 
   docs.forEach((doc) => {
     const bill = doc.data();
     const row = document.createElement("tr");
+
+    // The HTML is now cleaner, with data-* attributes instead of onclick
+    // and includes the new Status column.
     row.innerHTML = `
-              <td><input type="checkbox" class="bill-checkbox" value="${doc.id}"></td>
-              <td>${bill["Serial No"]}</td>
-              <td>${bill["Date"]}</td>
-              <td>${bill["Customer Name"]}</td>
-              <td>${bill["Bill Type"]}</td>
-              <td>${formatNumber(bill["Final Total"])}</td>
-              <td class="action-buttons">
-                  <button class="view-btn" onclick="viewBill('${doc.id}')">View</button>
-                  <button class="edit-btn" onclick="editBill('${doc.id}')">Edit</button>
-                  <button class="delete-btn" onclick="deleteBill('${doc.id}', ${bill["Serial No"]})">Delete</button>
-              </td>
-          `;
+     <td><input type="checkbox" class="bill-checkbox" value="${doc.id}" onchange="updateSelectionSummary()"></td>
+      <td>${bill["Serial No"]}</td>
+      <td>${bill["Date"]}</td>
+      <td>${bill["Customer Name"]}</td>
+      <td>${getStatusHtml(bill)}</td>
+      <td>${bill["Bill Type"]}</td>
+      <td>${formatNumber(bill["Final Total"])}</td>
+      <td class="action-buttons">
+          <button class="view-btn" data-id="${doc.id}">View</button>
+          <button class="edit-btn" data-id="${doc.id}" ${bill.paymentStatus === "Paid" ? "disabled" : ""}>Edit</button>
+          <button class="delete-btn" data-id="${doc.id}" data-serial="${bill["Serial No"]}">Delete</button>
+      </td>
+    `;
+
+    // The event listeners are now properly attached in the JavaScript
+    row.querySelector(".view-btn").addEventListener("click", (event) => {
+      viewBill(event.target.dataset.id);
+    });
+
+    row.querySelector(".edit-btn").addEventListener("click", (event) => {
+      editBill(event.target.dataset.id);
+    });
+
+    row.querySelector(".delete-btn").addEventListener("click", (event) => {
+      const id = event.target.dataset.id;
+      const serial = event.target.dataset.serial;
+      deleteBill(id, serial);
+    });
+
     tableBody.appendChild(row);
   });
 }
 function viewBill(docId) {
-  showLoading("Fetching bill details...");
-  billsCollection
-    .doc(docId)
-    .get()
-    .then((doc) => {
-      if (doc.exists) {
-        localStorage.setItem("currentBill", JSON.stringify({ ...doc.data(), id: doc.id }));
-        window.location.href = `final.html?id=${docId}`;
-      } else {
-        alert("Could not find this bill. It might not be synced yet.");
-      }
-    })
-    .catch((error) => {
-      console.error("Error fetching bill for view:", error);
-      alert("Could not load the bill. Please try again.");
-    })
-    .finally(() => {
-      hideLoading();
-    });
+  window.location.href = `final.html?id=${docId}`;
 }
 function editBill(docId) {
   showLoading("Fetching bill for editing...");
@@ -100,19 +178,35 @@ function editBill(docId) {
       hideLoading();
     });
 }
-function deleteBill(docId, serialNo) {
-  if (confirm(`Are you sure you want to delete Bill No. ${serialNo}? This cannot be undone.`)) {
+async function deleteBill(docId, serialNo) {
+  const result = await Swal.fire({
+    title: "Are you sure?",
+    text: `You are about to delete Bill No. ${serialNo}. This cannot be undone.`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#dc3545", // Red color for the confirm button
+    cancelButtonColor: "#6c757d", // Gray for cancel
+    confirmButtonText: "Yes, delete it!",
+  });
+
+  // If the user clicked the "Yes, delete it!" button
+  if (result.isConfirmed) {
     showLoading("Deleting bill...");
-    billsCollection
-      .doc(docId)
-      .delete()
-      .catch((error) => {
-        console.error("Error removing document: ", error);
-        alert("Could not delete the bill. Please try again when online.");
-      })
-      .finally(() => {
-        hideLoading();
+    try {
+      await billsCollection.doc(docId).delete();
+      Swal.fire({
+        title: "Deleted!",
+        text: `Bill No. ${serialNo} has been deleted.`,
+        icon: "success",
+        timer: 2000, // Automatically close after 2 seconds
+        showConfirmButton: false,
       });
+    } catch (error) {
+      console.error("Error removing document: ", error);
+      Swal.fire("Error!", "Could not delete the bill. Please try again when online.", "error");
+    } finally {
+      hideLoading();
+    }
   }
 }
 function toggleSelectAll(source) {
@@ -120,6 +214,7 @@ function toggleSelectAll(source) {
   for (let i = 0; i < checkboxes.length; i++) {
     checkboxes[i].checked = source.checked;
   }
+  updateSelectionSummary();
 }
 async function exportSelectedBills() {
   showLoading("Preparing download...");
@@ -283,4 +378,55 @@ async function processUploadedBills(bills, statusElement) {
   hideLoading();
   // Reload the bill list to show new data
   showBillListView();
+}
+function filterData(period, searchTerm = null) {
+  let filteredBills = allBillsForList;
+
+  if (searchTerm) {
+    const lowerCaseSearch = searchTerm.toLowerCase();
+    filteredBills = allBillsForList.filter((bill) => {
+      const name = (bill["Customer Name"] || "").toLowerCase();
+      const village = (bill["Village"] || "").toLowerCase();
+      const vehicle = (bill["Vehicle No"] || "").toLowerCase();
+      const serial = String(bill["Serial No"] || "").toLowerCase();
+      const broker = bill["Broker"] ? bill["Broker"].toLowerCase() : "";
+      const billType = bill["Bill Type"] ? bill["Bill Type"].toLowerCase() : "";
+      const WeighbridgeWeight = String(bill["Weighbridge Weight"]);
+
+      return (
+        name.includes(lowerCaseSearch) ||
+        village.includes(lowerCaseSearch) ||
+        vehicle.includes(lowerCaseSearch) ||
+        broker.includes(lowerCaseSearch) ||
+        billType.includes(lowerCaseSearch) ||
+        WeighbridgeWeight.includes(lowerCaseSearch) ||
+        serial.includes(lowerCaseSearch)
+      );
+    });
+  }
+
+  renderBillList(filteredBills.map((bill) => ({ id: bill.id, data: () => bill })));
+}
+// Add this new function to both bill-list.js and dashboard.js
+
+function updateSelectionSummary() {
+  const selectedCheckboxes = document.querySelectorAll(".bill-checkbox:checked");
+  const summaryElement = document.getElementById("selection-summary");
+
+  if (selectedCheckboxes.length > 0) {
+    const selectedIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
+
+    // Use the correct global variable for each page
+    const billSource = typeof allBillsForList !== "undefined" ? allBillsForList : currentlyDisplayedBills;
+
+    const selectedBills = billSource.filter((bill) => selectedIds.includes(bill.id));
+
+    const totalAmount = selectedBills.reduce((sum, bill) => sum + bill["Final Total"], 0);
+
+    summaryElement.innerHTML = `Selected ${
+      selectedBills.length
+    } bill(s) | Total: <span style="color: #005a9e;">${formatNumber(totalAmount)}</span>`;
+  } else {
+    summaryElement.innerHTML = ""; // Clear the summary if nothing is selected
+  }
 }

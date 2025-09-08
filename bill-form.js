@@ -1,23 +1,46 @@
-async function fetchSettings() {
+let uniqueCustomers = []; // To hold our customer list
+async function setupAutocomplete() {
+  // 1. Get the customer list directly from the Firestore 'customers' collection
   try {
-    const settingsDoc = await db.collection("settings").doc("deductions").get();
-    if (settingsDoc.exists) {
-      globalSettings = settingsDoc.data();
-    } else {
-      console.error("Settings document not found. Using default values.");
-      globalSettings = {
-        kasarPercentage: 0.003,
-        kantanWeight: 0.6,
-        plasticWeight: 0.2,
-        utraiPercentage: 7,
-      };
-    }
+    const snapshot = await db.collection("customers").get();
+    uniqueCustomers = snapshot.docs.map((doc) => doc.data());
   } catch (error) {
-    console.error("Error fetching settings:", error);
+    console.error("Could not fetch customer list for autocomplete:", error);
   }
+
+  // 2. Get references to the input fields (no change here)
+  const nameInput = document.querySelector('input[name="customer_name"]');
+  const villageInput = document.querySelector('input[name="village"]');
+  const suggestionsBox = document.getElementById("autocomplete-container");
+
+  // 3. The rest of the function stays the same
+  nameInput.addEventListener("input", () => {
+    const value = nameInput.value.toLowerCase();
+    suggestionsBox.innerHTML = "";
+
+    if (!value) return;
+
+    const filteredCustomers = uniqueCustomers.filter((customer) => customer.name.toLowerCase().includes(value));
+
+    const suggestionsList = document.createElement("div");
+    suggestionsList.classList.add("autocomplete-items");
+    filteredCustomers.forEach((customer) => {
+      const item = document.createElement("div");
+      item.innerHTML = `<strong>${customer.name}</strong> (${customer.village})`;
+      item.addEventListener("click", () => {
+        nameInput.value = customer.name;
+        villageInput.value = customer.village;
+        suggestionsBox.innerHTML = "";
+      });
+      suggestionsList.appendChild(item);
+    });
+    suggestionsBox.appendChild(suggestionsList);
+  });
 }
 function initializeIndexPage() {
   addExpense();
+  // Call the new autocomplete setup function
+  setupAutocomplete();
   const toggle = document.getElementById("loose_supply_toggle");
   if (toggle) {
     toggle.addEventListener("change", function (event) {
@@ -60,28 +83,40 @@ function populateFormForEdit(data) {
   const form = document.getElementById("estimateForm");
   form.dataset.editId = data.id;
 
-  document.querySelector('input[name="customer_name"]').value = data["Customer Name"];
-  document.querySelector('input[name="vehicle_no"]').value = data["Vehicle No"];
-  document.querySelector('input[name="village"]').value = data["Village"];
-  document.querySelector('input[name="broker"]').value = data["Broker"];
-  document.querySelector('input[name="weighbridge_weight"]').value = data["Weighbridge Weight"];
+  // Safer way to set values, provides a fallback for missing data
+  document.querySelector('input[name="customer_name"]').value = (data["Customer Name"] || "").toUpperCase();
+  document.querySelector('input[name="vehicle_no"]').value = (data["Vehicle No"] || "").toUpperCase();
+  document.querySelector('input[name="village"]').value = (data["Village"] || "").toUpperCase();
+  document.querySelector('input[name="broker"]').value = (data["Broker"] || "").toUpperCase();
+  document.querySelector('input[name="weighbridge_weight"]').value = data["Weighbridge Weight"] || 0;
+  document.querySelector('input[name="truck_freight"]').value = data["Truck Freight"] || 0;
 
   if (data["Bill Type"] === "Loose") {
     document.getElementById("loose_supply_toggle").checked = true;
     document.getElementById("loose_supply_toggle").dispatchEvent(new Event("change"));
-    document.querySelector('input[name="loose_price"]').value = data["Vakal 1 Bhav"];
+    document.querySelector('input[name="loose_price"]').value = data["Vakal 1 Bhav"] || 0;
   } else {
-    document.getElementById("loose_supply_toggle").checked = false;
-    document.getElementById("loose_supply_toggle").dispatchEvent(new Event("change"));
+    // Populate Vakal fields for Bag bills
+    for (let i = 1; i <= 5; i++) {
+      document.querySelector(`input[name="vakal_${i}_katta"]`).value = data[`Vakal ${i} Katta`] || "";
+      document.querySelector(`input[name="vakal_${i}_bhav"]`).value = data[`Vakal ${i} Bhav`] || "";
+    }
   }
 
-  // Expenses logic
-  const expenses = JSON.parse(data["Expenses"]);
-  const expenseList = document.getElementById("expense_list");
-  expenseList.innerHTML = ""; // Clear existing expense rows
-  expenses.forEach((exp) => {
-    addExpense(exp.name, exp.amount);
-  });
+  // Populate expenses
+  if (data["Expenses"]) {
+    try {
+      const expenses = JSON.parse(data["Expenses"]);
+      const expenseList = document.getElementById("expense_list");
+      expenseList.innerHTML = ""; // Clear existing empty expense row
+      if (expenses.length > 0) {
+        expenses.forEach((exp) => addExpense(exp.name, exp.amount));
+      }
+      addExpense(); // Add a final empty row
+    } catch (e) {
+      console.error("Could not parse expenses for editing.");
+    }
+  }
 
   document.querySelector('button[type="submit"]').textContent = "Update Bill";
 }
@@ -229,7 +264,12 @@ function calculateBillData(formData) {
   }
 
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const finaltotal = total - finalutrai - totalExpenses;
+
+  // 1. Get the new truck freight value
+  const truckFreight = Number(formData.get("truck_freight")) || 0;
+
+  // 2. Add it to the final total calculation
+  const finaltotal = total - finalutrai - totalExpenses + truckFreight;
 
   // --- Populate the rest of the data object ---
   data["Customer Name"] = formData.get("customer_name");
@@ -239,6 +279,8 @@ function calculateBillData(formData) {
   data["Net Weight"] = net_vajan;
   data["Total Amount"] = total;
   data["Utrāī"] = finalutrai;
+  // 3. Save the Truck Freight value to the data object
+  data["Truck Freight"] = truckFreight;
   data["Final Total"] = finaltotal;
   data["DeductionSettings"] = {
     kasarPercentage: globalSettings.kasarPercentage,
@@ -256,37 +298,70 @@ async function collectData() {
   const submitButton = form.querySelector('button[type="submit"]');
   submitButton.disabled = true;
 
-  const counterRef = db.collection("counters").doc("billCounter");
-
   try {
-    const formData = new FormData(form);
+    // 1. Determine the current financial year
+    const now = new Date();
+    let year = now.getFullYear();
+    const month = now.getMonth(); // 0 = January, 3 = April
 
-    // 1. Get all calculated data from our new central function
+    if (month < 3) {
+      // If the month is Jan, Feb, or Mar...
+      year = year - 1; // ...it's part of the previous financial year
+    }
+    const shortYear = year.toString().slice(-2);
+    const nextShortYear = (year + 1).toString().slice(-2);
+    const financialYearId = `FY${shortYear}${nextShortYear}`; // e.g., "FY2526"
+
+    // 2. Set the correct counter document reference
+    const counterRef = db.collection("counters").doc(`billCounter_${financialYearId}`);
+
+    const formData = new FormData(form);
     let data = calculateBillData(formData);
 
-    // 2. Get the new serial number
+    // Save or update the customer in the 'customers' collection
+    const customerName = data["Customer Name"];
+    const customerVillage = data["Village"];
+    if (customerName) {
+      const customerId = customerName.toLowerCase().replace(/\s+/g, "");
+      const customerRef = db.collection("customers").doc(customerId);
+      await customerRef.set(
+        {
+          name: customerName,
+          village: customerVillage,
+        },
+        { merge: true }
+      );
+    }
+    // --- END OF NEW CODE BLOCK ---
+
+    // --- UPDATED TRANSACTION LOGIC ---
     const newSerialNo = await db.runTransaction(async (transaction) => {
       const counterDoc = await transaction.get(counterRef);
-      if (!counterDoc.exists) throw "Counter document does not exist!";
-      const newCounterValue = counterDoc.data().currentNumber + 1;
-      transaction.update(counterRef, { currentNumber: newCounterValue });
-      return newCounterValue;
+
+      if (!counterDoc.exists) {
+        // If the counter for the new year doesn't exist, create it and start at 1
+        transaction.set(counterRef, { currentNumber: 1 });
+        return 1;
+      } else {
+        // If the counter already exists, just increment it
+        const newCounterValue = counterDoc.data().currentNumber + 1;
+        transaction.update(counterRef, { currentNumber: newCounterValue });
+        return newCounterValue;
+      }
     });
 
-    // 3. Add fields specific to a NEW bill
-    data["Serial No"] = newSerialNo;
-    const now = new Date();
+    // Format the new bill number (e.g., "26-00001")
+    const paddedSerialNo = String(newSerialNo).padStart(5, "0");
+    const formattedBillNo = `${shortYear}-${paddedSerialNo}`;
+
+    data["Serial No"] = formattedBillNo;
     data["Date"] = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(
       2,
       "0"
     )}/${now.getFullYear()}`;
 
-    // 4. Save to Firebase
-    // At the end of collectData()
     const docRef = await billsCollection.add(data);
-    localStorage.setItem("currentBill", JSON.stringify({ ...data, id: docRef.id }));
 
-    // Make sure this line includes the ID
     window.location.href = `final.html?id=${docRef.id}`;
   } catch (error) {
     console.error("Transaction failed or error adding document: ", error);
@@ -304,30 +379,26 @@ async function updateData(docId) {
 
   const billRef = billsCollection.doc(docId);
   try {
-    const existingBill = await billRef.get();
-    if (!existingBill.exists) {
-      alert("Bill not found.");
-      hideLoading();
-      submitButton.disabled = false;
-      return;
-    }
-    const existingData = existingBill.data();
+    const originalBillDoc = await billRef.get();
+    if (!originalBillDoc.exists) throw "Original bill not found!";
+    const originalData = originalBillDoc.data();
+
     const formData = new FormData(form);
+    let newData = calculateBillData(formData);
 
-    // 1. Get all calculated data from our new central function
-    let calculatedData = calculateBillData(formData);
+    newData["Serial No"] = originalData["Serial No"];
+    newData["Date"] = originalData["Date"];
 
-    // 2. Combine the new calculations with the original, unchangeable data
-    //    We keep the original Serial No and Date.
-    const finalData = {
-      ...calculatedData, // Use all the new calculations
-      "Serial No": existingData["Serial No"], // Keep the original serial number
-      Date: existingData["Date"], // Keep the original date
-    };
+    await billRef.update(newData);
 
-    // 3. Update the document in Firebase
-    await billRef.update(finalData);
-    localStorage.setItem("currentBill", JSON.stringify({ ...finalData, id: docId }));
+    // Calculate bags in the original bill
+    let bagsInOriginalBill = 0;
+    if (originalData["Bill Type"] === "Bag") {
+      for (let i = 1; i <= 5; i++) {
+        bagsInOriginalBill += originalData[`Vakal ${i} Katta`] || 0;
+      }
+    }
+
     window.location.href = `final.html?id=${docId}`;
   } catch (error) {
     console.error("Error updating document: ", error);
@@ -337,13 +408,9 @@ async function updateData(docId) {
     hideLoading();
   }
 }
-document.addEventListener("DOMContentLoaded", async function () {
-  await fetchSettings(); // Wait for settings to be fetched
+// At the bottom of bill-form.js
 
-  // Now that settings are loaded, proceed with the rest of the logic.
-  if (document.getElementById("estimateForm")) {
-    initializeIndexPage();
-  } else if (document.getElementById("container-original")) {
-    displayData();
-  }
+document.addEventListener("DOMContentLoaded", async () => {
+  await fetchSettings(); // 1. Wait for the settings to load
+  initializeIndexPage(); // 2. Then, set up the rest of the page
 });

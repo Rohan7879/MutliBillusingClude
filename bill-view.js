@@ -119,12 +119,33 @@ function displayData(data) {
   }
 
   // Setup for printing two copies
-  const originalContainer = document.getElementById("container-original"),
-    copyContainer = document.getElementById("container-copy");
-  if (originalContainer && copyContainer) {
-    const contentToCopy = originalContainer.cloneNode(true);
-    contentToCopy.querySelector(".button-container").remove();
-    copyContainer.innerHTML = contentToCopy.innerHTML;
+
+  // const originalContainer = document.getElementById("container-original"),
+  //   copyContainer = document.getElementById("container-copy");
+  // if (originalContainer && copyContainer) {
+  //   const contentToCopy = originalContainer.cloneNode(true);
+  //   contentToCopy.querySelector(".button-container").remove();
+  //   copyContainer.innerHTML = contentToCopy.innerHTML;
+  // }
+
+  // If truck freight exists, create and insert a new display box for it
+  if (data["Truck Freight"] && data["Truck Freight"] > 0) {
+    const totalsGrid = document.querySelector(".totals-grid");
+    const finalTotalBox = document.querySelector(".final-total-box-container");
+
+    const freightItem = document.createElement("div");
+    freightItem.classList.add("detail-item");
+    freightItem.innerHTML = `
+      <span class="detail-label">ટ્રક ભાડું (Freight)</span>
+      <span class="detail-value" style="color: #28a745;">+${Number(data["Truck Freight"]).toLocaleString(
+        "en-IN"
+      )}</span>
+    `;
+
+    // Insert the new freight box right before the final total box
+    if (totalsGrid && finalTotalBox) {
+      totalsGrid.insertBefore(freightItem, finalTotalBox);
+    }
   }
 
   hideLoading();
@@ -233,101 +254,165 @@ async function fetchBillAndDownload(docId) {
 }
 document.addEventListener("DOMContentLoaded", () => {
   const urlParams = new URLSearchParams(window.location.search);
+  const billId = urlParams.get("id") || urlParams.get("billId");
 
-  const idFromParameter_id = urlParams.get("id");
-
-  const idFromParameter_billId = urlParams.get("billId");
-
-  const finalBillId = urlParams.get("id") || urlParams.get("billId");
-
-  if (finalBillId) {
-    showLoading("Loading bill details...");
-    billsCollection
-      .doc(finalBillId)
-      .get()
-      .then((doc) => {
-        if (doc.exists) {
-          const billData = { ...doc.data(), id: doc.id };
-          localStorage.setItem("currentBill", JSON.stringify(billData));
-          displayData(billData);
-        } else {
-          alert("Error: Bill not found in database.");
-          hideLoading();
-        }
-      });
-  } else {
+  if (billId) {
+    fetchBillAndDisplay(billId); // Call a single function to handle everything
   }
 });
+async function fetchBillAndDisplay(billId) {
+  try {
+    showLoading("Loading bill details...");
+    await fetchSettings(); // Fetch the latest settings
+
+    const doc = await billsCollection.doc(billId).get();
+    if (doc.exists) {
+      const billData = { ...doc.data(), id: doc.id };
+      localStorage.setItem("currentBill", JSON.stringify(billData)); // Still needed for Share/Download buttons
+      displayData(billData);
+    } else {
+      alert("Error: Bill not found in database.");
+    }
+  } catch (error) {
+    console.error("Error fetching and displaying bill:", error);
+    alert("Could not load bill details.");
+  } finally {
+    hideLoading();
+  }
+}
 function downloadBillAsPDF() {
-  const { jsPDF } = window.jspdf;
-  const doc = new jsPDF(); // Create a new PDF document
+  showLoading("Generating PDF...");
+  const billContainer = document.getElementById("container-original");
   const billData = JSON.parse(localStorage.getItem("currentBill"));
 
-  if (!billData) {
-    alert("Bill data not found. Please refresh the page.");
+  if (!billData || !billContainer) {
+    alert("No bill data or container found to download.");
+    hideLoading();
     return;
   }
+  const billNo = billData["Serial No"];
+  const billName = billData["Customer Name"];
 
-  // --- Add Content to the PDF ---
+  document.body.classList.add("print-mode");
 
-  // 1. Title
-  doc.setFontSize(20);
-  doc.text("Final Bill", 105, 20, { align: "center" });
-
-  // 2. Bill Meta Info (Bill No. and Date)
-  doc.setFontSize(12);
-  doc.text(`Bill No: ${billData["Serial No"]}`, 20, 35);
-  doc.text(`Date: ${billData["Date"]}`, 190, 35, { align: "right" });
-
-  // 3. Customer Details
-  doc.text(`Name: ${billData["Customer Name"]}`, 20, 45);
-  doc.text(`Village: ${billData["Village"]}`, 20, 52);
-  doc.text(`Vehicle No: ${billData["Vehicle No"]}`, 190, 45, { align: "right" });
-  doc.text(`Broker: ${billData["Broker"]}`, 190, 52, { align: "right" });
-
-  // 4. Prepare the data for the main table
-  const tableHead = [["Item", "Bags", "Kilos", "Price", "Amount"]];
-  const tableBody = [];
-
-  // Loop through the Vakal items and add them to the table body
-  for (let i = 1; i <= 5; i++) {
-    if (billData[`Vakal ${i} Katta`] > 0 || billData[`Vakal ${i} Kilo`] > 0) {
-      tableBody.push([
-        `Vakal ${i}`,
-        billData[`Vakal ${i} Katta`],
-        billData[`Vakal ${i} Kilo`],
-        `₹${billData[`Vakal ${i} Bhav`]}`,
-        `₹${Number(billData[`Vakal ${i} Amount`]).toLocaleString("en-IN")}`,
-      ]);
-    }
+  const printDetails = billContainer.querySelectorAll(".print-only-details");
+  printDetails.forEach((el) => (el.style.display = "block"));
+  const buttonContainer = billContainer.querySelector(".button-container");
+  if (buttonContainer) {
+    buttonContainer.style.display = "none";
   }
 
-  // 5. Add the table to the PDF using the AutoTable plugin
-  doc.autoTable({
-    head: tableHead,
-    body: tableBody,
-    startY: 60, // The Y position on the page to start the table
-    theme: "grid",
-  });
+  setTimeout(() => {
+    html2canvas(billContainer, { scale: 2 }).then((canvas) => {
+      const imgData = canvas.toDataURL("image/jpeg", 0.8);
+      const { jsPDF } = window.jspdf;
+      const pdf = new jsPDF("p", "mm", "a4");
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const canvasAspectRatio = canvas.width / canvas.height;
 
-  // Get the Y position of where the table ended
-  const finalY = doc.lastAutoTable.finalY;
+      let finalWidth = pdfWidth;
+      let finalHeight = pdfWidth / canvasAspectRatio;
+      if (finalHeight > pdfHeight) {
+        finalHeight = pdfHeight;
+        finalWidth = pdfHeight * canvasAspectRatio;
+      }
+      const x = (pdfWidth - finalWidth) / 2;
+      const y = (pdfHeight - finalHeight) / 2;
 
-  // 6. Add the Totals Section below the table
-  doc.setFontSize(14);
-  doc.text(`Total Amount: ₹${Number(billData["Total Amount"]).toLocaleString("en-IN")}`, 190, finalY + 15, {
-    align: "right",
-  });
-  doc.text(`Unloading (ઉતરાઈ): - ₹${Number(billData["Utrāī"]).toLocaleString("en-IN")}`, 190, finalY + 22, {
-    align: "right",
-  });
+      pdf.addImage(imgData, "JPEG", x, y, finalWidth, finalHeight);
+      pdf.save(`Bill No-${billNo}-${billName}.pdf`);
 
-  doc.setFontSize(18);
-  doc.setFont("helvetica", "bold");
-  doc.text(`Final Total: ₹${Number(billData["Final Total"]).toLocaleString("en-IN")}`, 190, finalY + 32, {
-    align: "right",
-  });
+      document.body.classList.remove("print-mode");
+      printDetails.forEach((el) => (el.style.display = "none"));
+      if (buttonContainer) {
+        buttonContainer.style.display = "flex";
+      }
+      hideLoading();
+    });
+  }, 100);
+}
+// In bill-view.js, add this at the bottom
 
-  // 7. Save the PDF
-  doc.save(`Bill No-${billData["Serial No"]}-${billData["Customer Name"]}.pdf`);
+// --- PAYMENT LOGIC ---
+document.addEventListener("DOMContentLoaded", () => {
+  // This logic needs to be inside the DOMContentLoaded listener
+  const recordPaymentBtn = document.getElementById("record_payment_btn");
+  const paymentModal = document.getElementById("payment-modal");
+  const closePaymentModalBtn = document.getElementById("close-payment-modal-btn");
+  const savePaymentBtn = document.getElementById("save-payment-btn");
+
+  if (recordPaymentBtn) {
+    recordPaymentBtn.addEventListener("click", () => {
+      paymentModal.style.display = "flex";
+    });
+  }
+
+  if (closePaymentModalBtn) {
+    closePaymentModalBtn.addEventListener("click", () => {
+      paymentModal.style.display = "none";
+    });
+  }
+
+  if (savePaymentBtn) {
+    savePaymentBtn.addEventListener("click", async () => {
+      const urlParams = new URLSearchParams(window.location.search);
+      const billId = urlParams.get("id") || urlParams.get("billId");
+      const paymentAmount = Number(document.getElementById("payment-amount-input").value);
+
+      if (!billId || isNaN(paymentAmount) || paymentAmount <= 0) {
+        Swal.fire("Invalid Input", "Please enter a valid payment amount.", "error");
+        return;
+      }
+
+      try {
+        showLoading("Saving payment...");
+        const billRef = billsCollection.doc(billId);
+        const doc = await billRef.get();
+        if (!doc.exists) throw new Error("Bill not found");
+
+        const billData = doc.data();
+        const newAmountPaid = (billData.amountPaid || 0) + paymentAmount;
+        const finalTotal = billData["Final Total"];
+        let newAmountDue = finalTotal - newAmountPaid;
+        let newStatus = "Partially Paid";
+
+        if (newAmountDue <= 0) {
+          newAmountDue = 0;
+          newStatus = "Paid";
+        }
+
+        await billRef.update({
+          amountPaid: newAmountPaid,
+          amountDue: newAmountDue,
+          paymentStatus: newStatus,
+        });
+
+        paymentModal.style.display = "none";
+        Swal.fire("Success!", "Payment has been recorded.", "success").then(() => {
+          window.location.reload(); // Reload page to show updated status
+        });
+      } catch (error) {
+        console.error("Error saving payment:", error);
+        Swal.fire("Error", "Could not save the payment.", "error");
+      } finally {
+        hideLoading();
+      }
+    });
+  }
+});
+
+function prepareAndPrint() {
+  const originalContainer = document.getElementById("container-original");
+  const copyContainer = document.getElementById("container-copy");
+
+  if (originalContainer && copyContainer) {
+    // Copy the content from the original to the duplicate
+    copyContainer.innerHTML = originalContainer.innerHTML;
+  }
+
+  // Give the browser a moment to render the new content
+  setTimeout(() => {
+    window.print();
+  }, 10);
 }

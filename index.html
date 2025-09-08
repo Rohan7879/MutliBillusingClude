@@ -3,23 +3,25 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow">
     <title>Estimate Input Form</title>
     <!-- Firebase Libraries -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-
     <!-- NEW: Libraries for PDF and Excel Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
 
     <script src="firebase-init.js"></script>
     <script src="utils.js"></script>
-
     <script src="bill-form.js" defer></script>
     <script src="bill-list.js" defer></script>
     <link rel="stylesheet" href="html.css" />
+    <link rel="stylesheet" href="dashboard.css" />
     <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
   </head>
   <body>
@@ -54,7 +56,9 @@
                       name="customer_name"
                       oninput="this.value = this.value.toUpperCase()"
                       style="text-transform: uppercase"
+                      required
                     />
+                    <div id="autocomplete-container"></div>
                   </td>
                   <td><strong>ગાડી નં (Vehicle No.)</strong></td>
                   <td>
@@ -104,7 +108,7 @@
               <tr>
                 <td><strong>વેબ્રીજ વજન</strong></td>
                 <td colspan="4">
-                  <input type="number" name="weighbridge_weight" required />
+                  <input type="number" name="weighbridge_weight" step="any" required />
                 </td>
               </tr>
             </tbody>
@@ -112,7 +116,7 @@
               <tr>
                 <td><strong>ભાવ (Price)</strong></td>
                 <td colspan="4">
-                  <input type="number" name="loose_price" id="loose_price_input" />
+                  <input type="number" name="loose_price" id="loose_price_input" step="any" />
                 </td>
               </tr>
             </tbody>
@@ -172,35 +176,35 @@
                 <td>કટ્ટા</td>
                 <td><input type="number" name="vakal_1_katta" /></td>
                 <td>ભાવ</td>
-                <td><input type="number" name="vakal_1_bhav" /></td>
+                <td><input type="number" name="vakal_1_bhav" step="any" /></td>
               </tr>
               <tr>
                 <td><strong>વકલ ૨</strong></td>
                 <td>કટ્ટા</td>
                 <td><input type="number" name="vakal_2_katta" /></td>
                 <td>ભાવ</td>
-                <td><input type="number" name="vakal_2_bhav" /></td>
+                <td><input type="number" name="vakal_2_bhav" step="any" /></td>
               </tr>
               <tr>
                 <td><strong>વકલ ૩</strong></td>
                 <td>કટ્ટા</td>
                 <td><input type="number" name="vakal_3_katta" /></td>
                 <td>ભાવ</td>
-                <td><input type="number" name="vakal_3_bhav" /></td>
+                <td><input type="number" name="vakal_3_bhav" step="any" /></td>
               </tr>
               <tr>
                 <td><strong>વકલ ૪</strong></td>
                 <td>કટ્ટા</td>
                 <td><input type="number" name="vakal_4_katta" /></td>
                 <td>ભાવ</td>
-                <td><input type="number" name="vakal_4_bhav" /></td>
+                <td><input type="number" name="vakal_4_bhav" step="any" /></td>
               </tr>
               <tr>
                 <td><strong>વકલ ૫</strong></td>
                 <td>કટ્ટા</td>
                 <td><input type="number" name="vakal_5_katta" /></td>
                 <td>ભાવ</td>
-                <td><input type="number" name="vakal_5_bhav" /></td>
+                <td><input type="number" name="vakal_5_bhav" step="any" /></td>
               </tr>
             </tbody>
           </table>
@@ -223,6 +227,10 @@
             </div>
             <button type="button" class="add-expense-btn" onclick="addExpense()">+ ખર્ચ ઉમેરો (Add Expense)</button>
           </div>
+          <div class="expense-section">
+            <h3>ભાડું (Truck Freight)</h3>
+            <input type="number" name="truck_freight" placeholder="ટ્રક ભાડું ઉમેરો (Add Freight Cost)" />
+          </div>
 
           <button type="submit">Generate Bill</button>
         </form>
@@ -232,6 +240,15 @@
       <div id="bill_list_view" style="display: none">
         <center><h2>Saved Bills</h2></center>
         <div id="sync_status" style="margin-bottom: 10px">Syncing...</div>
+        <div class="dashboard-filters">
+          <input
+            type="text"
+            id="search_input_list"
+            placeholder="Search by name, village, or vehicle..."
+            style="width: 300px; padding: 8px; border-radius: 5px; border: 1px solid #ccc"
+          />
+        </div>
+        <table class="bill-list-table">
         <button
           type="submit"
           onclick="showBillCreationForm()"
@@ -262,7 +279,13 @@
           <button class="button" style="background-color: #17a2b8" onclick="exportSelectedBills()">
             Download Selected
           </button>
+          <button  class="button" id="mark_paid_btn" style="background-color: #28a745;">Mark Selected as Paid</button>
+          <button type="submit" class="button" onclick="printSelectedBills()" style="background-color: #007bff;">Print Selected</button>
+
+          <div id="selection-summary" style="font-weight: bold; font-size: larger; margin: 10px 0; text-align: center;"></div>
         </div>
+
+
 
         <table class="bill-list-table">
           <thead>
@@ -271,6 +294,7 @@
               <th>Bill No.</th>
               <th>Date</th>
               <th>Name</th>
+              <th>Status</th>
               <th>Bill Type</th>
               <th>Final Total</th>
               <th>Actions</th>

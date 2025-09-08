@@ -1,17 +1,3 @@
-// --- 1. FIREBASE SETUP ---
-const firebaseConfig = {
-  apiKey: "AIzaSyCjYTkXGs8_xVyi9ij7H5AS4Zk1oh1VxzU",
-  authDomain: "ganeshagribilling.firebaseapp.com",
-  projectId: "ganeshagribilling",
-  storageBucket: "ganeshagribilling.firebasestorage.app",
-  messagingSenderId: "99624726079",
-  appId: "1:99624726079:web:4c5aa1f7341ff40e8cd28a",
-  measurementId: "G-3XXY4BCZPL",
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();
-const billsCollection = db.collection("bills");
-
 // --- GLOBAL VARIABLES ---
 let allBillsData = [];
 let currentlyDisplayedBills = [];
@@ -19,7 +5,6 @@ let currentBillIdInModal = null;
 let currentPage = 1;
 const itemsPerPage = 20;
 
-// --- 2. MAIN INITIALIZATION ---
 document.addEventListener("DOMContentLoaded", function () {
   initializeDashboard();
 });
@@ -44,15 +29,26 @@ function initializeDashboard() {
   document.getElementById("next_page_btn").addEventListener("click", goToNextPage);
 }
 
-// --- 3. DATA FETCHING & FILTERING ---
 async function fetchAllBills() {
   try {
+    // This part stays the same: fetch all bill summaries
     const snapshot = await billsCollection.orderBy("Serial No", "desc").get();
+
     allBillsData = snapshot.docs.map((doc) => {
       const data = doc.data();
       return { id: doc.id, ...data };
     });
-    updateDashboard(allBillsData);
+
+    // --- NEW: Filter for the current month immediately after fetching ---
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // getMonth() is 0-11, so we add 1
+
+    const currentMonthBills = allBillsData.filter((bill) => {
+      const [billDay, billMonth, billYear] = bill.Date.split("/").map(Number);
+      return billYear === currentYear && billMonth === currentMonth;
+    });
+    updateDashboard(currentMonthBills);
   } catch (error) {
     console.error("Error fetching bills:", error);
     alert("Could not load bill data.");
@@ -112,6 +108,7 @@ function filterData(period, searchTerm = null) {
       const village = bill["Village"] ? bill["Village"].toLowerCase() : "";
       const broker = bill["Broker"] ? bill["Broker"].toLowerCase() : "";
       const billType = bill["Bill Type"] ? bill["Bill Type"].toLowerCase() : "";
+      const vehicle = (bill["Vehicle No"] || "").toLowerCase();
       const serialNo = String(bill["Serial No"]);
       const WeighbridgeWeight = String(bill["Weighbridge Weight"]);
 
@@ -121,6 +118,7 @@ function filterData(period, searchTerm = null) {
         broker.includes(lowerCaseSearch) ||
         billType.includes(lowerCaseSearch) ||
         serialNo.includes(lowerCaseSearch) ||
+        vehicle.includes(lowerCaseSearch) ||
         WeighbridgeWeight.includes(lowerCaseSearch)
       );
     });
@@ -128,41 +126,13 @@ function filterData(period, searchTerm = null) {
 
   updateDashboard(filteredBills);
 }
-
-// --- 4. ANALYTICS & DASHBOARD UPDATING ---
 function updateDashboard(billsToDisplay) {
   currentlyDisplayedBills = billsToDisplay;
-  recalculateKPIs();
+  updateKPIs(billsToDisplay);
   renderBillList();
   renderPaginationControls();
+  recalculateKPIs();
 }
-
-function recalculateKPIs() {
-  const selectedCheckboxes = document.querySelectorAll(".bill-checkbox:checked");
-  let billsToCalculate = [];
-
-  if (selectedCheckboxes.length > 0) {
-    const selectedIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
-    billsToCalculate = currentlyDisplayedBills.filter((bill) => selectedIds.includes(bill.id));
-  } else {
-    billsToCalculate = currentlyDisplayedBills;
-  }
-
-  const totalPurchases = billsToCalculate.reduce((sum, bill) => sum + bill["Final Total"], 0);
-  const totalWeight = billsToCalculate.reduce((sum, bill) => sum + bill["Net Weight"], 0);
-  const totalBills = billsToCalculate.length;
-  // NEW: Calculate the total Utrāī
-  const totalUtrai = billsToCalculate.reduce((sum, bill) => sum + bill["Utrāī"], 0);
-  const avgPrice = calculateAveragePrice(billsToCalculate);
-
-  document.getElementById("kpi-total-purchases").textContent = `₹${totalPurchases.toLocaleString("en-IN")}`;
-  document.getElementById("kpi-total-weight").textContent = `${totalWeight.toLocaleString("en-IN")} kg`;
-  document.getElementById("kpi-total-bills").textContent = totalBills;
-  // NEW: Update the Utrāī card with the total sum
-  document.getElementById("kpi-total-utrai").textContent = `₹${totalUtrai.toLocaleString("en-IN")}`;
-  document.getElementById("kpi-avg-price").textContent = `₹${avgPrice.toFixed(2)}`;
-}
-
 function calculateAveragePrice(bills) {
   let grandFinalTotal = 0;
   grandTotalKilos = 0;
@@ -179,7 +149,27 @@ function calculateAveragePrice(bills) {
   return (grandFinalTotal / grandTotalKilos) * 20;
 }
 
-// --- 5. UI RENDERING AND MODAL FUNCTIONS ---
+function getStatusHtml(bill) {
+  const status = bill.paymentStatus || "Unpaid";
+  const amountPaid = bill.amountPaid || 0;
+  const finalTotal = bill["Final Total"] || 0;
+  // Use a helper function to format numbers, assuming you have one in utils.js
+  const formattedAmountPaid = typeof formatNumber === "function" ? formatNumber(amountPaid) : amountPaid;
+  const formattedFinalTotal = typeof formatNumber === "function" ? formatNumber(finalTotal) : finalTotal;
+
+  const dotClass = status.toLowerCase().replace(" ", "-");
+
+  switch (status) {
+    case "Paid":
+      return `<span class="status-dot ${dotClass}"></span> Paid`;
+    case "Partially Paid":
+      return `<span class="status-dot ${dotClass}"></span> Partial<br><small>(${formattedAmountPaid} / ${formattedFinalTotal})</small>`;
+    case "Unpaid":
+    default:
+      return `<span class="status-dot unpaid"></span> Unpaid`;
+  }
+}
+
 function renderBillList() {
   const tableBody = document.getElementById("dashboard_bill_list_body");
   tableBody.innerHTML = "";
@@ -195,11 +185,12 @@ function renderBillList() {
               <td>${bill["Serial No"]}</td>
               <td>${bill["Date"]}</td>
               <td>${bill["Customer Name"]}</td>
+              <td>${getStatusHtml(bill)}</td>
               <td>${bill["Bill Type"]}</td>
               <td>${Number(bill["Final Total"]).toLocaleString("en-IN")}</td>
               <td class="action-buttons">
-                  <button class="view-btn" onclick="viewBillInModal('${bill.id}')">View</button>
-              </td>
+        <button class="view-btn" onclick="viewBillInModal('${bill.id}')">View</button>
+    </td>
           `;
     tableBody.appendChild(row);
   });
@@ -211,8 +202,6 @@ function toggleSelectAll(source) {
   checkboxes.forEach((checkbox) => (checkbox.checked = source.checked));
   recalculateKPIs();
 }
-
-// --- PAGINATION FUNCTIONS ---
 function renderPaginationControls() {
   const totalPages = Math.ceil(currentlyDisplayedBills.length / itemsPerPage);
   document.getElementById("page_info").textContent = `Page ${currentPage} of ${totalPages}`;
@@ -240,22 +229,51 @@ function goToPreviousPage() {
 
 async function viewBillInModal(docId) {
   try {
+    // Show a loading indicator in the modal
+    const modalContent = document.getElementById("modal-bill-content");
+    modalContent.innerHTML = "<h3>Loading bill...</h3>";
+    const modalOverlay = document.getElementById("view-bill-modal");
+    modalOverlay.style.display = "flex";
+
+    // --- NEW: Fetch the FULL document from Firestore ---
     const doc = await billsCollection.doc(docId).get();
+
     if (doc.exists) {
       currentBillIdInModal = doc.id;
       const billData = doc.data();
-      const modalContent = document.getElementById("modal-bill-content");
-      const modalOverlay = document.getElementById("view-bill-modal");
-      modalContent.innerHTML = generateBillHtmlForView(billData);
-      modalOverlay.style.display = "flex";
+
+      // We need to manually add the truck freight box if it exists
+      // because the modal's HTML is generated dynamically
+      let finalHtml = generateBillHtmlForView(billData);
+      if (billData["Truck Freight"] && billData["Truck Freight"] > 0) {
+        // This part is a simplified version of the logic from bill-view.js
+        // to add the freight cost to the dynamically generated HTML
+        const freightHtml = `
+            <div class="detail-item">
+              <span class="detail-label">ટ્રક ભાડું (Freight)</span>
+              <span class="detail-value" style="color: #28a745;">
+                +${Number(billData["Truck Freight"]).toLocaleString("en-IN", {
+                  minimumFractionDigits: 0,
+                  maximumFractionDigits: 0,
+                })}
+              </span>
+            </div>`;
+        // Insert freightHtml before the final total box in the generated string
+        finalHtml = finalHtml.replace(
+          '<div class="detail-item final-total-box">',
+          freightHtml + '<div class="detail-item final-total-box">'
+        );
+      }
+
+      modalContent.innerHTML = finalHtml;
     } else {
-      alert("Could not find this bill.");
+      modalContent.innerHTML = "<h3>Error: Bill not found.</h3>";
     }
   } catch (error) {
     console.error("Error fetching bill for view:", error);
+    modalContent.innerHTML = "<h3>Could not load bill details.</h3>";
   }
 }
-
 function closeBillView() {
   document.getElementById("view-bill-modal").style.display = "none";
   currentBillIdInModal = null;
@@ -380,4 +398,128 @@ function resetTime(date) {
   const newDate = new Date(date);
   newDate.setHours(0, 0, 0, 0);
   return newDate;
+}
+document.getElementById("month_filter_btn").addEventListener("click", filterByMonth);
+function filterByMonth() {
+  const monthYearInput = document.getElementById("month_year_input").value;
+  let filteredBills;
+
+  if (monthYearInput) {
+    // --- Case 1: A month and year ARE selected ---
+
+    // The input gives us a string like "2025-02". We split it.
+    const [year, month] = monthYearInput.split("-").map(Number);
+
+    filteredBills = allBillsData.filter((bill) => {
+      // The bill date is a string like "30/08/2025". We split it.
+      const [billDay, billMonth, billYear] = bill.Date.split("/").map(Number);
+
+      // Return true only if the year and month match
+      return billYear === year && billMonth === month;
+    });
+  } else {
+    // --- Case 2: No month is selected (show current month) ---
+
+    const now = new Date();
+    const currentYear = now.getFullYear();
+    const currentMonth = now.getMonth() + 1; // getMonth() is 0-11, so we add 1
+
+    filteredBills = allBillsData.filter((bill) => {
+      const [billDay, billMonth, billYear] = bill.Date.split("/").map(Number);
+
+      // Return true only if the bill is from the current year and month
+      return billYear === currentYear && billMonth === currentMonth;
+    });
+  }
+
+  // Update the dashboard with the filtered results
+  updateDashboard(filteredBills);
+}
+
+function updateKPIs(billsToDisplay) {
+  const totalPurchases = billsToDisplay.reduce((sum, bill) => sum + bill["Final Total"], 0);
+  const totalWeight = billsToDisplay.reduce((sum, bill) => sum + bill["Net Weight"], 0);
+  const totalBills = billsToDisplay.length;
+  const totalUtrai = billsToDisplay.reduce((sum, bill) => sum + bill["Utrāī"], 0);
+  const totalAmountDue = billsToDisplay.reduce((sum, bill) => {
+    // If the bill has the new 'amountDue' field, use it.
+    if (typeof bill.amountDue === "number") {
+      return sum + bill.amountDue;
+    }
+    // If it's an old bill and hasn't been marked as 'Paid', assume the full amount is due.
+    if (bill.paymentStatus !== "Paid") {
+      return sum + bill["Final Total"];
+    }
+    // Otherwise (it's an old bill that might have been marked 'Paid'), the amount due is 0.
+    return sum;
+  }, 0);
+
+  const totalBags = billsToDisplay.reduce((sum, bill) => {
+    let bagsInBill = 0;
+    if (bill["Bill Type"] === "Bag") {
+      // For "Bag" bills, sum the 'Katta' fields
+      for (let i = 1; i <= 5; i++) {
+        bagsInBill += bill[`Vakal ${i} Katta`] || 0;
+      }
+    } else if (bill["Bill Type"] === "Loose") {
+      // For "Loose" bills, calculate bags from weight (1 bag per 50kg)
+      const netWeight = bill["Net Weight"] || 0;
+      bagsInBill = Math.round(netWeight / 50);
+    }
+    return sum + bagsInBill;
+  }, 0);
+  document.getElementById("kpi-total-due").textContent = `₹${totalAmountDue.toLocaleString("en-IN")}`;
+  const avgPrice = calculateAveragePrice(billsToDisplay);
+
+  // Update the KPI cards
+  document.getElementById("kpi-total-purchases").textContent = `₹${totalPurchases.toLocaleString("en-IN")}`;
+  document.getElementById("kpi-total-weight").textContent = `${totalWeight.toLocaleString("en-IN")} kg`;
+  document.getElementById("kpi-total-bills").textContent = totalBills;
+  document.getElementById("kpi-total-utrai").textContent = `₹${totalUtrai.toLocaleString("en-IN")}`;
+  document.getElementById("kpi-total-bags").textContent = totalBags.toLocaleString("en-IN");
+  document.getElementById("kpi-avg-price").textContent = `₹${avgPrice.toFixed(2)}`;
+}
+
+function recalculateKPIs() {
+  // Find all the checkboxes that are currently checked
+  const selectedCheckboxes = document.querySelectorAll(".bill-checkbox:checked");
+  let billsToCalculate = [];
+
+  if (selectedCheckboxes.length > 0) {
+    // If some boxes are checked, build a list of the selected bills
+    const selectedIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
+    billsToCalculate = currentlyDisplayedBills.filter((bill) => selectedIds.includes(bill.id));
+  } else {
+    // If NO boxes are checked, use all the bills currently displayed on the page
+    billsToCalculate = currentlyDisplayedBills;
+  }
+
+  // Calculate the totals for the selected (or displayed) bills
+  const totalPurchases = billsToCalculate.reduce((sum, bill) => sum + bill["Final Total"], 0);
+  const totalWeight = billsToCalculate.reduce((sum, bill) => sum + bill["Net Weight"], 0);
+  const totalBills = billsToCalculate.length;
+  const totalUtrai = billsToCalculate.reduce((sum, bill) => sum + bill["Utrāī"], 0);
+  const totalBags = billsToCalculate.reduce((sum, bill) => {
+    let bagsInBill = 0;
+    if (bill["Bill Type"] === "Bag") {
+      // For "Bag" bills, sum the 'Katta' fields
+      for (let i = 1; i <= 5; i++) {
+        bagsInBill += bill[`Vakal ${i} Katta`] || 0;
+      }
+    } else if (bill["Bill Type"] === "Loose") {
+      // For "Loose" bills, calculate bags from weight (1 bag per 50kg)
+      const netWeight = bill["Net Weight"] || 0;
+      bagsInBill = Math.round(netWeight / 50);
+    }
+    return sum + bagsInBill;
+  }, 0);
+  const avgPrice = calculateAveragePrice(billsToCalculate);
+
+  // Update the KPI cards on the screen
+  document.getElementById("kpi-total-purchases").textContent = `₹${totalPurchases.toLocaleString("en-IN")}`;
+  document.getElementById("kpi-total-weight").textContent = `${totalWeight.toLocaleString("en-IN")} kg`;
+  document.getElementById("kpi-total-bills").textContent = totalBills;
+  document.getElementById("kpi-total-utrai").textContent = `₹${totalUtrai.toLocaleString("en-IN")}`;
+  document.getElementById("kpi-total-bags").textContent = totalBags.toLocaleString("en-IN");
+  document.getElementById("kpi-avg-price").textContent = `₹${avgPrice.toFixed(2)}`;
 }

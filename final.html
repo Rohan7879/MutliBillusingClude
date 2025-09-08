@@ -3,15 +3,19 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
     <title>Final Bill</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css">
 
     <!-- Firebase Libraries -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <!-- Libraries for PDF Export -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
     <script src="firebase-init.js"></script>
@@ -53,7 +57,7 @@
 
       <div class="bill-meta">
         <div class="meta-item">
-          <span class="meta-label bill-label">Bill No:</span>
+          <!-- <span class="meta-label bill-label">Bill No:</span> -->
           <span class="meta-value bill-no" id="display_serial_no"></span>
         </div>
         <div class="meta-item">
@@ -169,16 +173,28 @@
           </div>
         </div>
       </div>
-
+      
       <div class="button-container">
         <a href="index.html" class="button back-button">Go Back</a>
+        <button id="record_payment_btn" class="button" style="background-color: #28a745">Record Payment</button>
         <button onclick="downloadBillAsPDF()" class="button" style="background-color: #dc3545">Download PDF</button>
         <button onclick="sendBillViaWhatsApp()" class="button" style="background-color: #25d366">
           Share via WhatsApp
         </button>
-        <button onclick="window.print()" class="button" id="printButton">Print Bill</button>
+        <button onclick="prepareAndPrint()" class="button" id="printButton">Print Bill</button>
       </div>
     </div>
-    <div class="container print-copy" id="container-copy"></div>
+      <div class="container print-copy" id="container-copy"></div>
+    
+    <div id="payment-modal" class="modal-overlay" style="display: none;">
+      <div class="modal-content">
+        <h2>Record a Payment</h2>
+        <p>Enter the amount the customer has paid for this bill.</p>
+        <input type="number" id="payment-amount-input" placeholder="Enter amount" step="any" style="width: 100%; margin-bottom: 15px;">
+        <div class="modal-button-container">
+          <button id="save-payment-btn" class="button">Save Payment</button>
+          <button id="close-payment-modal-btn" class="button close-modal-btn">Cancel</button>
+        </div>
+        
   </body>
 </html>

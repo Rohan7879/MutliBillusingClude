@@ -2,7 +2,7 @@
 
 @page {
   size: A4;
-  margin: 0.5cm; /* Reduced page margin */
+  margin: 1cm; /* Reduced page margin */
 }
 
 @media print {
