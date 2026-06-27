@@ -1,14 +1,27 @@
+let allBillsForList = [];
+let currentPageForList = 1;
+const itemsPerPageForList = 25;
+
+let billListInitialized = false;
+
 function showBillListView() {
-  document.getElementById("bill_creation_form").style.display = "none";
-  document.getElementById("view_all_bills_btn").style.display = "none";
-  document.getElementById("bill_list_view").style.display = "block";
+  const formEl = document.getElementById("bill_creation_form");
+  const listEl = document.getElementById("bill_list_view");
+  if (formEl) formEl.style.display = "none";
+  if (listEl) listEl.style.display = "block";
   showLoading();
 
-  document
-    .getElementById("search_input_list")
-    .addEventListener("input", (event) => filterData(null, event.target.value));
-
-  document.getElementById("mark_paid_btn").addEventListener("click", markSelectedBillsAsPaid);
+  if (!billListInitialized) {
+    billListInitialized = true;
+    const searchEl = document.getElementById("search_input_list");
+    const prevBtn = document.getElementById("prev_page_list_btn");
+    const nextBtn = document.getElementById("next_page_list_btn");
+    const paidBtn = document.getElementById("mark_paid_btn");
+    if (searchEl) searchEl.addEventListener("input", (e) => filterAndRenderList(e.target.value));
+    if (prevBtn) prevBtn.addEventListener("click", goToPrevListPage);
+    if (nextBtn) nextBtn.addEventListener("click", goToNextListPage);
+    if (paidBtn) paidBtn.addEventListener("click", markSelectedBillsAsPaid);
+  }
 
   billsCollection.orderBy("Serial No", "desc").onSnapshot((snapshot) => {
     const syncStatus = document.getElementById("sync_status");
@@ -22,11 +35,34 @@ function showBillListView() {
       syncStatus.style.color = "green";
     }
 
-    allBillsForList = snapshot.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+    allBillsForList = snapshot.docs;
+    currentPageForList = 1;
 
-    renderBillList(snapshot.docs);
+    filterAndRenderList();
     hideLoading();
   });
+}
+
+function filterAndRenderList(searchTerm = null) {
+  let billsToDisplay = allBillsForList;
+
+  if (searchTerm) {
+    const lowerCaseSearch = searchTerm.toLowerCase();
+    billsToDisplay = allBillsForList.filter((doc) => {
+      const bill = doc.data();
+      const searchString = [bill["Serial No"], bill["Customer Name"], bill["Village"], bill["Vehicle No"]]
+        .join(" ")
+        .toLowerCase();
+      return searchString.includes(lowerCaseSearch);
+    });
+  }
+
+  const start = (currentPageForList - 1) * itemsPerPageForList;
+  const end = start + itemsPerPageForList;
+  const billsForCurrentPage = billsToDisplay.slice(start, end);
+
+  renderBillList(billsForCurrentPage);
+  renderListPaginationControls(billsToDisplay.length);
 }
 
 async function markSelectedBillsAsPaid() {
@@ -80,7 +116,6 @@ async function markSelectedBillsAsPaid() {
 function showBillCreationForm() {
   document.getElementById("bill_list_view").style.display = "none";
   document.getElementById("bill_creation_form").style.display = "block";
-  document.getElementById("view_all_bills_btn").style.display = "block";
 }
 // Add this new function to bill-list.js and dashboard.js
 
@@ -108,19 +143,13 @@ function renderBillList(docs) {
   const tableBody = document.getElementById("bill_list_body");
   tableBody.innerHTML = "";
   if (docs.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No bills saved yet.</td></tr>'; // colspan is now 8
+    tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No bills found.</td></tr>';
     return;
   }
-
-  // REMOVED: The old, unnecessary code for creating a unique customer list
-  // and saving it to sessionStorage has been deleted.
 
   docs.forEach((doc) => {
     const bill = doc.data();
     const row = document.createElement("tr");
-
-    // The HTML is now cleaner, with data-* attributes instead of onclick
-    // and includes the new Status column.
     row.innerHTML = `
      <td><input type="checkbox" class="bill-checkbox" value="${doc.id}" onchange="updateSelectionSummary()"></td>
       <td>${bill["Serial No"]}</td>
@@ -135,24 +164,41 @@ function renderBillList(docs) {
           <button class="delete-btn" data-id="${doc.id}" data-serial="${bill["Serial No"]}">Delete</button>
       </td>
     `;
-
-    // The event listeners are now properly attached in the JavaScript
-    row.querySelector(".view-btn").addEventListener("click", (event) => {
-      viewBill(event.target.dataset.id);
-    });
-
-    row.querySelector(".edit-btn").addEventListener("click", (event) => {
-      editBill(event.target.dataset.id);
-    });
-
-    row.querySelector(".delete-btn").addEventListener("click", (event) => {
-      const id = event.target.dataset.id;
-      const serial = event.target.dataset.serial;
-      deleteBill(id, serial);
-    });
-
+    row.querySelector(".view-btn").addEventListener("click", (event) => viewBill(event.target.dataset.id));
+    row.querySelector(".edit-btn").addEventListener("click", (event) => editBill(event.target.dataset.id));
+    row
+      .querySelector(".delete-btn")
+      .addEventListener("click", (event) => deleteBill(event.target.dataset.id, event.target.dataset.serial));
     tableBody.appendChild(row);
   });
+}
+
+function renderListPaginationControls(totalItems) {
+  const totalPages = Math.ceil(totalItems / itemsPerPageForList) || 1;
+  document.getElementById("page_info_list").textContent = `Page ${currentPageForList} of ${totalPages}`;
+  document.getElementById("prev_page_list_btn").disabled = currentPageForList === 1;
+  document.getElementById("next_page_list_btn").disabled = currentPageForList >= totalPages;
+}
+
+function goToNextListPage() {
+  // We get the total number of items from the currently filtered list to calculate total pages
+  const searchTerm = document.getElementById("search_input_list").value;
+  const filteredList = searchTerm
+    ? allBillsForList.filter((doc) => JSON.stringify(doc.data()).toLowerCase().includes(searchTerm.toLowerCase()))
+    : allBillsForList;
+  const totalPages = Math.ceil(filteredList.length / itemsPerPageForList);
+
+  if (currentPageForList < totalPages) {
+    currentPageForList++;
+    filterAndRenderList(searchTerm);
+  }
+}
+
+function goToPrevListPage() {
+  if (currentPageForList > 1) {
+    currentPageForList--;
+    filterAndRenderList(document.getElementById("search_input_list").value);
+  }
 }
 function viewBill(docId) {
   window.location.href = `final.html?id=${docId}`;

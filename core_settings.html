@@ -3,70 +3,245 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Core Settings</title>
-    <!-- Firebase Libraries -->
+    <title>Settings — Ganesh Agri</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="firebase-init.js"></script>
-
     <script src="core_settings.js"></script>
     <link rel="stylesheet" href="html.css" />
-    <link rel="stylesheet" href="core_settings.css" />
     <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
+    <style>
+      .top-navbar {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        background: linear-gradient(135deg, #003d6e, #005a9e);
+        box-shadow: 0 4px 20px rgba(0, 62, 110, 0.35);
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 64px;
+        margin: -20px -16px 28px;
+      }
+      .navbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+      }
+      .navbar-brand img {
+        height: 40px;
+        border-radius: 8px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+      }
+      .navbar-brand span {
+        color: white;
+        font-size: 1.2em;
+        font-weight: 800;
+      }
+      .navbar-links {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
+      }
+      .nav-link:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+      }
+      .nav-link.active {
+        background: rgba(255, 255, 255, 0.22);
+        color: white;
+      }
+      @media (max-width: 640px) {
+        .navbar-links .nav-link span:not(.nav-icon) {
+          display: none;
+        }
+        .top-navbar {
+          padding: 0 12px;
+        }
+      }
+
+      .page-wrapper {
+        max-width: 680px;
+        margin: 0 auto;
+      }
+      .section-card {
+        background: white;
+        border-radius: 16px;
+        padding: 28px;
+        margin-bottom: 20px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 12px rgba(0, 90, 158, 0.07);
+      }
+      .section-card-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1em;
+        font-weight: 800;
+        color: #005a9e;
+        margin: 0 0 22px;
+        padding-bottom: 14px;
+        border-bottom: 2px solid #e7f3ff;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      .settings-row {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 16px 18px;
+        border-radius: 10px;
+        background: #f8f9fa;
+        border: 1.5px solid #e9ecef;
+        margin-bottom: 12px;
+        transition: border-color 0.2s;
+      }
+      .settings-row:hover {
+        border-color: #b3d4f5;
+      }
+      .settings-row-label {
+        font-weight: 700;
+        color: #343a40;
+        font-size: 15px;
+      }
+      .settings-row-desc {
+        font-size: 12px;
+        color: #6c757d;
+        margin-top: 3px;
+      }
+      .settings-row input {
+        width: 130px;
+        padding: 10px 14px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 15px;
+        font-family: inherit;
+        text-align: center;
+        font-weight: 700;
+        color: #005a9e;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+      .settings-row input:focus {
+        border-color: #005a9e;
+        box-shadow: 0 0 0 3px rgba(0, 90, 158, 0.1);
+        outline: none;
+      }
+
+      .save-btn {
+        width: 100%;
+        padding: 16px;
+        border: none;
+        border-radius: 12px;
+        background: linear-gradient(135deg, #005a9e, #003d6e);
+        color: white;
+        font-size: 17px;
+        font-weight: 800;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.22s;
+        box-shadow: 0 4px 16px rgba(0, 90, 158, 0.3);
+        letter-spacing: 0.3px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .save-btn:hover {
+        background: linear-gradient(135deg, #003d6e, #002550);
+        transform: translateY(-2px);
+        box-shadow: 0 8px 24px rgba(0, 90, 158, 0.38);
+      }
+
+      .info-banner {
+        background: linear-gradient(135deg, #e7f3ff, #cfe0ff);
+        border: 1.5px solid #b3d4f5;
+        border-radius: 10px;
+        padding: 14px 18px;
+        margin-bottom: 22px;
+        color: #003d6e;
+        font-size: 14px;
+        font-weight: 600;
+        display: flex;
+        align-items: center;
+        gap: 10px;
+      }
+    </style>
   </head>
   <body>
-    <div class="container">
-      <div class="header">
-        <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
-        <h1>Core Settings</h1>
+    <nav class="top-navbar">
+      <a class="navbar-brand" href="index.html">
+        <img src="IMG-20250716-WA0121.jpg" alt="Logo" />
+        <span>Ganesh Agri</span>
+      </a>
+      <div class="navbar-links">
+        <a class="nav-link" href="index.html"><span class="nav-icon">🧾</span><span>New Bill</span></a>
+        <a class="nav-link" href="index.html"><span class="nav-icon">📋</span><span>Bills</span></a>
+        <a class="nav-link" href="dashboard.html"><span class="nav-icon">📊</span><span>Dashboard</span></a>
+        <a class="nav-link" href="ledger.html"><span class="nav-icon">📒</span><span>Ledger</span></a>
+        <a class="nav-link active" href="core_settings.html"><span class="nav-icon">⚙️</span><span>Settings</span></a>
       </div>
+    </nav>
 
-      <div id="settings-form-container">
-        <h2>Deduction Values</h2>
-        <p>Update the values below to change the calculation for all new bills.</p>
+    <div class="page-wrapper">
+      <div class="section-card">
+        <div class="section-card-title"><span>⚙️</span> Core Settings — Deduction Values</div>
+
+        <div class="info-banner">
+          ℹ️ These values affect all <strong>new bills</strong>. Existing bills are not changed.
+        </div>
 
         <form id="settingsForm">
-          <table>
-            <tbody>
-              <tr>
-                <td><strong>Kasar Percentage (0.3% = 0.003)</strong></td>
-                <td>
-                  <input type="number" name="kasarPercentage" step="0.001" min="0" required />
-                </td>
-              </tr>
-              <tr>
-                <td><strong>Kantan Bag Weight (in kg)</strong></td>
-                <td>
-                  <input type="number" name="kantanWeight" step="0.1" min="0" required />
-                </td>
-              </tr>
-              <tr>
-                <td><strong>Plastic Bag Weight (in kg)</strong></td>
-                <td>
-                  <input type="number" name="plasticWeight" step="0.1" min="0" required />
-                </td>
-              </tr>
-              <tr>
-                <td><strong>Utrāī Percentage (%)</strong></td>
-                <td>
-                  <input type="number" name="utraiPercentage" step="1" min="0" required />
-                </td>
-              </tr>
-            </tbody>
-          </table>
-          <button type="submit">Save Settings</button>
+          <div class="settings-row">
+            <div>
+              <div class="settings-row-label">📉 Kasar Percentage</div>
+              <div class="settings-row-desc">0.3% = enter 0.003</div>
+            </div>
+            <input type="number" name="kasarPercentage" step="0.001" min="0" required placeholder="0.003" />
+          </div>
+          <div class="settings-row">
+            <div>
+              <div class="settings-row-label">🟤 Kantan Bag Weight</div>
+              <div class="settings-row-desc">Weight in kg per bag</div>
+            </div>
+            <input type="number" name="kantanWeight" step="0.1" min="0" required placeholder="0.6" />
+          </div>
+          <div class="settings-row">
+            <div>
+              <div class="settings-row-label">⬜ Plastic Bag Weight</div>
+              <div class="settings-row-desc">Weight in kg per bag</div>
+            </div>
+            <input type="number" name="plasticWeight" step="0.1" min="0" required placeholder="0.2" />
+          </div>
+          <div class="settings-row">
+            <div>
+              <div class="settings-row-label">🚛 Utrāī Percentage</div>
+              <div class="settings-row-desc">Unloading charge in %</div>
+            </div>
+            <input type="number" name="utraiPercentage" step="1" min="0" required placeholder="7" />
+          </div>
+
+          <button type="submit" class="save-btn" style="margin-top: 8px">💾 Save Settings</button>
         </form>
       </div>
-
-      <button
-        type="submit"
-        onclick="window.location.href='index.html';"
-        id="view_all_bills_btn"
-        class="button"
-        style="width: 100%; margin-top: 20px; background-color: #6c757d"
-      >
-        Back to Bill Creation
-      </button>
     </div>
   </body>
 </html>

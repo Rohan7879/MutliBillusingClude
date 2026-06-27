@@ -1,100 +1,249 @@
-/* --- Print-Friendly Styles for Two Copies --- */
+/* --- DEDICATED STYLESHEET FOR PRINTING BILLS --- */
 
-@page {
-  size: A4;
-  margin: 1cm; /* Reduced page margin */
+body {
+  -webkit-print-color-adjust: exact !important;
+  print-color-adjust: exact !important;
+  background-color: #fff;
+  font-family: sans-serif;
 }
 
+/* ── DEFAULT: A5, 2 copies per page ── */
+@page {
+  size: A5;
+  margin: 0.5cm;
+}
+
+/* Hide non-print elements */
+.no-print,
+.header,
+.button-container,
+#loading-bar,
+#payment-modal,
+.match-status {
+  display: none !important;
+}
+
+/* ── 2 copies fit in A5 ── */
+.container {
+  width: 100%;
+  height: 48%;
+  display: flex;
+  flex-direction: column;
+  box-shadow: none;
+  border: 1px solid #000;
+  padding: 8px 10px;
+  margin-bottom: 1%;
+  box-sizing: border-box;
+  position: relative;
+  overflow: hidden;
+  page-break-inside: avoid;
+}
+
+/* ── When body has .use-a4 class → A4, 1 copy full page ── */
 @media print {
-  body {
-    background-color: #ffffff;
-    font-family: serif;
-    font-size: 8pt; /* Further reduced font size */
-    color: #000000;
-    margin: 0;
-    padding: 0;
+  body.use-a4 {
+    size: A4;
   }
+}
 
-  /* Hide elements not needed on the printed bill */
-  .button-container,
-  .match-status,
-  .logo {
-    /* Added .logo to hide it */
-    display: none;
-  }
+body.use-a4 .container {
+  height: auto !important;
+  min-height: unset !important;
+  width: 100%;
+  margin-bottom: 0;
+  page-break-after: always;
+  overflow: visible;
+  border: 1px solid #000;
+}
 
-  /* Style both containers to fit on one page */
-  .container {
-    width: 100%;
-    height: 49%; /* Reduced height to ensure fit */
-    box-shadow: none;
-    border: 1px solid #aaa; /* Lighter border for print */
-    padding: 10px; /* Further reduced padding */
-    margin: 0 0 1% 0;
-    page-break-after: avoid;
-    page-break-inside: avoid;
-    box-sizing: border-box;
-  }
+/* When A4 mode — inject @page via JS */
 
-  /* Show the second copy only when printing */
-  .print-copy {
-    display: block !important;
-  }
+.print-copy {
+  display: block !important;
+}
 
-  /* Remove the background watermark for printing */
-  .container::before {
-    display: none;
-  }
+/* ── Bill Meta Header ── */
+.bill-meta {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  border-bottom: 2px solid #000;
+  padding-bottom: 4px;
+  margin-bottom: 4px;
+}
+.bill-meta .meta-item {
+  font-size: 10pt;
+  font-weight: bold;
+}
+.bill-meta .bill-no {
+  white-space: nowrap;
+}
+.bill-meta .bag-count-header {
+  font-size: 8pt;
+  text-align: center;
+}
 
-  /* Ensure all text is black for printing */
-  .detail-value,
-  .detail-label,
-  h1,
-  .final-bill-table td,
-  .final-bill-table th,
-  .bill-label,
-  .bill-value,
-  .summary-row .bill-label {
-    color: #000000;
-  }
+/* ── Customer Details ── */
+.print-only-details {
+  display: block !important;
+}
+.detail-line {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 3px;
+  font-size: 9pt;
+}
+.detail-label-enter {
+  font-size: 9pt;
+  font-weight: 700;
+}
+.detail-value-line {
+  font-size: 9pt;
+  font-weight: bold;
+  border-bottom: 1px solid #000;
+  flex: 1;
+  margin-left: 4px;
+}
 
-  h1 {
-    font-size: 1.4em; /* Further reduce heading size */
-    margin-bottom: 10px;
-  }
+/* ── Details Grid ── */
+.details-grid {
+  display: grid;
+  grid-template-columns: repeat(5, 1fr);
+  gap: 4px;
+  margin-top: 5px;
+  margin-bottom: 4px;
+}
+.detail-item {
+  border: 1px solid #ccc;
+  padding: 2px 3px;
+  text-align: center;
+  background-color: transparent !important;
+}
+.detail-label {
+  font-size: 7pt;
+  display: block;
+}
+.detail-value {
+  font-size: 11pt;
+  font-weight: bold;
+  color: #000 !important;
+  display: block;
+}
+.summary-item .detail-value {
+  font-size: 13pt;
+}
 
-  /* Make the final total stand out */
-  .final-total {
-    background-color: transparent !important;
-    border-top: 2px solid #000;
-    border-bottom: 2px solid #000;
-    padding: 6px 0; /* Reduced padding */
-  }
+/* ── Supply type / bag count ── */
+#bag-count-text-line,
+#display_supply_type,
+#total-bags-final-view {
+  font-size: 9pt;
+  font-weight: bold;
+  text-align: center;
+  margin: 3px 0;
+  color: #000 !important;
+}
 
-  .final-total .bill-label,
-  .final-total .bill-value {
-    color: #000000 !important;
-  }
+/* ── Vakal Table ── */
+.final-bill-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8pt;
+  margin-top: 4px;
+}
+.final-bill-table th,
+.final-bill-table td {
+  border: 1px solid #ccc;
+  padding: 2px 4px;
+  text-align: center;
+}
+.final-bill-table th {
+  background: #eee !important;
+  font-size: 7.5pt;
+  font-weight: bold;
+}
+.final-bill-table td {
+  font-size: 9pt;
+}
+.final-bill-table td:last-child {
+  font-weight: bold;
+  font-size: 10pt;
+}
 
-  /* Make the summary cards simpler */
-  .detail-item {
-    background-color: transparent;
-    border: 1px solid #ccc;
-    padding: 6px; /* Reduced padding */
-  }
+/* ── Moisture total box ── */
+#moisture_total_box {
+  display: block !important;
+  background: transparent !important;
+  border: 1px dashed #999 !important;
+  border-radius: 0 !important;
+  padding: 2px 6px !important;
+  margin: 3px 0 !important;
+  text-align: center;
+}
+#moisture_total_box .detail-label {
+  font-size: 7.5pt;
+  color: #000 !important;
+  font-weight: 700;
+}
+#moisture_total_box .detail-value {
+  font-size: 9pt;
+  color: #000 !important;
+  font-weight: 800;
+}
 
-  .details-grid {
-    gap: 10px; /* Reduced gap between cards */
-    margin-bottom: 15px;
-  }
+/* ── Totals Grid ── */
+.totals-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  font-size: 9pt;
+  margin-top: auto;
+}
+.totals-grid .detail-item {
+  border-radius: 0;
+}
 
-  .summary-item,
-  .avg-weight-item {
-    background: #eee;
-  }
+/* ── FINAL TOTAL BOX — Black bold ── */
+.final-total-box-container {
+  grid-column: 1 / -1;
+}
+.final-total-box {
+  background-color: #000 !important;
+  border: 2px solid #000 !important;
+  padding: 5px !important;
+}
+.final-total-box .detail-label {
+  color: #fff !important;
+  font-size: 9pt !important;
+  font-weight: 800 !important;
+  display: block;
+}
+.final-total-box .detail-value {
+  color: #fff !important;
+  font-size: 17pt !important;
+  font-weight: 900 !important;
+  display: block;
+  letter-spacing: 0.5px;
+}
 
-  table td,
-  .bill-row {
-    padding: 4px 8px; /* Reduced padding on table cells and rows */
-  }
+/* ── Original / Duplicate tags ── */
+#container-original::after {
+  content: "Original";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: 1px solid #000;
+  padding: 1px 3px;
+  font-size: 6.5pt;
+  font-weight: bold;
+}
+#container-copy::after {
+  content: "Duplicate";
+  position: absolute;
+  top: 4px;
+  right: 4px;
+  border: 1px solid #000;
+  padding: 1px 3px;
+  font-size: 6.5pt;
+  font-weight: bold;
 }

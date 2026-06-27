@@ -1,12 +1,12 @@
 // firebase-init.js
 const firebaseConfig = {
-  apiKey: "AIzaSyCjYTkXGs8_xVyi9ij7H5AS4Zk1oh1VxzU",
-  authDomain: "ganeshagribilling.firebaseapp.com",
-  projectId: "ganeshagribilling",
-  storageBucket: "ganeshagribilling.firebasestorage.app",
-  messagingSenderId: "99624726079",
-  appId: "1:99624726079:web:4c5aa1f7341ff40e8cd28a",
-  measurementId: "G-3XXY4BCZPL",
+  apiKey: "AIzaSyDcXQP5bqH6hZwDVRkpeB7PJfBYRqwhsAA",
+  authDomain: "ganesh-agri-new.firebaseapp.com",
+  projectId: "ganesh-agri-new",
+  storageBucket: "ganesh-agri-new.firebasestorage.app",
+  messagingSenderId: "929079364229",
+  appId: "1:929079364229:web:4d258a51db7feff95337ec",
+  measurementId: "G-4ZSXCGNRF7",
 };
 
 // Initialize Firebase

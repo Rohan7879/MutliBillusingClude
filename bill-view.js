@@ -1,161 +1,309 @@
-async function fetchSettings() {
+document.addEventListener("DOMContentLoaded", () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const billId = urlParams.get("id") || urlParams.get("billId");
+  if (billId) {
+    fetchBillAndDisplay(billId);
+  }
+
+  // Payment modal logic from previous updates
+  const recordPaymentBtn = document.getElementById("record_payment_btn");
+  const paymentModal = document.getElementById("payment-modal");
+  const closePaymentModalBtn = document.getElementById("close-payment-modal-btn");
+  const savePaymentBtn = document.getElementById("save-payment-btn");
+  if (recordPaymentBtn) {
+    recordPaymentBtn.addEventListener("click", () => {
+      if (paymentModal) paymentModal.style.display = "flex";
+    });
+  }
+  if (closePaymentModalBtn) {
+    closePaymentModalBtn.addEventListener("click", () => {
+      if (paymentModal) paymentModal.style.display = "none";
+    });
+  }
+  if (savePaymentBtn) {
+    savePaymentBtn.addEventListener("click", () => {
+      // The primary payment system is now in the ledger.
+      // This button can be re-enabled with logic similar to the ledger's savePayment if needed.
+      alert("Please use the Customer Ledger to record payments.");
+    });
+  }
+});
+
+async function fetchBillAndDisplay(billId) {
   try {
-    const settingsDoc = await db.collection("settings").doc("deductions").get();
-    if (settingsDoc.exists) {
-      globalSettings = settingsDoc.data();
+    showLoading("Loading bill details...");
+    await fetchSettings();
+
+    const doc = await billsCollection.doc(billId).get();
+    if (doc.exists) {
+      const billData = { ...doc.data(), id: doc.id };
+      localStorage.setItem("currentBill", JSON.stringify(billData));
+      displayData(billData);
     } else {
-      console.error("Settings document not found. Using default values.");
-      globalSettings = {
-        kasarPercentage: 0.003,
-        kantanWeight: 0.6,
-        plasticWeight: 0.2,
-        utraiPercentage: 7,
-      };
+      alert("Error: Bill not found in database.");
     }
   } catch (error) {
-    console.error("Error fetching settings:", error);
+    console.error("Error fetching and displaying bill:", error);
+    alert("Could not load bill details.");
+  } finally {
+    hideLoading();
   }
 }
+
 function displayData(data) {
-  showLoading("Loading bill details...");
-
-  // Use a fallback for old bills that don't have DeductionSettings
-  const deductionSettings = data.DeductionSettings || {
-    kasarPercentage: 0.003,
-    kantanWeight: 0.6,
-    plasticWeight: 0.2,
-    utraiPercentage: 7,
-  };
-
-  // This is a helper function inside displayData
+  // Helper to safely set a value with number formatting
   function setValue(id, value) {
-    let element = document.getElementById(id);
+    const element = document.getElementById(id);
     if (element) {
       element.innerHTML = formatNumber(value);
     }
   }
 
-  // Find the label for Kasar and update it
-  const kasarLabel = document.querySelector("#kasar_box .detail-label");
-  if (kasarLabel) {
-    const percentage = (deductionSettings.kasarPercentage * 100).toFixed(1);
-    kasarLabel.textContent = `કાંટા કસર (${percentage}%)`;
-  }
-
-  // Find the label for Bardan and update it
-  const bardanLabel = document.querySelector("#bardan_box .detail-label");
-  if (bardanLabel) {
-    bardanLabel.textContent = `બારદાન વજન(${deductionSettings.kantanWeight}+${deductionSettings.plasticWeight})`;
-  }
-
-  // Add the label update for Utrai
-  const utraiLabel = document.querySelector("#utrai_box .detail-label");
-  if (utraiLabel) {
-    utraiLabel.textContent = `ઉતરાઈ (${deductionSettings.utraiPercentage}₹/100kg)`;
-  }
-
-  const serialNoElement = document.getElementById("display_serial_no");
-  if (serialNoElement) {
-    serialNoElement.textContent = data["Serial No"];
-  }
-
-  const customerDetailsMapping = {
-    display_customer_name: data["Customer Name"],
-    display_vehicle_no: data["Vehicle No"],
-    display_village: data["Village"],
-    display_broker: data["Broker"],
-  };
-  Object.entries(customerDetailsMapping).forEach(([id, value]) => {
+  // Helper to safely set simple text content
+  function setText(id, text) {
     const element = document.getElementById(id);
-    if (element) element.textContent = value;
-  });
-
-  const fieldMapping = {
-    display_date: "Date",
-    display_weighbridge_weight: "Weighbridge Weight",
-    display_kasar: "Kasar",
-    display_net_weight: "Net Weight",
-    display_total_amount: "Total Amount",
-    display_utrai: "Utrāī",
-    display_final_total: "Final Total",
-  };
-  Object.entries(fieldMapping).forEach(([id, key]) => setValue(id, data[key] !== undefined ? data[key] : ""));
-
-  // Handle negative sign formatting
-  let kasarValue = data["Kasar"] || 0;
-  document.getElementById("display_kasar").textContent = "-" + formatNumber(kasarValue);
-
-  let utraiValue = data["Utrāī"] || 0;
-  document.getElementById("display_utrai").textContent = "-" + formatNumber(utraiValue);
-
-  for (let i = 1; i <= 5; i++) {
-    setValue(`display_vakal_${i}_katta`, data[`Vakal ${i} Katta`]);
-    setValue(`display_vakal_${i}_kilo`, data[`Vakal ${i} Kilo`]);
-    setValue(`display_vakal_${i}_bhav`, data[`Vakal ${i} Bhav`]);
-    setValue(`display_vakal_${i}_amount`, data[`Vakal ${i} Amount`]);
+    if (element) {
+      element.textContent = text;
+    }
   }
 
-  const bardanValueElement = document.getElementById("display_bardan_weight");
-  if (bardanValueElement) {
-    let bardanValue = data["Bardan Weight"] || 0;
-    bardanValueElement.textContent = "-" + formatNumber(bardanValue);
+  const supplyTypeElement = document.getElementById("display_supply_type");
+  if (supplyTypeElement) {
+    let displayText = "";
+
+    // Case 1: A true "Loose Supply" bill
+    if (data["Bill Type"] === "Loose") {
+      displayText = "લૂઝ";
+    }
+    // Case 2: A "Kantan Pack" bag bill
+    else if (data["Bill Type"] === "Bag" && data["Supply Type"] === "કંતાન પેક") {
+      const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
+      displayText = `ઘઉંના કટ્ટા - ${totalBharela} કંતાન પેક`;
+    }
+    // Case 3: A "Loose" description for a "Bag" bill
+    else if (data["Bill Type"] === "Bag" && data["Supply Type"] === "લૂઝ") {
+      const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
+      displayText = `ઘઉંના કટ્ટા - ${totalBharela} લૂઝ`;
+    }
+
+    supplyTypeElement.textContent = displayText;
+    supplyTypeElement.style.display = displayText ? "block" : "none";
+  }
+  // Set main display values
+  setText("display_serial_no", data["Serial No"]);
+  setText("display_date", data["Date"]);
+  setText("display_customer_name", data["Customer Name"]);
+  setText("display_vehicle_no", data["Vehicle No"]);
+  setText("display_village", data["Village"]);
+  setText("display_broker", data["Broker"]);
+
+  setValue("display_weighbridge_weight", data["Weighbridge Weight"]);
+  setValue("display_net_weight", data["Net Weight"]);
+  setValue("display_total_amount", data["Total Amount"]);
+  setValue("display_final_total", data["Final Total"]);
+
+  // Handle negative display values
+  setText("display_kasar", "-" + formatNumber(data["Kasar"] || 0));
+  setText("display_utrai", "-" + formatNumber(data["Utrāī"] || 0));
+
+  // Moisture display
+  const wbMoistureBox = document.getElementById("wb_moisture_box");
+  const wbMoistureKg = data["Weighbridge Moisture Kg"] || 0;
+  const wbMoisturePct = data["Weighbridge Moisture %"] || 0;
+  if (wbMoistureBox) {
+    if (wbMoistureKg > 0) {
+      wbMoistureBox.style.display = "block";
+      setText("display_wb_moisture", `-${formatNumber(wbMoistureKg)} (${wbMoisturePct}%)`);
+    } else {
+      wbMoistureBox.style.display = "none";
+    }
   }
 
-  renderExpenses(data);
+  // Logic for Kantan/Plastic/Bardan boxes
+  const kantanBox = document.getElementById("kantan_box");
+  const plasticBox = document.getElementById("plastic_box");
 
-  // Hide unnecessary rows
   if (data["Bill Type"] === "Loose") {
-    document.getElementById("bardan_box").style.display = "none";
-    document.querySelectorAll(".optional-vakal").forEach((row) => (row.style.display = "none"));
+    if (kantanBox) kantanBox.style.display = "block";
+    if (plasticBox) plasticBox.style.display = "block";
+    setText("display_kantan_weight", "-" + formatNumber(data["Kantan Weight"] || 0));
+    setText("display_plastic_weight", "-" + formatNumber(data["Plastic Weight"] || 0));
+  } else if (data["Kantan Weight"] !== undefined) {
+    if (kantanBox) kantanBox.style.display = "block";
+    if (plasticBox) plasticBox.style.display = "block";
+    setText("display_kantan_weight", "-" + formatNumber(data["Kantan Weight"] || 0));
+    setText("display_plastic_weight", "-" + formatNumber(data["Plastic Weight"] || 0));
   } else {
-    for (let i = 1; i <= 5; i++) {
-      const kattaValue = data[`Vakal ${i} Katta`] || 0;
-      const bhavValue = data[`Vakal ${i} Bhav`] || 0;
-      const vakalRow = document.getElementById(`vakal_row_${i}`);
-      if (vakalRow && kattaValue === 0 && bhavValue === 0) {
+    // Fallback for old bills
+    if (kantanBox) kantanBox.style.display = "none";
+    if (plasticBox) {
+      plasticBox.style.display = "block";
+      setText("plastic_label", "બારદાન વજન");
+      setText("display_plastic_weight", "-" + formatNumber(data["Bardan Weight"] || 0));
+    }
+  }
+
+  const totalBagsContainer = document.getElementById("total-bags-final-view");
+  if (data["Bill Type"] === "Bag" && totalBagsContainer) {
+    const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
+    const totalKhali = (data["Khali 600"] || 0) + (data["Khali 200"] || 0);
+    const grandTotal = totalBharela + totalKhali;
+
+    if (grandTotal > 0) {
+      totalBagsContainer.innerHTML = `${totalBharela} (ભરેલા) + ${totalKhali} (ખાલી) = ${grandTotal} (કુલ)`;
+      totalBagsContainer.style.display = "block";
+    } else {
+      totalBagsContainer.style.display = "none";
+    }
+  } else if (totalBagsContainer) {
+    totalBagsContainer.style.display = "none";
+  }
+
+  // --- CORRECTED VAKAL ROW LOGIC ---
+  for (let i = 1; i <= 5; i++) {
+    const katta = data[`Vakal ${i} Katta`];
+    const kilo = data[`Vakal ${i} Kilo`];
+    const vakalRow = document.getElementById(`vakal_row_${i}`);
+
+    if (vakalRow) {
+      let showRow = true; // Default to showing the row
+
+      if (data["Bill Type"] === "Loose") {
+        // For loose bills, only show the first row (i=1)
+        if (i > 1) {
+          showRow = false;
+        }
+      } else {
+        // For "Bag" bills, hide empty rows after the first one
+        if ((!katta || katta === 0) && (!kilo || kilo === 0) && i > 1) {
+          showRow = false;
+        }
+      }
+      // --- MODIFIED: LOGIC TO ADD/REMOVE CSS CLASS FOR SPACING ---
+      const billMeta = document.querySelector(".bill-meta");
+      const headerBagCount = document.getElementById("header-bag-count");
+
+      if (data["Bill Type"] === "Bag" && headerBagCount && billMeta) {
+        const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
+        const totalKhali = (data["Khali 600"] || 0) + (data["Khali 200"] || 0);
+        const grandTotal = totalBharela + totalKhali;
+
+        if (grandTotal > 0) {
+          setText("display_bharela_header", `${totalBharela} (ભરેલા)`);
+          setText("display_khali_header", `${totalKhali} (ખાલી)`);
+          setText("display_grand_total_header", `${grandTotal} (કુલ)`);
+          headerBagCount.style.display = "block";
+          billMeta.classList.add("has-bag-counts"); // Add class for larger spacing
+        } else {
+          headerBagCount.style.display = "none";
+          billMeta.classList.remove("has-bag-counts"); // Remove class for smaller spacing
+        }
+      } else if (headerBagCount && billMeta) {
+        headerBagCount.style.display = "none";
+        billMeta.classList.remove("has-bag-counts"); // Remove class for smaller spacing
+      }
+
+      // Now, apply visibility and set data for the row
+      if (showRow) {
+        vakalRow.style.display = "table-row";
+        setValue(`display_vakal_${i}_katta`, katta);
+
+        const moisturePct = data[`Vakal ${i} Moisture %`] || 0;
+        const moistureKg = data[`Vakal ${i} Moisture Kg`] || 0;
+
+        // kilo stored is already AFTER moisture deduction
+        const kiloAfterMoisture = kilo; // final net kilo
+        // raw kilo before moisture = kilo + moistureKg
+        const rawKilo = kiloAfterMoisture + moistureKg;
+
+        const moistureTd = document.getElementById(`vakal_${i}_moisture_td`);
+        const netKiloTd = document.getElementById(`vakal_${i}_net_kilo_td`);
+        const kiloEl = document.getElementById(`display_vakal_${i}_kilo`);
+
+        if (moisturePct > 0 && moistureKg > 0) {
+          // Show raw kilo in kilo column
+          if (kiloEl) kiloEl.innerHTML = formatNumber(rawKilo);
+          // Show moisture column
+          if (moistureTd) {
+            moistureTd.style.display = "table-cell";
+            moistureTd.innerHTML = `-${formatNumber(
+              moistureKg
+            )}<br><small style="font-size:11px;">(${moisturePct}%)</small>`;
+          }
+          // Show net kilo column
+          if (netKiloTd) {
+            netKiloTd.style.display = "table-cell";
+            netKiloTd.innerHTML = `<strong>${formatNumber(kiloAfterMoisture)}</strong>`;
+          }
+        } else {
+          // No moisture — show net kilo directly
+          if (kiloEl) kiloEl.innerHTML = formatNumber(kiloAfterMoisture);
+          if (moistureTd) moistureTd.style.display = "none";
+          if (netKiloTd) netKiloTd.style.display = "none";
+        }
+
+        setValue(`display_vakal_${i}_bhav`, data[`Vakal ${i} Bhav`]);
+        setValue(`display_vakal_${i}_amount`, data[`Vakal ${i} Amount`]);
+      } else {
         vakalRow.style.display = "none";
       }
     }
   }
 
-  // Setup for printing two copies
+  // Show/hide moisture header columns based on data
+  const anyVakalMoisture = [1, 2, 3, 4, 5].some((i) => (data[`Vakal ${i} Moisture %`] || 0) > 0);
+  const thMoisture = document.getElementById("th_moisture");
+  const thNetKilo = document.getElementById("th_net_kilo");
+  if (thMoisture) thMoisture.style.display = anyVakalMoisture ? "table-cell" : "none";
+  if (thNetKilo) thNetKilo.style.display = anyVakalMoisture ? "table-cell" : "none";
 
-  // const originalContainer = document.getElementById("container-original"),
-  //   copyContainer = document.getElementById("container-copy");
-  // if (originalContainer && copyContainer) {
-  //   const contentToCopy = originalContainer.cloneNode(true);
-  //   contentToCopy.querySelector(".button-container").remove();
-  //   copyContainer.innerHTML = contentToCopy.innerHTML;
-  // }
+  // Moisture total summary box
+  let existingMoistureBox = document.getElementById("moisture_total_box");
+  if (anyVakalMoisture) {
+    const totalMoistureKg = [1, 2, 3, 4, 5].reduce((sum, i) => sum + (data[`Vakal ${i} Moisture Kg`] || 0), 0);
+    if (!existingMoistureBox) {
+      const box = document.createElement("div");
+      box.id = "moisture_total_box";
+      box.className = "detail-item";
+      box.style.cssText =
+        "background:#fff8e7; border:2px solid #ffe08a; border-radius:10px; padding:12px; text-align:center; margin-top:10px;";
+      box.innerHTML = `
+        <span class="detail-label" style="color:#7a5700; font-weight:700;">💧 કુલ મોઇ. કપાત (Total Moisture Cut)</span>
+        <span class="detail-value" style="color:#e67e00; font-size:1.8em; font-weight:800; display:block; margin-top:4px;">-${Number(
+          totalMoistureKg
+        ).toLocaleString("en-IN")} kg</span>
+      `;
+      const finalBillTable = document.querySelector(".final-bill-table");
+      if (finalBillTable && finalBillTable.parentNode) {
+        finalBillTable.parentNode.insertBefore(box, finalBillTable.nextSibling);
+      }
+    }
+  } else if (existingMoistureBox) {
+    existingMoistureBox.remove();
+  }
 
-  // If truck freight exists, create and insert a new display box for it
+  renderExpenses(data);
+
   if (data["Truck Freight"] && data["Truck Freight"] > 0) {
     const totalsGrid = document.querySelector(".totals-grid");
     const finalTotalBox = document.querySelector(".final-total-box-container");
-
-    const freightItem = document.createElement("div");
-    freightItem.classList.add("detail-item");
-    freightItem.innerHTML = `
-      <span class="detail-label">ટ્રક ભાડું (Freight)</span>
-      <span class="detail-value" style="color: #28a745;">+${Number(data["Truck Freight"]).toLocaleString(
-        "en-IN"
-      )}</span>
-    `;
-
-    // Insert the new freight box right before the final total box
-    if (totalsGrid && finalTotalBox) {
+    if (totalsGrid && finalTotalBox && !document.getElementById("freight_item")) {
+      const freightItem = document.createElement("div");
+      freightItem.id = "freight_item";
+      freightItem.classList.add("detail-item");
+      freightItem.innerHTML = `<span class="detail-label">ટ્રક ભાડું (Freight)</span><span class="detail-value" style="color: #28a745;">+${Number(
+        data["Truck Freight"]
+      ).toLocaleString("en-IN")}</span>`;
       totalsGrid.insertBefore(freightItem, finalTotalBox);
     }
   }
 
   hideLoading();
 }
+
 function renderExpenses(data) {
   const expensesContainer = document.getElementById("expenses_container");
-  if (!expensesContainer) {
-    console.error("Expenses container not found.");
-    return;
-  }
+  if (!expensesContainer) return;
   expensesContainer.innerHTML = "";
   if (data["Expenses"]) {
     try {
@@ -172,34 +320,26 @@ function renderExpenses(data) {
         expensesContainer.style.display = "none";
       }
     } catch (e) {
-      console.error("Error parsing expenses:", e);
       expensesContainer.style.display = "none";
     }
   } else {
     expensesContainer.style.display = "none";
   }
 }
+
 function sendBillViaWhatsApp() {
-  // --- The Fix Starts Here ---
-  // 1. Get the correct Bill ID directly from the URL.
   const urlParams = new URLSearchParams(window.location.search);
   const billId = urlParams.get("id") || urlParams.get("billId");
-  // 2. Get the rest of the data from localStorage (which was just updated when the page loaded).
   let storedData = localStorage.getItem("currentBill");
-  // --- The Fix Ends Here ---
-
   if (!storedData || !billId) {
     alert("Bill data not found. Cannot create share link.");
     return;
   }
   let data = JSON.parse(storedData);
-
   const customerName = data["Customer Name"];
   const finalTotal = Number(data["Final Total"]).toLocaleString("en-IN");
   const netWeight = Number(data["Net Weight"]).toLocaleString("en-IN");
-
   let vakalDetails = "";
-  // ... (the rest of your message-building logic is perfect and doesn't need to change) ...
   if (data["Bill Type"] === "Loose") {
     vakalDetails = `\n- Kilo: ${data["Vakal 1 Kilo"]} kg\n- Price: ₹${data["Vakal 1 Bhav"]}\n- Amount: ₹${Number(
       data["Vakal 1 Amount"]
@@ -208,86 +348,26 @@ function sendBillViaWhatsApp() {
     for (let i = 1; i <= 5; i++) {
       const kattaValue = data[`Vakal ${i} Katta`];
       if (kattaValue > 0) {
-        vakalDetails +=
-          `\n*વકલ ${i}:*\n` +
-          `  - Bags: ${kattaValue}\n` +
-          `  - Kilos: ${data[`Vakal ${i} Kilo`]} kg\n` +
-          `  - Price: ₹${data[`Vakal ${i} Bhav`]}\n` +
-          `  - Amount: ₹${Number(data[`Vakal ${i} Amount`]).toLocaleString("en-IN")}`;
+        vakalDetails += `\n*વકલ ${i}:*\n  - Bags: ${kattaValue}\n  - Kilos: ${
+          data[`Vakal ${i} Kilo`]
+        } kg\n  - Price: ₹${data[`Vakal ${i} Bhav`]}\n  - Amount: ₹${Number(data[`Vakal ${i} Amount`]).toLocaleString(
+          "en-IN"
+        )}`;
       }
     }
   }
-
-  // Use the 'correctBillId' from the URL to build the link
-  const downloadLink = `https://ganeshagribilling.web.app/d1j3h2k?billId=${billId}`;
-
-  const message =
-    `Bill No : ${data["Serial No"]}\n` +
-    `નામ (Name) : ${customerName}\n` +
-    `ફાઇનલ ટોટલ : ₹${finalTotal}\n` +
-    `નેટ વજન : ${netWeight} kg\n\n` +
-    `*--- Details ---*${vakalDetails}\n\n` +
-    `*Click here to download your bill:*` +
-    `\n${downloadLink}`;
-
+  const downloadLink = `https://ganeshagribilling.web.app/download.html?id=${billId}`; // Assuming this is your deployed app URL
+  const message = `Bill No : ${data["Serial No"]}\nનામ (Name) : ${customerName}\nફાઇનલ ટોટલ : ₹${finalTotal}\nનેટ વજન : ${netWeight} kg\n\n*--- Details ---*${vakalDetails}\n\n*Click here to download your bill:*\n${downloadLink}`;
   const encodedMessage = encodeURIComponent(message);
   const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-
   window.open(whatsappUrl, "_blank");
 }
-async function fetchBillAndDownload(docId) {
-  showLoading("Fetching bill details...");
-  try {
-    const doc = await billsCollection.doc(docId).get();
-    if (doc.exists) {
-      localStorage.setItem("currentBill", JSON.stringify({ ...doc.data(), id: doc.id }));
-      downloadBillAsPDF();
-    } else {
-      alert("Could not find this bill.");
-      hideLoading();
-    }
-  } catch (error) {
-    console.error("Error fetching bill for download:", error);
-    alert("Could not load the bill. Please try again.");
-    hideLoading();
-  }
-}
-document.addEventListener("DOMContentLoaded", () => {
-  const urlParams = new URLSearchParams(window.location.search);
-  const billId = urlParams.get("id") || urlParams.get("billId");
 
-  if (billId) {
-    fetchBillAndDisplay(billId); // Call a single function to handle everything
-  }
-});
-async function fetchBillAndDisplay(billId) {
-  try {
-    showLoading("Loading bill details...");
-    await fetchSettings(); // Fetch the latest settings
-
-    const doc = await billsCollection.doc(billId).get();
-    if (doc.exists) {
-      const billData = { ...doc.data(), id: doc.id };
-      localStorage.setItem("currentBill", JSON.stringify(billData)); // Still needed for Share/Download buttons
-      displayData(billData);
-    } else {
-      alert("Error: Bill not found in database.");
-    }
-  } catch (error) {
-    console.error("Error fetching and displaying bill:", error);
-    alert("Could not load bill details.");
-  } finally {
-    hideLoading();
-  }
-}
 function downloadBillAsPDF() {
-  showLoading("Generating PDF...");
-  const billContainer = document.getElementById("container-original");
+  const billContainer = document.getElementById("finalcontainer");
   const billData = JSON.parse(localStorage.getItem("currentBill"));
-
   if (!billData || !billContainer) {
     alert("No bill data or container found to download.");
-    hideLoading();
     return;
   }
   const billNo = billData["Serial No"];
@@ -295,12 +375,12 @@ function downloadBillAsPDF() {
 
   document.body.classList.add("print-mode");
 
-  const printDetails = billContainer.querySelectorAll(".print-only-details");
-  printDetails.forEach((el) => (el.style.display = "block"));
-  const buttonContainer = billContainer.querySelector(".button-container");
-  if (buttonContainer) {
-    buttonContainer.style.display = "none";
+  if (window.getSelection) {
+    window.getSelection().removeAllRanges();
   }
+
+  const buttonContainer = billContainer.querySelector(".button-container");
+  if (buttonContainer) buttonContainer.style.display = "none";
 
   setTimeout(() => {
     html2canvas(billContainer, { scale: 2 }).then((canvas) => {
@@ -308,111 +388,32 @@ function downloadBillAsPDF() {
       const { jsPDF } = window.jspdf;
       const pdf = new jsPDF("p", "mm", "a4");
       const pdfWidth = pdf.internal.pageSize.getWidth();
-      const pdfHeight = pdf.internal.pageSize.getHeight();
-      const canvasAspectRatio = canvas.width / canvas.height;
-
-      let finalWidth = pdfWidth;
-      let finalHeight = pdfWidth / canvasAspectRatio;
-      if (finalHeight > pdfHeight) {
-        finalHeight = pdfHeight;
-        finalWidth = pdfHeight * canvasAspectRatio;
-      }
-      const x = (pdfWidth - finalWidth) / 2;
-      const y = (pdfHeight - finalHeight) / 2;
-
-      pdf.addImage(imgData, "JPEG", x, y, finalWidth, finalHeight);
-      pdf.save(`Bill No-${billNo}-${billName}.pdf`);
-
+      const imgProps = pdf.getImageProperties(imgData);
+      const pdfHeight = (imgProps.height * pdfWidth) / imgProps.width;
+      pdf.addImage(imgData, "JPEG", 0, 0, pdfWidth, pdfHeight);
+      pdf.save(`Bill No ${billNo}_${billName}.pdf`);
       document.body.classList.remove("print-mode");
-      printDetails.forEach((el) => (el.style.display = "none"));
-      if (buttonContainer) {
-        buttonContainer.style.display = "flex";
-      }
+      if (buttonContainer) buttonContainer.style.display = "flex";
       hideLoading();
     });
   }, 100);
 }
-// In bill-view.js, add this at the bottom
-
-// --- PAYMENT LOGIC ---
-document.addEventListener("DOMContentLoaded", () => {
-  // This logic needs to be inside the DOMContentLoaded listener
-  const recordPaymentBtn = document.getElementById("record_payment_btn");
-  const paymentModal = document.getElementById("payment-modal");
-  const closePaymentModalBtn = document.getElementById("close-payment-modal-btn");
-  const savePaymentBtn = document.getElementById("save-payment-btn");
-
-  if (recordPaymentBtn) {
-    recordPaymentBtn.addEventListener("click", () => {
-      paymentModal.style.display = "flex";
-    });
-  }
-
-  if (closePaymentModalBtn) {
-    closePaymentModalBtn.addEventListener("click", () => {
-      paymentModal.style.display = "none";
-    });
-  }
-
-  if (savePaymentBtn) {
-    savePaymentBtn.addEventListener("click", async () => {
-      const urlParams = new URLSearchParams(window.location.search);
-      const billId = urlParams.get("id") || urlParams.get("billId");
-      const paymentAmount = Number(document.getElementById("payment-amount-input").value);
-
-      if (!billId || isNaN(paymentAmount) || paymentAmount <= 0) {
-        Swal.fire("Invalid Input", "Please enter a valid payment amount.", "error");
-        return;
-      }
-
-      try {
-        showLoading("Saving payment...");
-        const billRef = billsCollection.doc(billId);
-        const doc = await billRef.get();
-        if (!doc.exists) throw new Error("Bill not found");
-
-        const billData = doc.data();
-        const newAmountPaid = (billData.amountPaid || 0) + paymentAmount;
-        const finalTotal = billData["Final Total"];
-        let newAmountDue = finalTotal - newAmountPaid;
-        let newStatus = "Partially Paid";
-
-        if (newAmountDue <= 0) {
-          newAmountDue = 0;
-          newStatus = "Paid";
-        }
-
-        await billRef.update({
-          amountPaid: newAmountPaid,
-          amountDue: newAmountDue,
-          paymentStatus: newStatus,
-        });
-
-        paymentModal.style.display = "none";
-        Swal.fire("Success!", "Payment has been recorded.", "success").then(() => {
-          window.location.reload(); // Reload page to show updated status
-        });
-      } catch (error) {
-        console.error("Error saving payment:", error);
-        Swal.fire("Error", "Could not save the payment.", "error");
-      } finally {
-        hideLoading();
-      }
-    });
-  }
-});
 
 function prepareAndPrint() {
-  const originalContainer = document.getElementById("container-original");
-  const copyContainer = document.getElementById("container-copy");
-
-  if (originalContainer && copyContainer) {
-    // Copy the content from the original to the duplicate
-    copyContainer.innerHTML = originalContainer.innerHTML;
-  }
-
-  // Give the browser a moment to render the new content
   setTimeout(() => {
     window.print();
   }, 10);
+}
+
+async function fetchSettings() {
+  try {
+    const settingsDoc = await db.collection("settings").doc("deductions").get();
+    if (settingsDoc.exists) {
+      globalSettings = settingsDoc.data();
+    } else {
+      globalSettings = { kasarPercentage: 0.003, kantanWeight: 0.6, plasticWeight: 0.2, utraiPercentage: 7 };
+    }
+  } catch (error) {
+    console.error("Error fetching settings:", error);
+  }
 }

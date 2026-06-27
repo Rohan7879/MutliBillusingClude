@@ -34,12 +34,12 @@
         color: #6c757d;
       }
       .meta-value {
-        color: #343a40;
+        color: #000000;
       }
     </style>
   </head>
   <body>
-    <div class="container" id="container-original">
+    <div class="container" id="finalcontainer">
       <div class="header">
         <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
         <h1>Final Bill</h1>
@@ -64,8 +64,8 @@
           <span class="detail-label-enter" style="margin-left: 20px">ગાડી નં :</span>
           <span class="detail-value-line" id="display_vehicle_no"></span>
         </div>
-      </div>
-      <div class="print-only-details">
+        <!-- </div> -->
+        <!-- <div class="print-only-details"> -->
         <div class="detail-line">
           <span class="detail-label-enter">ગામ :</span>
           <span class="detail-value-line" id="display_village"></span>
@@ -73,6 +73,8 @@
           <span class="detail-value-line" id="display_broker"></span>
         </div>
       </div>
+
+      <div id="total-bags-final-view" style="display: none"></div>
 
       <div class="details-grid">
         <div class="detail-item">
@@ -83,9 +85,17 @@
           <span class="detail-label">કાંટા કસર (૦.૩%)</span>
           <span class="detail-value" id="display_kasar">0</span>
         </div>
-        <div class="detail-item" id="bardan_box">
-          <span class="detail-label">બારદાન વજન(0.6+0.2)</span>
-          <span class="detail-value" id="display_bardan_weight">0</span>
+        <div class="detail-item" id="wb_moisture_box" style="display: none">
+          <span class="detail-label">💧 મોઇ. (Moisture)</span>
+          <span class="detail-value" id="display_wb_moisture">0</span>
+        </div>
+        <div class="detail-item" id="kantan_box">
+          <span class="detail-label" id="kantan_label">કંતાન</span>
+          <span class="detail-value" id="display_kantan_weight">0</span>
+        </div>
+        <div class="detail-item" id="plastic_box">
+          <span class="detail-label" id="plastic_label">પ્લાસ્ટિક</span>
+          <span class="detail-value" id="display_plastic_weight">0</span>
         </div>
         <div class="detail-item summary-item">
           <span class="detail-label">નેટ વજન</span>
@@ -99,6 +109,8 @@
             <th>વકલ <span class="print-hide">(Item)</span></th>
             <th>કટ્ટા <span class="print-hide">(Bags)</span></th>
             <th>કિલો <span class="print-hide">(Kg)</span></th>
+            <th id="th_moisture" style="display: none">💧 મોઇ. <span class="print-hide">(Moisture)</span></th>
+            <th id="th_net_kilo" style="display: none">નેટ કિલો <span class="print-hide">(Net Kg)</span></th>
             <th>ભાવ <span class="print-hide">(Price)</span></th>
             <th>રૂપિયા <span class="print-hide">(Amount)</span></th>
           </tr>
@@ -108,6 +120,8 @@
             <td>વકલ ૧</td>
             <td id="display_vakal_1_katta">0</td>
             <td id="display_vakal_1_kilo">0</td>
+            <td id="vakal_1_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
+            <td id="vakal_1_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
             <td id="display_vakal_1_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_1_amount">0</td>
           </tr>
@@ -115,6 +129,8 @@
             <td>વકલ ૨</td>
             <td id="display_vakal_2_katta">0</td>
             <td id="display_vakal_2_kilo">0</td>
+            <td id="vakal_2_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
+            <td id="vakal_2_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
             <td id="display_vakal_2_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_2_amount">0</td>
           </tr>
@@ -122,6 +138,8 @@
             <td>વકલ ૩</td>
             <td id="display_vakal_3_katta">0</td>
             <td id="display_vakal_3_kilo">0</td>
+            <td id="vakal_3_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
+            <td id="vakal_3_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
             <td id="display_vakal_3_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_3_amount">0</td>
           </tr>
@@ -129,6 +147,8 @@
             <td>વકલ ૪</td>
             <td id="display_vakal_4_katta">0</td>
             <td id="display_vakal_4_kilo">0</td>
+            <td id="vakal_4_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
+            <td id="vakal_4_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
             <td id="display_vakal_4_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_4_amount">0</td>
           </tr>
@@ -136,11 +156,18 @@
             <td>વકલ ૫</td>
             <td id="display_vakal_5_katta">0</td>
             <td id="display_vakal_5_kilo">0</td>
+            <td id="vakal_5_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
+            <td id="vakal_5_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
             <td id="display_vakal_5_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_5_amount">0</td>
           </tr>
         </tbody>
       </table>
+
+      <h3
+        id="display_supply_type"
+        style="text-align: center; font-size: 2.5em; font-weight: bolder; color: #000000; margin: auto"
+      ></h3>
 
       <div class="match-status">
         <span id="display_match_message"></span>

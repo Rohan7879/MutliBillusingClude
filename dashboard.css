@@ -122,3 +122,195 @@
     box-sizing: border-box; /* Ensures padding is included in the width */
   }
 }
+/* --- Styles for Ledger Page --- */
+
+#customer-search-input {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 16px;
+  box-sizing: border-box;
+}
+
+#customer-list-container {
+  margin-top: 20px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+  gap: 15px;
+}
+
+.customer-card {
+  background-color: #fff;
+  padding: 15px;
+  border: 1px solid #e9ecef;
+  border-radius: 8px;
+  box-shadow: 0 2px 5px rgba(0, 90, 158, 0.08);
+  cursor: pointer;
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+
+.customer-card:hover {
+  transform: translateY(-3px);
+  box-shadow: 0 4px 12px rgba(0, 90, 158, 0.12);
+}
+
+.customer-card .customer-name {
+  font-weight: 700;
+  font-size: 18px;
+  color: #005a9e;
+}
+
+.customer-card .customer-village {
+  font-size: 14px;
+  color: #6c757d;
+  margin-top: 5px;
+}
+
+#ledger-table-body td:nth-child(3),
+#ledger-table-body td:nth-child(4),
+#ledger-table-body td:nth-child(5) {
+  text-align: right;
+  font-weight: 500;
+}
+
+#ledger-table-body td:nth-child(5) {
+  font-weight: 700;
+  color: #005a9e;
+}
+/* --- Ledger Page Enhancements --- */
+
+.ledger-controls {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 15px;
+  padding: 15px;
+  background-color: #f8f9fa;
+  border-radius: 8px;
+  margin-bottom: 20px;
+}
+
+#print-header {
+  display: none; /* Hidden by default, shown for print */
+}
+
+/* --- Print Styles for Ledger --- */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  #print-header {
+    display: block !important;
+  }
+  body,
+  .container {
+    margin: 0;
+    padding: 0;
+    box-shadow: none;
+    border: none;
+  }
+}
+/* --- Styles for Payment Modal on Ledger Page --- */
+#payment-modal .modal-content {
+  text-align: left;
+}
+#payment-modal input[type="number"],
+#payment-modal input[type="date"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  font-size: 16px;
+  color: #495057;
+  box-sizing: border-box;
+  margin-bottom: 15px;
+}
+.balance-card {
+  transition: background-color 0.4s ease;
+}
+/* --- Styles for Enhanced Payment Modal --- */
+#payment-modal .modal-content {
+  text-align: left;
+}
+#payment-modal input[type="number"],
+#payment-modal input[type="text"],
+#payment-modal input[type="date"] {
+  width: 100%;
+  padding: 12px;
+  border: 1px solid #ced4da;
+  border-radius: 8px;
+  font-size: 16px;
+  color: #495057;
+  box-sizing: border-box;
+  margin-bottom: 15px;
+}
+#payment-modal label {
+  display: block;
+  margin-bottom: 5px;
+  font-weight: bold;
+  color: #495057;
+}
+.modal-divider {
+  border: none;
+  border-top: 1px solid #e0e0e0;
+  margin: 20px 0;
+}
+.balance-card {
+  transition: background-color 0.4s ease;
+}
+/* --- Styles for Ledger Bill Selection --- */
+#selection-summary {
+  background-color: #e7f3ff;
+  border: 1px solid #b3d7ff;
+  color: #005a9e;
+  padding: 12px;
+  margin-bottom: 20px;
+  border-radius: 8px;
+  text-align: center;
+  font-size: 1.1em;
+  display: none; /* Hidden by default */
+}
+
+/* Make checkbox column in ledger table not printable */
+@media print {
+  .no-print {
+    display: none !important;
+  }
+  .bill-list-table th:first-child,
+  .bill-list-table td:first-child {
+    display: none !important;
+  }
+}
+/* --- Styles for Supplier Summary --- */
+
+.supplier-summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 15px;
+  margin-bottom: 25px;
+  padding-bottom: 20px;
+  border-bottom: 1px solid #e9ecef;
+}
+
+.summary-card {
+  background-color: #f8f9fa;
+  padding: 15px;
+  border-radius: 8px;
+  text-align: center;
+  border: 1px solid #dee2e6;
+}
+
+.summary-label {
+  font-size: 14px;
+  color: #6c757d;
+  font-weight: 500;
+  margin-bottom: 5px;
+}
+
+.summary-value {
+  font-size: 22px;
+  font-weight: 700;
+  color: #343a40;
+}

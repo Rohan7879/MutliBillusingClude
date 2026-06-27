@@ -3,19 +3,15 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <meta name="robots" content="noindex, nofollow">
-    <title>Estimate Input Form</title>
-    <!-- Firebase Libraries -->
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Ganesh Agri</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <!-- NEW: Libraries for PDF and Excel Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
-
     <script src="firebase-init.js"></script>
     <script src="utils.js"></script>
     <script src="bill-form.js" defer></script>
@@ -23,70 +19,1034 @@
     <link rel="stylesheet" href="html.css" />
     <link rel="stylesheet" href="dashboard.css" />
     <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
+    <style>
+      /* =========================================
+     TOP NAVBAR
+  ========================================= */
+      *,
+      *::before,
+      *::after {
+        box-sizing: border-box;
+      }
+      .top-navbar {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        background: linear-gradient(135deg, #003d6e, #005a9e);
+        box-shadow: 0 4px 20px rgba(0, 62, 110, 0.35);
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 62px;
+        padding: 0 24px;
+        margin: -20px -16px 24px;
+      }
+      .navbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        text-decoration: none;
+      }
+      .navbar-brand img {
+        height: 38px;
+        border-radius: 8px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+      }
+      .navbar-brand span {
+        color: #fff;
+        font-size: 1.1em;
+        font-weight: 800;
+        letter-spacing: 0.2px;
+      }
+      .navbar-links {
+        display: flex;
+        gap: 4px;
+        align-items: center;
+        flex-wrap: nowrap;
+      }
+      .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 7px 13px;
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 13px;
+        font-weight: 600;
+        text-decoration: none;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
+        white-space: nowrap;
+      }
+      .nav-link:hover,
+      .nav-link.active {
+        background: rgba(255, 255, 255, 0.18);
+        color: #fff;
+      }
+      .nav-conn {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 6px 13px;
+        border-radius: 20px;
+        border: 1px solid rgba(255, 255, 255, 0.25);
+        background: rgba(255, 255, 255, 0.1);
+        color: #fff;
+        font-size: 12px;
+        font-weight: 700;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
+      }
+      .nav-conn:hover {
+        background: rgba(255, 255, 255, 0.2);
+      }
+      .cdot {
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        background: #ffc107;
+        transition: background 0.3s;
+      }
+      .cdot.ok {
+        background: #28a745;
+      }
+      .cdot.err {
+        background: #dc3545;
+      }
+
+      /* =========================================
+     PAGE & CARDS
+  ========================================= */
+      .pg {
+        max-width: 880px;
+        margin: 0 auto;
+      }
+
+      /* Quick nav */
+      .qnav {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 13px;
+        margin-bottom: 22px;
+      }
+      .qcard {
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 8px;
+        padding: 18px 12px;
+        border-radius: 14px;
+        color: #fff;
+        font-weight: 700;
+        font-size: 13px;
+        border: none;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.22s;
+        box-shadow: 0 4px 14px rgba(0, 0, 0, 0.14);
+        text-decoration: none;
+        text-align: center;
+        line-height: 1.3;
+      }
+      .qcard:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      }
+      .qcard .ci {
+        font-size: 26px;
+      }
+      .qcard.c-bills {
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+      }
+      .qcard.c-dash {
+        background: linear-gradient(135deg, #6f42c1, #5a32a3);
+      }
+      .qcard.c-ledg {
+        background: linear-gradient(135deg, #17a2b8, #117a8b);
+      }
+
+      /* Section card */
+      .sc {
+        background: #fff;
+        border-radius: 14px;
+        padding: 22px 24px;
+        margin-bottom: 18px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 10px rgba(0, 90, 158, 0.07);
+      }
+      .sc-title {
+        display: flex;
+        align-items: center;
+        gap: 9px;
+        font-size: 0.9em;
+        font-weight: 800;
+        color: #005a9e;
+        margin: 0 0 18px;
+        padding-bottom: 11px;
+        border-bottom: 2px solid #e7f3ff;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      /* =========================================
+     FORM LAYOUT
+  ========================================= */
+      .fg2 {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 14px;
+        margin-bottom: 14px;
+      }
+      .ff label {
+        display: block;
+        font-weight: 700;
+        font-size: 12px;
+        color: #495057;
+        margin-bottom: 5px;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+      }
+      .ff input {
+        width: 100%;
+        padding: 11px 13px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 15px;
+        font-family: inherit;
+        background: #fafbff;
+        transition: border-color 0.2s, box-shadow 0.2s;
+        box-sizing: border-box;
+      }
+      .ff input:focus {
+        border-color: #005a9e;
+        box-shadow: 0 0 0 3px rgba(0, 90, 158, 0.1);
+        outline: none;
+        background: #fff;
+      }
+
+      /* Toggle row */
+      .trow {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        padding: 13px 16px;
+        background: #f0f6ff;
+        border-radius: 9px;
+        margin-bottom: 10px;
+        border: 1.5px solid #cfe0ff;
+      }
+      .trow-label {
+        font-weight: 700;
+        color: #003d6e;
+        font-size: 14px;
+        display: flex;
+        align-items: center;
+        gap: 7px;
+      }
+      .trow-label .badge {
+        background: #dc3545;
+        color: #fff;
+        font-size: 11px;
+        font-weight: 800;
+        padding: 2px 7px;
+        border-radius: 20px;
+      }
+
+      /* Supply pills */
+      .spills {
+        display: flex;
+        gap: 8px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-bottom: 14px;
+      }
+      .spill {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        padding: 8px 16px;
+        border-radius: 22px;
+        border: 2px solid #dee2e6;
+        background: #fff;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        transition: all 0.2s;
+        color: #495057;
+      }
+      .spill input[type="radio"] {
+        display: none;
+      }
+      .spill:has(input:checked) {
+        background: linear-gradient(135deg, #005a9e, #003d6e);
+        color: #fff;
+        border-color: #005a9e;
+        box-shadow: 0 3px 10px rgba(0, 90, 158, 0.28);
+      }
+
+      /* Bardan cards */
+      .bgrid {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 12px;
+        margin-bottom: 10px;
+      }
+      .bcard {
+        background: #f8f9fa;
+        border: 1.5px solid #dee2e6;
+        border-radius: 10px;
+        padding: 13px;
+      }
+      .bcard-title {
+        font-weight: 700;
+        font-size: 12px;
+        color: #005a9e;
+        margin-bottom: 9px;
+        text-align: center;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+      }
+      .binputs {
+        display: grid;
+        grid-template-columns: 1fr 1fr;
+        gap: 7px;
+        align-items: center;
+      }
+      .binputs label {
+        font-size: 11px;
+        font-weight: 700;
+        color: #6c757d;
+        margin-bottom: 3px;
+        display: block;
+      }
+      .binputs input {
+        width: 100%;
+        padding: 8px 9px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 7px;
+        font-size: 14px;
+        font-family: inherit;
+        box-sizing: border-box;
+        text-align: center;
+      }
+      .binputs input:focus {
+        border-color: #005a9e;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(0, 90, 158, 0.1);
+      }
+      .bded {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 7px;
+        margin-top: 9px;
+        font-size: 12px;
+        font-weight: 700;
+        color: #6c757d;
+      }
+
+      /* Vakal table — KEEP AS REAL TABLE for JS compatibility */
+      .vt-wrap {
+        border-radius: 10px;
+        overflow: hidden;
+        margin-bottom: 4px;
+      }
+      .vt {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .vt thead tr {
+        background: #005a9e;
+      }
+      .vt th {
+        color: #fff;
+        padding: 10px 11px;
+        text-align: center;
+        font-size: 12px;
+        font-weight: 700;
+        letter-spacing: 0.3px;
+      }
+      .vt td {
+        padding: 9px 11px;
+        border-bottom: 1px solid #f0f0f0;
+        text-align: center;
+        background: #fff;
+      }
+      .vt tbody tr:hover td {
+        background: #f0f6ff;
+      }
+      .vt td:first-child {
+        font-weight: 800;
+        color: #005a9e;
+        font-size: 13px;
+        text-align: left;
+      }
+      .vt input {
+        width: 100%;
+        padding: 8px 9px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 7px;
+        font-size: 14px;
+        font-family: inherit;
+        text-align: center;
+        box-sizing: border-box;
+      }
+      .vt input:focus {
+        border-color: #005a9e;
+        outline: none;
+        box-shadow: 0 0 0 2px rgba(0, 90, 158, 0.1);
+      }
+
+      /* Total bags */
+      .tbag {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+        background: linear-gradient(135deg, #e7f3ff, #cfe0ff);
+        border: 2px solid #b3d4f5;
+        border-radius: 11px;
+        padding: 9px 18px;
+        font-weight: 800;
+        font-size: 1.15em;
+        color: #003d6e;
+        margin: 10px 0;
+      }
+
+      /* Generate button */
+      .gen-btn {
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        gap: 9px;
+        width: 100%;
+        padding: 16px 22px;
+        background: linear-gradient(135deg, #005a9e, #003d6e);
+        color: #fff;
+        border: none;
+        border-radius: 12px;
+        font-size: 17px;
+        font-weight: 800;
+        cursor: pointer;
+        transition: all 0.22s;
+        font-family: inherit;
+        box-shadow: 0 5px 18px rgba(0, 90, 158, 0.32);
+        margin-top: 6px;
+      }
+      .gen-btn:hover {
+        background: linear-gradient(135deg, #003d6e, #002550);
+        transform: translateY(-2px);
+        box-shadow: 0 9px 26px rgba(0, 90, 158, 0.4);
+      }
+
+      /* Expense */
+      .exp-sec {
+        padding: 16px 18px;
+        background: #fafbff;
+        border-radius: 10px;
+        border: 1.5px solid #dee2e6;
+        margin-bottom: 14px;
+      }
+      .exp-sec h3 {
+        margin: 0 0 12px;
+        font-size: 14px;
+        color: #005a9e;
+      }
+
+      /* =========================================
+     BILL LIST VIEW
+  ========================================= */
+      .toolbar {
+        display: flex;
+        gap: 9px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 16px;
+        padding: 14px;
+        background: #f8f9fa;
+        border-radius: 11px;
+        border: 1px solid #dee2e6;
+      }
+      .srch {
+        flex: 1;
+        min-width: 180px;
+        position: relative;
+      }
+      .srch input {
+        width: 100%;
+        padding: 10px 13px 10px 36px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+        box-sizing: border-box;
+        background: #fff;
+      }
+      .srch::before {
+        content: "🔍";
+        position: absolute;
+        left: 11px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 13px;
+        pointer-events: none;
+      }
+      .tbtn {
+        padding: 9px 16px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+        color: #fff;
+      }
+      .tbtn:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 4px 12px rgba(0, 0, 0, 0.18);
+      }
+      .tbtn-new {
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+      }
+      .tbtn-print {
+        background: linear-gradient(135deg, #007bff, #005a9e);
+      }
+      .tbtn-paid {
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+      }
+      .tbtn-exp {
+        background: linear-gradient(135deg, #17a2b8, #117a8b);
+      }
+
+      .file-row {
+        display: flex;
+        gap: 9px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin-top: 9px;
+      }
+      .file-row input[type="file"] {
+        flex: 1;
+        font-size: 13px;
+      }
+      select#export_format {
+        padding: 9px 11px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-family: inherit;
+        font-size: 13px;
+        color: #495057;
+        background: #fff;
+      }
+
+      /* Bill list table */
+      .blt {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0 7px;
+      }
+      .blt th {
+        background: #005a9e;
+        color: #fff;
+        font-weight: 700;
+        padding: 11px 13px;
+        text-align: left;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+      .blt th:first-child {
+        border-radius: 8px 0 0 8px;
+      }
+      .blt th:last-child {
+        border-radius: 0 8px 8px 0;
+      }
+      .blt td {
+        background: #fff;
+        padding: 11px 13px;
+        font-size: 13px;
+        border-top: 1px solid #f0f0f0;
+        border-bottom: 1px solid #f0f0f0;
+      }
+      .blt td:first-child {
+        border-left: 1px solid #f0f0f0;
+        border-radius: 8px 0 0 8px;
+      }
+      .blt td:last-child {
+        border-right: 1px solid #f0f0f0;
+        border-radius: 0 8px 8px 0;
+      }
+      .blt tbody tr {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+        transition: all 0.2s;
+      }
+      .blt tbody tr:hover {
+        transform: translateY(-2px);
+        box-shadow: 0 5px 16px rgba(0, 90, 158, 0.12);
+      }
+
+      .action-buttons {
+        display: flex;
+        gap: 5px;
+        flex-wrap: wrap;
+      }
+      .view-btn {
+        padding: 7px 13px;
+        background: linear-gradient(135deg, #007bff, #005a9e);
+        color: #fff;
+        border: none;
+        border-radius: 7px;
+        font-weight: 700;
+        font-size: 12px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+      }
+      .edit-btn {
+        padding: 7px 13px;
+        background: linear-gradient(135deg, #ffc107, #e0a800);
+        color: #1a1a1a;
+        border: none;
+        border-radius: 7px;
+        font-weight: 700;
+        font-size: 12px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+      }
+      .delete-btn {
+        padding: 7px 13px;
+        background: linear-gradient(135deg, #dc3545, #c82333);
+        color: #fff;
+        border: none;
+        border-radius: 7px;
+        font-weight: 700;
+        font-size: 12px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+      }
+      .view-btn:hover,
+      .edit-btn:hover,
+      .delete-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.2);
+      }
+
+      .status-dot {
+        display: inline-block;
+        width: 8px;
+        height: 8px;
+        border-radius: 50%;
+        margin-right: 5px;
+      }
+      .status-dot.unpaid {
+        background: #dc3545;
+      }
+      .status-dot.paid {
+        background: #28a745;
+      }
+      .status-dot.partially-paid {
+        background: #ffc107;
+      }
+
+      .pgn {
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 13px;
+        margin-top: 16px;
+      }
+      .pgn span {
+        font-weight: 700;
+        color: #005a9e;
+      }
+      .filter-btn {
+        padding: 8px 16px;
+        border-radius: 8px;
+        border: none;
+        background: linear-gradient(135deg, #007bff, #005a9e);
+        color: #fff;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+      }
+      .filter-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 10px rgba(0, 90, 158, 0.28);
+      }
+
+      /* Switch (keep same) */
+      .switch {
+        position: relative;
+        display: inline-block;
+        width: 52px;
+        height: 28px;
+      }
+      .switch input {
+        opacity: 0;
+        width: 0;
+        height: 0;
+      }
+      .slider {
+        position: absolute;
+        cursor: pointer;
+        inset: 0;
+        background: #ccc;
+        transition: 0.35s;
+        border-radius: 28px;
+      }
+      .slider:before {
+        position: absolute;
+        content: "";
+        height: 20px;
+        width: 20px;
+        left: 4px;
+        bottom: 4px;
+        background: #fff;
+        transition: 0.35s;
+        border-radius: 50%;
+        box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+      }
+      input:checked + .slider {
+        background: #005a9e;
+      }
+      input:checked + .slider:before {
+        transform: translateX(24px);
+      }
+
+      /* Toggle container for deductions */
+      .toggle-container {
+        display: inline-flex;
+        align-items: center;
+        gap: 12px;
+        font-weight: 700;
+        font-size: 14px;
+      }
+
+      /* Expense rows */
+      .expense-row {
+        display: flex;
+        gap: 9px;
+        align-items: center;
+        margin-bottom: 9px;
+      }
+      .expense-row input[type="text"] {
+        flex: 2;
+        padding: 10px 12px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+      }
+      .expense-row input[type="number"] {
+        flex: 1;
+        padding: 10px 12px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+      }
+      .remove-expense-btn {
+        padding: 10px 14px;
+        background: linear-gradient(135deg, #dc3545, #c82333);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+      }
+      .add-expense-btn {
+        padding: 10px 16px;
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-weight: 700;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+        margin-top: 8px;
+      }
+
+      /* Loading */
+      #loading-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #005a9e, #00c6ff);
+        z-index: 9999;
+        width: 0;
+        transition: width 1.5s linear;
+      }
+      #loading-bar.active {
+        width: 100%;
+      }
+      .hidden {
+        display: none;
+      }
+
+      /* Autocomplete */
+      #autocomplete-container {
+        position: relative;
+      }
+      .autocomplete-items {
+        position: absolute;
+        border: 1.5px solid #dee2e6;
+        border-top: none;
+        z-index: 999;
+        top: 100%;
+        left: 0;
+        right: 0;
+        background: #fff;
+        border-radius: 0 0 8px 8px;
+        box-shadow: 0 4px 18px rgba(0, 90, 158, 0.13);
+        max-height: 200px;
+        overflow-y: auto;
+      }
+      .autocomplete-items div {
+        padding: 10px 13px;
+        cursor: pointer;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 14px;
+        transition: background 0.2s;
+      }
+      .autocomplete-items div:hover {
+        background: #e7f3ff;
+        color: #005a9e;
+      }
+
+      /* Selection summary */
+      #selection-summary {
+        background: #e7f3ff;
+        border: 1px solid #b3d4f5;
+        color: #005a9e;
+        padding: 10px;
+        margin-bottom: 13px;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 1em;
+        display: none;
+      }
+
+      /* Responsive */
+      @media (max-width: 640px) {
+        .top-navbar {
+          padding: 0 12px;
+          height: 56px;
+        }
+        .navbar-brand span {
+          font-size: 0.95em;
+        }
+        .navbar-links .nav-link span:not(:first-child) {
+          display: none;
+        }
+        .nav-link {
+          padding: 7px 9px;
+        }
+        .qnav {
+          gap: 9px;
+        }
+        .qcard {
+          padding: 13px 8px;
+          font-size: 12px;
+        }
+        .qcard .ci {
+          font-size: 22px;
+        }
+        .fg2 {
+          grid-template-columns: 1fr;
+        }
+        .bgrid {
+          grid-template-columns: 1fr;
+        }
+        .sc {
+          padding: 16px 14px;
+        }
+        .toolbar {
+          flex-direction: column;
+          align-items: stretch;
+        }
+        .tbtn {
+          justify-content: center;
+        }
+        .blt {
+          font-size: 12px;
+        }
+        .blt th,
+        .blt td {
+          padding: 9px 8px;
+        }
+        .action-buttons {
+          flex-direction: column;
+        }
+        .action-buttons button {
+          width: 100%;
+        }
+      }
+    </style>
   </head>
   <body>
-    <div class="container">
-      <div class="header">
-        <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
-        <h1>Bill Details</h1>
+    <!-- NAVBAR -->
+    <nav class="top-navbar">
+      <a class="navbar-brand" href="index.html">
+        <img src="IMG-20250716-WA0121.jpg" alt="Logo" />
+        <span>Ganesh Agri</span>
+      </a>
+      <div class="navbar-links">
+        <button class="nav-link active" onclick="showBillCreationForm()">🧾 <span>New Bill</span></button>
+        <button class="nav-link" onclick="showBillListView()">📋 <span>Bills</span></button>
+        <a class="nav-link" href="dashboard.html">📊 <span>Dashboard</span></a>
+        <a class="nav-link" href="ledger.html">📒 <span>Ledger</span></a>
+        <a class="nav-link" href="core_settings.html">⚙️ <span>Settings</span></a>
+        <button class="nav-conn" onclick="checkFirebaseConnection()">
+          <span class="cdot" id="conn-dot"></span>
+          <span id="connection_status">Check</span>
+        </button>
       </div>
-      <!-- Loading Progress Bar -->
-      <div id="loading-bar" class="loading-bar hidden"></div>
+    </nav>
 
-      <!-- Bill Creation Form -->
+    <div id="loading-bar" class="loading-bar hidden"></div>
+
+    <div class="pg">
+      <!-- QUICK NAV CARDS -->
+      <div class="qnav">
+        <button class="qcard c-bills" onclick="showBillListView()">
+          <span class="ci">📋</span><span>View Saved Bills</span>
+        </button>
+        <a class="qcard c-dash" href="dashboard.html"> <span class="ci">📊</span><span>Dashboard</span> </a>
+        <a class="qcard c-ledg" href="ledger.html"> <span class="ci">📒</span><span>Customer Ledger</span> </a>
+      </div>
+
+      <!-- ===== BILL CREATION FORM ===== -->
       <div id="bill_creation_form">
-        <div id="bill_creation_form">
-          <center><h2>Bill Details</h2></center>
-          <div class="connection-check-container">
-            <button onclick="checkFirebaseConnection()" class="connection-check-button">Check Connection</button>
-            <span style="margin-right: 71%" id="connection_status"></span>
-          </div>
-        </div>
         <form id="estimateForm">
-          <!-- Customer Details Section -->
-          <div class="customer-details-section">
-            <center><h3>Customer Details</h3></center>
-            <table>
+          <!-- Customer Details -->
+          <div class="sc">
+            <div class="sc-title">👤 Customer Details</div>
+            <div class="fg2">
+              <div class="ff">
+                <label>નામ (Name) *</label>
+                <input
+                  type="text"
+                  name="customer_name"
+                  oninput="this.value=this.value.toUpperCase()"
+                  required
+                  placeholder="Customer name..."
+                />
+                <div id="autocomplete-container"></div>
+              </div>
+              <div class="ff">
+                <label>ગાડી નં (Vehicle No.)</label>
+                <input
+                  type="text"
+                  name="vehicle_no"
+                  oninput="this.value=this.value.toUpperCase()"
+                  placeholder="GJ-XX-XXXX"
+                />
+              </div>
+              <div class="ff">
+                <label>ગામ (Village)</label>
+                <input
+                  type="text"
+                  name="village"
+                  oninput="this.value=this.value.toUpperCase()"
+                  placeholder="Village..."
+                />
+              </div>
+              <div class="ff">
+                <label>દલાલ (Broker)</label>
+                <input
+                  type="text"
+                  name="broker"
+                  oninput="this.value=this.value.toUpperCase()"
+                  placeholder="Broker..."
+                />
+              </div>
+            </div>
+          </div>
+
+          <!-- Bill Type & Weight -->
+          <div class="sc">
+            <div class="sc-title">⚖️ Bill Type & Weight</div>
+
+            <div class="trow">
+              <div class="trow-label">🔄 બિલનો પ્રકાર</div>
+              <div style="display: flex; align-items: center; gap: 10px">
+                <span style="font-size: 13px; font-weight: 600; color: #6c757d">Bag</span>
+                <label class="switch">
+                  <input type="checkbox" id="loose_supply_toggle" name="is_loose_supply" />
+                  <span class="slider"></span>
+                </label>
+                <span style="font-size: 13px; font-weight: 700; color: #005a9e">Loose Supply</span>
+              </div>
+            </div>
+
+            <div class="spills supply-type-selector">
+              <strong style="color: #495057; font-size: 14px">ઘઉંના કટ્ટા:</strong>
+              <label class="spill"><input type="radio" name="supply_type" value="કંતાન પેક" /> કંતાન પેક</label>
+              <label class="spill"><input type="radio" name="supply_type" value="લૂઝ" checked /> કંતાન લૂઝ</label>
+            </div>
+
+            <!-- KEEP AS TABLE so JS table-row-group works -->
+            <table style="width: 100%; border-collapse: collapse">
               <tbody>
                 <tr>
-                  <td><strong>નામ (Name)</strong></td>
-                  <td>
+                  <td style="padding: 10px 0; font-weight: 700; color: #005a9e; width: 40%">⚖️ વેબ્રીજ વજન *</td>
+                  <td style="padding: 10px 0">
                     <input
-                      type="text"
-                      name="customer_name"
-                      oninput="this.value = this.value.toUpperCase()"
-                      style="text-transform: uppercase"
+                      type="number"
+                      name="weighbridge_weight"
+                      step="any"
                       required
-                    />
-                    <div id="autocomplete-container"></div>
-                  </td>
-                  <td><strong>ગાડી નં (Vehicle No.)</strong></td>
-                  <td>
-                    <input
-                      type="text"
-                      name="vehicle_no"
-                      oninput="this.value = this.value.toUpperCase()"
-                      style="text-transform: uppercase"
+                      style="
+                        width: 100%;
+                        padding: 11px 13px;
+                        border: 1.5px solid #dee2e6;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-weight: 700;
+                        font-family: inherit;
+                        box-sizing: border-box;
+                      "
                     />
                   </td>
                 </tr>
+              </tbody>
+              <!-- Loose supply section — MUST be tbody for JS -->
+              <tbody id="loose_supply_section" style="display: none">
                 <tr>
-                  <td><strong>ગામ (Village)</strong></td>
-                  <td>
+                  <td style="padding: 10px 0; font-weight: 700; color: #005a9e">💰 ભાવ (Price)</td>
+                  <td style="padding: 10px 0">
                     <input
-                      type="text"
-                      name="village"
-                      oninput="this.value = this.value.toUpperCase()"
-                      style="text-transform: uppercase"
-                    />
-                  </td>
-                  <td><strong>દલાલ (Broker)</strong></td>
-                  <td>
-                    <input
-                      type="text"
-                      name="broker"
-                      oninput="this.value = this.value.toUpperCase()"
-                      style="text-transform: uppercase"
+                      type="number"
+                      name="loose_price"
+                      id="loose_price_input"
+                      step="any"
+                      style="
+                        width: 100%;
+                        padding: 11px 13px;
+                        border: 1.5px solid #dee2e6;
+                        border-radius: 8px;
+                        font-size: 16px;
+                        font-family: inherit;
+                        box-sizing: border-box;
+                      "
+                      placeholder="Price per 20kg..."
                     />
                   </td>
                 </tr>
@@ -94,244 +1054,451 @@
             </table>
           </div>
 
-          <div class="master-toggle-container">
-            <strong>બિલનો પ્રકાર:</strong>
-            <label class="switch">
-              <input type="checkbox" id="loose_supply_toggle" name="is_loose_supply" />
-              <span class="slider"></span>
-            </label>
-            <strong>લૂઝ સપ્લાય બિલ (Loose Supply)</strong>
+          <!-- Bardan — MUST keep id="bag_supply_section" as tbody for JS -->
+          <div class="sc">
+            <div class="sc-title">🧺 બારદાન (Bags)</div>
+            <table style="width: 100%; border-collapse: collapse">
+              <tbody id="bag_supply_section">
+                <tr>
+                  <td colspan="5" style="padding: 0 0 14px">
+                    <div class="bgrid">
+                      <div class="bcard">
+                        <div class="bcard-title">🟤 કંતાન (600 ગ્રામ)</div>
+                        <div class="binputs">
+                          <div><label>ભરેલા</label><input type="number" name="bharela_600" placeholder="0" /></div>
+                          <div><label>ખાલી</label><input type="number" name="khali_600" placeholder="0" /></div>
+                        </div>
+                        <div class="bded">
+                          Deduct<label class="switch" style="transform: scale(0.85)"
+                            ><input type="checkbox" name="deduct_kantan" checked /><span class="slider"></span
+                          ></label>
+                        </div>
+                      </div>
+                      <div class="bcard">
+                        <div class="bcard-title">⬜ પ્લાસ્ટિક (200 ગ્રામ)</div>
+                        <div class="binputs">
+                          <div><label>ભરેલા</label><input type="number" name="bharela_200" placeholder="0" /></div>
+                          <div><label>ખાલી</label><input type="number" name="khali_200" placeholder="0" /></div>
+                        </div>
+                        <div class="bded">
+                          Deduct<label class="switch" style="transform: scale(0.85)"
+                            ><input type="checkbox" name="deduct_plastic" checked /><span class="slider"></span
+                          ></label>
+                        </div>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="5" style="padding: 6px 0">
+                    <div class="trow">
+                      <div class="trow-label">
+                        📉 કાંટા કસર<span class="badge" id="kasar-percentage-display"></span>
+                      </div>
+                      <label class="switch"
+                        ><input type="checkbox" name="deduct_kasar" checked /><span class="slider"></span
+                      ></label>
+                    </div>
+                  </td>
+                </tr>
+                <tr>
+                  <td colspan="5" style="padding: 6px 0">
+                    <div class="trow">
+                      <div class="trow-label">🚛 ઉતરાઈ<span class="badge" id="utrai-value-display"></span></div>
+                      <label class="switch"
+                        ><input type="checkbox" name="deduct_utrai" checked /><span class="slider"></span
+                      ></label>
+                    </div>
+                  </td>
+                </tr>
+                <!-- WEIGHBRIDGE MOISTURE -->
+                <tr>
+                  <td colspan="5" style="padding: 6px 0">
+                    <div class="trow" style="background: #fff8e7; border-color: #ffe08a">
+                      <div class="trow-label" style="color: #7a5700">💧 વેબ્રીજ મોઇશ્ચર (Weighbridge Moisture)</div>
+                      <div style="display: flex; align-items: center; gap: 10px">
+                        <label class="switch"
+                          ><input
+                            type="checkbox"
+                            name="deduct_weighbridge_moisture"
+                            id="deduct_wb_moisture_toggle" /><span class="slider"></span
+                        ></label>
+                      </div>
+                    </div>
+                    <div
+                      id="wb_moisture_input"
+                      style="
+                        display: none;
+                        margin-top: 8px;
+                        padding: 12px 14px;
+                        background: #fffbf0;
+                        border: 1.5px solid #ffe08a;
+                        border-radius: 9px;
+                      "
+                    >
+                      <label
+                        style="font-weight: 700; font-size: 13px; color: #7a5700; display: block; margin-bottom: 6px"
+                        >💧 Moisture % (વેબ્રીજ પછી)</label
+                      >
+                      <div style="display: flex; align-items: center; gap: 10px">
+                        <input
+                          type="number"
+                          name="weighbridge_moisture_pct"
+                          step="0.1"
+                          min="0"
+                          max="100"
+                          placeholder="e.g. 2"
+                          style="
+                            width: 140px;
+                            padding: 10px 12px;
+                            border: 1.5px solid #ffe08a;
+                            border-radius: 8px;
+                            font-size: 16px;
+                            font-weight: 700;
+                            font-family: inherit;
+                            text-align: center;
+                          "
+                        />
+                        <span style="font-weight: 700; color: #7a5700; font-size: 15px">%</span>
+                        <span style="color: #6c757d; font-size: 13px; font-weight: 600" id="wb_moisture_preview"></span>
+                      </div>
+                    </div>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
           </div>
 
-          <table>
-            <tbody>
-              <tr>
-                <td><strong>વેબ્રીજ વજન</strong></td>
-                <td colspan="4">
-                  <input type="number" name="weighbridge_weight" step="any" required />
-                </td>
-              </tr>
-            </tbody>
-            <tbody id="loose_supply_section" style="display: none">
-              <tr>
-                <td><strong>ભાવ (Price)</strong></td>
-                <td colspan="4">
-                  <input type="number" name="loose_price" id="loose_price_input" step="any" />
-                </td>
-              </tr>
-            </tbody>
-            <tbody id="bag_supply_section">
-              <tr>
-                <td rowspan="2"><strong>બારદાન</strong></td>
-                <td style="font-weight: bold; color: #005a9e">કંતાન (૬૦૦ ગ્રામ)</td>
-                <td>ભરેલા: <input type="number" name="bharela_600" style="width: 80px" /></td>
-                <td>ખાલી: <input type="number" name="khali_600" style="width: 80px" /></td>
-                <td class="toggle-cell-container">
-                  <label class="switch">
-                    <input type="checkbox" name="deduct_kantan" checked />
-                    <span class="slider"></span>
-                  </label>
-                </td>
-              </tr>
-              <tr>
-                <td style="font-weight: bold; color: #005a9e">પ્લાસ્ટિક (૨૦૦ ગ્રામ)</td>
-                <td>ભરેલા: <input type="number" name="bharela_200" style="width: 80px" /></td>
-                <td>ખાલી: <input type="number" name="khali_200" style="width: 80px" /></td>
-                <td class="toggle-cell-container">
-                  <label class="switch">
-                    <input type="checkbox" name="deduct_plastic" checked />
-                    <span class="slider"></span>
-                  </label>
-                </td>
-              </tr>
-            </tbody>
-            <tbody>
-              <tr>
-                <td colspan="5" class="checkbox-cell">
-                  <div class="toggle-container">
-                    <strong>કાંટા કસર કપાત કરવી (Deduct Kasar)</strong>
-                    <label class="switch">
-                      <input type="checkbox" name="deduct_kasar" checked />
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </td>
-              </tr>
-              <tr>
-                <td style="border-bottom: 2px solid #dee2e6"></td>
-                <td colspan="4" class="checkbox-cell" style="border-bottom: 2px solid #dee2e6">
-                  <div class="toggle-container">
-                    <strong>ઉતરાઈ કપાત કરવી (Deduct Unloading)</strong>
-                    <label class="switch">
-                      <input type="checkbox" name="deduct_utrai" checked />
-                      <span class="slider"></span>
-                    </label>
-                  </div>
-                </td>
-              </tr>
-            </tbody>
-            <tbody id="vakal_section">
-              <tr>
-                <td><strong>વકલ ૧</strong></td>
-                <td>કટ્ટા</td>
-                <td><input type="number" name="vakal_1_katta" /></td>
-                <td>ભાવ</td>
-                <td><input type="number" name="vakal_1_bhav" step="any" /></td>
-              </tr>
-              <tr>
-                <td><strong>વકલ ૨</strong></td>
-                <td>કટ્ટા</td>
-                <td><input type="number" name="vakal_2_katta" /></td>
-                <td>ભાવ</td>
-                <td><input type="number" name="vakal_2_bhav" step="any" /></td>
-              </tr>
-              <tr>
-                <td><strong>વકલ ૩</strong></td>
-                <td>કટ્ટા</td>
-                <td><input type="number" name="vakal_3_katta" /></td>
-                <td>ભાવ</td>
-                <td><input type="number" name="vakal_3_bhav" step="any" /></td>
-              </tr>
-              <tr>
-                <td><strong>વકલ ૪</strong></td>
-                <td>કટ્ટા</td>
-                <td><input type="number" name="vakal_4_katta" /></td>
-                <td>ભાવ</td>
-                <td><input type="number" name="vakal_4_bhav" step="any" /></td>
-              </tr>
-              <tr>
-                <td><strong>વકલ ૫</strong></td>
-                <td>કટ્ટા</td>
-                <td><input type="number" name="vakal_5_katta" /></td>
-                <td>ભાવ</td>
-                <td><input type="number" name="vakal_5_bhav" step="any" /></td>
-              </tr>
-            </tbody>
-          </table>
-
-          <div
-            id="total-bags-container"
-            style="text-align: center; margin-bottom: 10px; font-weight: bold; font-size: 1.5em"
-          >
-            Total Bags: <span id="total-bags-count">0</span>
-          </div>
-
-          <div class="expense-section">
-            <h3>અન્ય ખર્ચ (Other Expenses)</h3>
-            <div id="expense_list"></div>
+          <!-- Vakal — MUST keep id="vakal_section" as tbody for JS -->
+          <div class="sc">
+            <div class="sc-title">📦 વકલ (Items)</div>
+            <div class="tbag">🎒 Total Bags: <span id="total-bags-count" style="font-size: 1.3em">0</span></div>
             <div
-              id="expense-subtotal-container"
-              style="text-align: right; margin-top: 10px; font-weight: bold; font-size: 1.2em"
-            >
-              Total Expenses: <span id="expenses-subtotal">₹0</span>
+              id="vakal-bag-warning"
+              style="
+                display: none;
+                background: #fff0f0;
+                border: 2px solid #dc3545;
+                border-radius: 9px;
+                padding: 10px 14px;
+                font-weight: 700;
+                font-size: 14px;
+                color: #dc3545;
+                margin-bottom: 10px;
+                text-align: center;
+              "
+            ></div>
+            <div class="trow" style="margin-bottom: 12px; background: #fff8e7; border-color: #ffe08a">
+              <div class="trow-label" style="color: #7a5700">💧 વકલ મોઇશ્ચર (Per Vakal Moisture Cut)</div>
+              <label class="switch"
+                ><input type="checkbox" name="deduct_vakal_moisture" id="deduct_vakal_moisture_toggle" /><span
+                  class="slider"
+                ></span
+              ></label>
             </div>
-            <button type="button" class="add-expense-btn" onclick="addExpense()">+ ખર્ચ ઉમેરો (Add Expense)</button>
-          </div>
-          <div class="expense-section">
-            <h3>ભાડું (Truck Freight)</h3>
-            <input type="number" name="truck_freight" placeholder="ટ્રક ભાડું ઉમેરો (Add Freight Cost)" />
+            <div class="vt-wrap">
+              <table class="vt">
+                <thead>
+                  <tr>
+                    <th>વકલ</th>
+                    <th>કટ્ટા (Bags)</th>
+                    <th>ભાવ (Price)</th>
+                    <th id="vakal_moisture_header" style="display: none">💧 Moisture %</th>
+                  </tr>
+                </thead>
+                <tbody id="vakal_section">
+                  <tr>
+                    <td>વકલ ૧</td>
+                    <td><input type="number" name="vakal_1_katta" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_1_bhav" step="any" placeholder="0.00" /></td>
+                    <td class="vakal-moisture-cell" style="display: none">
+                      <input
+                        type="number"
+                        name="vakal_1_moisture"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        placeholder="0%"
+                        style="
+                          width: 80px;
+                          padding: 8px;
+                          border: 1.5px solid #ffe08a;
+                          border-radius: 7px;
+                          font-size: 14px;
+                          text-align: center;
+                          font-family: inherit;
+                          background: #fffbf0;
+                        "
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>વકલ ૨</td>
+                    <td><input type="number" name="vakal_2_katta" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_2_bhav" step="any" placeholder="0.00" /></td>
+                    <td class="vakal-moisture-cell" style="display: none">
+                      <input
+                        type="number"
+                        name="vakal_2_moisture"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        placeholder="0%"
+                        style="
+                          width: 80px;
+                          padding: 8px;
+                          border: 1.5px solid #ffe08a;
+                          border-radius: 7px;
+                          font-size: 14px;
+                          text-align: center;
+                          font-family: inherit;
+                          background: #fffbf0;
+                        "
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>વકલ ૩</td>
+                    <td><input type="number" name="vakal_3_katta" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_3_bhav" step="any" placeholder="0.00" /></td>
+                    <td class="vakal-moisture-cell" style="display: none">
+                      <input
+                        type="number"
+                        name="vakal_3_moisture"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        placeholder="0%"
+                        style="
+                          width: 80px;
+                          padding: 8px;
+                          border: 1.5px solid #ffe08a;
+                          border-radius: 7px;
+                          font-size: 14px;
+                          text-align: center;
+                          font-family: inherit;
+                          background: #fffbf0;
+                        "
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>વકલ ૪</td>
+                    <td><input type="number" name="vakal_4_katta" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_4_bhav" step="any" placeholder="0.00" /></td>
+                    <td class="vakal-moisture-cell" style="display: none">
+                      <input
+                        type="number"
+                        name="vakal_4_moisture"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        placeholder="0%"
+                        style="
+                          width: 80px;
+                          padding: 8px;
+                          border: 1.5px solid #ffe08a;
+                          border-radius: 7px;
+                          font-size: 14px;
+                          text-align: center;
+                          font-family: inherit;
+                          background: #fffbf0;
+                        "
+                      />
+                    </td>
+                  </tr>
+                  <tr>
+                    <td>વકલ ૫</td>
+                    <td><input type="number" name="vakal_5_katta" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_5_bhav" step="any" placeholder="0.00" /></td>
+                    <td class="vakal-moisture-cell" style="display: none">
+                      <input
+                        type="number"
+                        name="vakal_5_moisture"
+                        step="0.1"
+                        min="0"
+                        max="100"
+                        placeholder="0%"
+                        style="
+                          width: 80px;
+                          padding: 8px;
+                          border: 1.5px solid #ffe08a;
+                          border-radius: 7px;
+                          font-size: 14px;
+                          text-align: center;
+                          font-family: inherit;
+                          background: #fffbf0;
+                        "
+                      />
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
           </div>
 
-          <button type="submit">Generate Bill</button>
+          <!-- Expenses & Freight -->
+          <div class="sc">
+            <div class="sc-title">💸 ખર્ચ & ભાડું</div>
+            <div class="exp-sec">
+              <h3>📋 અન્ય ખર્ચ (Other Expenses)</h3>
+              <div id="expense_list"></div>
+              <div
+                id="expense-subtotal-container"
+                style="text-align: right; margin-top: 9px; font-weight: 700; font-size: 1.1em; color: #005a9e"
+              >
+                Total: <span id="expenses-subtotal">₹0</span>
+              </div>
+              <button type="button" class="add-expense-btn" onclick="addExpense()">+ ખર્ચ ઉમેરો</button>
+            </div>
+            <div class="ff" style="margin-top: 14px">
+              <label>🚛 ભાડું (Truck Freight)</label>
+              <input type="number" name="truck_freight" placeholder="ટ્રક ભાડું ઉમેરો..." />
+            </div>
+          </div>
+
+          <button type="submit" class="gen-btn">🧾 Generate Bill</button>
         </form>
       </div>
+      <!-- end bill_creation_form -->
 
-      <!-- View for listing all saved bills -->
+      <!-- ===== BILL LIST VIEW ===== -->
       <div id="bill_list_view" style="display: none">
-        <center><h2>Saved Bills</h2></center>
-        <div id="sync_status" style="margin-bottom: 10px">Syncing...</div>
-        <div class="dashboard-filters">
-          <input
-            type="text"
-            id="search_input_list"
-            placeholder="Search by name, village, or vehicle..."
-            style="width: 300px; padding: 8px; border-radius: 5px; border: 1px solid #ccc"
-          />
-        </div>
-        <table class="bill-list-table">
-        <button
-          type="submit"
-          onclick="showBillCreationForm()"
-          class="button"
-          style="width: 100%; margin-top: 20px; background-color: #6c757d"
-        >
-          Create New Bill
-        </button>
-
-        <!-- NEW: Import Section -->
-        <div class="import-section">
-          <center><h3>Upload Bills from File</h3></center>
-          <p>Select an Excel file (.xlsx) to upload new bills to the database.</p>
-          <div style="display: flex; gap: 10px; align-items: center; margin-top: 15px">
-            <input type="file" id="upload_file_input" accept=".xlsx" style="flex-grow: 1" />
-            <button class="button" style="background-color: #17a2b8" onclick="uploadBills()">Upload from File</button>
+        <div class="sc">
+          <div class="sc-title">
+            📋 Saved Bills
+            <span
+              id="sync_status"
+              style="
+                margin-left: auto;
+                font-size: 11px;
+                font-weight: 600;
+                color: #28a745;
+                text-transform: none;
+                letter-spacing: 0;
+              "
+            ></span>
           </div>
-          <p id="upload_status" style="margin-top: 10px; font-weight: bold"></p>
+
+          <!-- Toolbar -->
+          <div class="toolbar">
+            <div class="srch">
+              <input type="text" id="search_input_list" placeholder="Search by name, village, vehicle..." />
+            </div>
+            <button class="tbtn tbtn-new" onclick="showBillCreationForm()">✏️ New Bill</button>
+            <button class="tbtn tbtn-print" onclick="printSelectedBills()">🖨️ Print</button>
+            <button class="tbtn tbtn-paid" id="mark_paid_btn">✅ Mark Paid</button>
+          </div>
+
+          <!-- Import / Export -->
+          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px">
+            <div style="background: #f8f9fa; border: 1.5px solid #dee2e6; border-radius: 10px; padding: 14px">
+              <div style="font-weight: 800; font-size: 13px; color: #005a9e; margin-bottom: 8px">📤 Upload Bills</div>
+              <div class="file-row">
+                <input type="file" id="upload_file_input" accept=".xlsx" />
+                <button class="tbtn tbtn-exp" onclick="uploadBills()">Upload</button>
+              </div>
+              <p id="upload_status" style="margin: 7px 0 0; font-weight: 700; font-size: 12px"></p>
+            </div>
+            <div style="background: #f8f9fa; border: 1.5px solid #dee2e6; border-radius: 10px; padding: 14px">
+              <div style="font-weight: 800; font-size: 13px; color: #005a9e; margin-bottom: 8px">📥 Export Bills</div>
+              <div class="file-row">
+                <select id="export_format">
+                  <option value="excel">Excel (XLSX)</option>
+                  <option value="pdf">PDF</option>
+                </select>
+                <button class="tbtn tbtn-exp" onclick="exportSelectedBills()">Download</button>
+              </div>
+            </div>
+          </div>
+
+          <div id="selection-summary"></div>
+
+          <!-- Table -->
+          <table class="blt bill-list-table">
+            <thead>
+              <tr>
+                <th><input type="checkbox" onchange="toggleSelectAll(this)" /></th>
+                <th>Bill No.</th>
+                <th>Date</th>
+                <th>Name</th>
+                <th>Status</th>
+                <th>Type</th>
+                <th>Total</th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bill_list_body"></tbody>
+          </table>
+
+          <div class="pgn">
+            <button id="prev_page_list_btn" class="filter-btn">← Prev</button>
+            <span id="page_info_list"></span>
+            <button id="next_page_list_btn" class="filter-btn">Next →</button>
+          </div>
         </div>
-
-        <!-- NEW: Export Section -->
-        <div class="export-section">
-          <label for="export_format">Export Format:</label>
-          <select id="export_format">
-            <option value="excel">Excel (XLSX)</option>
-            <option value="pdf">PDF</option>
-          </select>
-          <button class="button" style="background-color: #17a2b8" onclick="exportSelectedBills()">
-            Download Selected
-          </button>
-          <button  class="button" id="mark_paid_btn" style="background-color: #28a745;">Mark Selected as Paid</button>
-          <button type="submit" class="button" onclick="printSelectedBills()" style="background-color: #007bff;">Print Selected</button>
-
-          <div id="selection-summary" style="font-weight: bold; font-size: larger; margin: 10px 0; text-align: center;"></div>
-        </div>
-
-
-
-        <table class="bill-list-table">
-          <thead>
-            <tr>
-              <th><input type="checkbox" onchange="toggleSelectAll(this)" /></th>
-              <th>Bill No.</th>
-              <th>Date</th>
-              <th>Name</th>
-              <th>Status</th>
-              <th>Bill Type</th>
-              <th>Final Total</th>
-              <th>Actions</th>
-            </tr>
-          </thead>
-          <tbody id="bill_list_body">
-            <!-- Bill rows will be inserted here by JavaScript -->
-          </tbody>
-        </table>
       </div>
-      <button
-        type="submit"
-        onclick="showBillListView()"
-        id="view_all_bills_btn"
-        class="button"
-        style="width: 100%; margin-top: 20px; background-color: #6c757d"
-      >
-        View Saved Bills
-      </button>
-      <button
-        type="submit"
-        onclick="window.location.href='core_settings.html';"
-        id="view_all_bills_btn"
-        class="button"
-        style="width: 100%; margin-top: 20px; background-color: #6c757d"
-      >
-        Change Core Settings
-      </button>
-      <button
-        type="submit"
-        onclick="window.location.href='dashboard.html';"
-        id="view_all_bills_btn"
-        class="button"
-        style="width: 100%; margin-top: 20px; background-color: #6c757d"
-      >
-        Dashboard
-      </button>
+      <!-- end bill_list_view -->
     </div>
+    <!-- end .pg -->
+
+    <script>
+      // Moisture toggle logic
+      document.addEventListener("DOMContentLoaded", () => {
+        // Weighbridge moisture toggle
+        const wbToggle = document.getElementById("deduct_wb_moisture_toggle");
+        const wbInput = document.getElementById("wb_moisture_input");
+        if (wbToggle && wbInput) {
+          wbToggle.addEventListener("change", () => {
+            wbInput.style.display = wbToggle.checked ? "block" : "none";
+          });
+          // Live preview
+          const pctInput = document.querySelector('input[name="weighbridge_moisture_pct"]');
+          const wbPreview = document.getElementById("wb_moisture_preview");
+          const wbWeightEl = document.querySelector('input[name="weighbridge_weight"]');
+          function updateWbPreview() {
+            if (!pctInput || !wbPreview || !wbWeightEl) return;
+            const pct = parseFloat(pctInput.value) || 0;
+            const wt = parseFloat(wbWeightEl.value) || 0;
+            if (pct > 0 && wt > 0) {
+              const kg = Math.round(wt * (pct / 100));
+              wbPreview.textContent = `= ${kg} kg katega`;
+            } else {
+              wbPreview.textContent = "";
+            }
+          }
+          if (pctInput) pctInput.addEventListener("input", updateWbPreview);
+          if (wbWeightEl) wbWeightEl.addEventListener("input", updateWbPreview);
+        }
+
+        // Vakal moisture toggle
+        const vakalToggle = document.getElementById("deduct_vakal_moisture_toggle");
+        const vakalCells = document.querySelectorAll(".vakal-moisture-cell");
+        const vakalHeader = document.getElementById("vakal_moisture_header");
+        if (vakalToggle) {
+          vakalToggle.addEventListener("change", () => {
+            const show = vakalToggle.checked;
+            vakalCells.forEach((c) => (c.style.display = show ? "table-cell" : "none"));
+            if (vakalHeader) vakalHeader.style.display = show ? "table-cell" : "none";
+          });
+        }
+      });
+
+      // Sync connection dot
+      document.addEventListener("DOMContentLoaded", () => {
+        const dot = document.getElementById("conn-dot");
+        const st = document.getElementById("connection_status");
+        if (!st || !dot) return;
+        const obs = new MutationObserver(() => {
+          const t = st.textContent.toLowerCase();
+          if (t.includes("connect") && !t.includes("dis")) {
+            dot.className = "cdot ok";
+          } else if (t.includes("dis")) {
+            dot.className = "cdot err";
+          }
+        });
+        obs.observe(st, { childList: true, characterData: true, subtree: true });
+      });
+    </script>
   </body>
 </html>

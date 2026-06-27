@@ -1,0 +1,614 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="robots" content="noindex, nofollow" />
+    <title>Customer Ledger — Ganesh Agri</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="firebase-init.js"></script>
+    <script src="utils.js"></script>
+    <script src="ledger.js" defer></script>
+    <link rel="stylesheet" href="html.css" />
+    <link rel="stylesheet" href="dashboard.css" />
+    <link rel="stylesheet" href="print-ledger.css" />
+    <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
+    <style>
+      /* ── NAVBAR ── */
+      .top-navbar {
+        position: sticky;
+        top: 0;
+        z-index: 1000;
+        background: linear-gradient(135deg, #003d6e, #005a9e);
+        box-shadow: 0 4px 20px rgba(0, 62, 110, 0.35);
+        padding: 0 24px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        height: 64px;
+        margin: -20px -16px 28px;
+      }
+      .navbar-brand {
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        text-decoration: none;
+      }
+      .navbar-brand img {
+        height: 40px;
+        border-radius: 8px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+      }
+      .navbar-brand span {
+        color: white;
+        font-size: 1.2em;
+        font-weight: 800;
+      }
+      .navbar-links {
+        display: flex;
+        gap: 6px;
+        align-items: center;
+      }
+      .nav-link {
+        display: flex;
+        align-items: center;
+        gap: 7px;
+        padding: 8px 14px;
+        border-radius: 8px;
+        color: rgba(255, 255, 255, 0.85);
+        font-size: 14px;
+        font-weight: 600;
+        text-decoration: none;
+        border: none;
+        background: transparent;
+        cursor: pointer;
+        transition: all 0.2s;
+        font-family: inherit;
+      }
+      .nav-link:hover {
+        background: rgba(255, 255, 255, 0.15);
+        color: white;
+      }
+      .nav-link.active {
+        background: rgba(255, 255, 255, 0.22);
+        color: white;
+      }
+      @media (max-width: 640px) {
+        .navbar-links .nav-link span:not(.nav-icon) {
+          display: none;
+        }
+        .top-navbar {
+          padding: 0 12px;
+        }
+      }
+
+      /* ── PAGE ── */
+      .page-wrapper {
+        max-width: 960px;
+        margin: 0 auto;
+      }
+
+      /* ── SECTION CARD ── */
+      .section-card {
+        background: white;
+        border-radius: 16px;
+        padding: 24px 26px;
+        margin-bottom: 20px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 12px rgba(0, 90, 158, 0.07);
+      }
+      .section-card-title {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        font-size: 1em;
+        font-weight: 800;
+        color: #005a9e;
+        margin: 0 0 18px;
+        padding-bottom: 12px;
+        border-bottom: 2px solid #e7f3ff;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+      }
+
+      /* ── CUSTOMER SEARCH ── */
+      .customer-search-wrap {
+        position: relative;
+        margin-bottom: 18px;
+      }
+      .customer-search-wrap input {
+        width: 100%;
+        padding: 14px 18px 14px 46px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 10px;
+        font-size: 16px;
+        font-family: inherit;
+        background: #fafbff;
+        box-sizing: border-box;
+        transition: border-color 0.2s, box-shadow 0.2s;
+      }
+      .customer-search-wrap input:focus {
+        border-color: #005a9e;
+        box-shadow: 0 0 0 3px rgba(0, 90, 158, 0.1);
+        outline: none;
+      }
+      .customer-search-wrap::before {
+        content: "🔍";
+        position: absolute;
+        left: 16px;
+        top: 50%;
+        transform: translateY(-50%);
+        font-size: 16px;
+        pointer-events: none;
+      }
+
+      /* ── CUSTOMER CARDS ── */
+      #customer-list-container {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(230px, 1fr));
+        gap: 14px;
+      }
+      .customer-card {
+        background: white;
+        padding: 18px;
+        border: 1.5px solid #e9ecef;
+        border-radius: 12px;
+        box-shadow: 0 2px 8px rgba(0, 90, 158, 0.07);
+        cursor: pointer;
+        transition: all 0.2s;
+        position: relative;
+        overflow: hidden;
+      }
+      .customer-card::before {
+        content: "";
+        position: absolute;
+        top: 0;
+        left: 0;
+        right: 0;
+        height: 3px;
+        background: linear-gradient(90deg, #005a9e, #17a2b8);
+      }
+      .customer-card:hover {
+        transform: translateY(-4px);
+        box-shadow: 0 6px 20px rgba(0, 90, 158, 0.15);
+        border-color: #b3d4f5;
+      }
+      .customer-card .customer-name {
+        font-weight: 800;
+        font-size: 17px;
+        color: #005a9e;
+        margin-bottom: 5px;
+      }
+      .customer-card .customer-village {
+        font-size: 13px;
+        color: #6c757d;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+      }
+      .customer-card .customer-balance {
+        margin-top: 10px;
+        font-weight: 700;
+        font-size: 14px;
+        color: #dc3545;
+      }
+
+      /* ── LEDGER VIEW ── */
+      .ledger-toolbar {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 10px;
+        align-items: center;
+        margin-bottom: 18px;
+        padding: 14px 16px;
+        background: #f8f9fa;
+        border-radius: 12px;
+        border: 1px solid #dee2e6;
+      }
+      .ledger-toolbar .filter-btn {
+        padding: 9px 16px;
+        border-radius: 8px;
+        border: none;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        font-family: inherit;
+        transition: all 0.2s;
+      }
+      .btn-back {
+        background: linear-gradient(135deg, #6c757d, #545b62);
+        color: white;
+      }
+      .btn-pay {
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+        color: white;
+      }
+      .btn-print {
+        background: linear-gradient(135deg, #007bff, #005a9e);
+        color: white;
+      }
+      .filter-btn:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 3px 10px rgba(0, 0, 0, 0.18);
+      }
+
+      input[type="date"] {
+        padding: 9px 12px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+      }
+
+      /* ── SUMMARY CARDS ── */
+      .supplier-summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 18px;
+      }
+      .summary-card {
+        background: #f8f9fa;
+        padding: 14px;
+        border-radius: 10px;
+        text-align: center;
+        border: 1px solid #dee2e6;
+      }
+      .summary-label {
+        font-size: 13px;
+        color: #6c757d;
+        font-weight: 600;
+        margin-bottom: 5px;
+      }
+      .summary-value {
+        font-size: 1.3em;
+        font-weight: 800;
+        color: #343a40;
+      }
+
+      /* ── KPI ── */
+      .kpi-grid-3 {
+        display: grid;
+        grid-template-columns: repeat(3, 1fr);
+        gap: 14px;
+        margin-bottom: 18px;
+      }
+      .kpi-card {
+        background: white;
+        padding: 18px 14px;
+        border-radius: 14px;
+        text-align: center;
+        border: 1px solid #e9ecef;
+        box-shadow: 0 2px 10px rgba(0, 90, 158, 0.07);
+      }
+      .kpi-label {
+        font-size: 13px;
+        color: #6c757d;
+        font-weight: 600;
+        margin-bottom: 6px;
+      }
+      .kpi-value {
+        font-size: 1.6em;
+        font-weight: 800;
+        color: #005a9e;
+      }
+      .balance-card .kpi-value {
+        color: #dc3545;
+      }
+
+      /* ── LEDGER TABLE ── */
+      .ledger-table {
+        width: 100%;
+        border-collapse: separate;
+        border-spacing: 0 6px;
+      }
+      .ledger-table th {
+        background: #005a9e;
+        color: white;
+        font-weight: 700;
+        padding: 12px 13px;
+        text-align: left;
+        font-size: 12px;
+        text-transform: uppercase;
+        letter-spacing: 0.4px;
+      }
+      .ledger-table th:first-child {
+        border-radius: 8px 0 0 8px;
+      }
+      .ledger-table th:last-child {
+        border-radius: 0 8px 8px 0;
+      }
+      .ledger-table td {
+        background: white;
+        padding: 12px 13px;
+        font-size: 14px;
+        border-top: 1px solid #f0f0f0;
+        border-bottom: 1px solid #f0f0f0;
+        font-weight: 500;
+      }
+      .ledger-table td:first-child {
+        border-left: 1px solid #f0f0f0;
+        border-radius: 8px 0 0 8px;
+      }
+      .ledger-table td:last-child {
+        border-right: 1px solid #f0f0f0;
+        border-radius: 0 8px 8px 0;
+      }
+      .ledger-table tbody tr {
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+        transition: all 0.2s;
+      }
+      .ledger-table tbody tr:hover {
+        transform: translateY(-1px);
+        box-shadow: 0 4px 14px rgba(0, 90, 158, 0.1);
+      }
+      .ledger-table td:nth-child(4),
+      .ledger-table td:nth-child(5),
+      .ledger-table td:nth-child(6) {
+        text-align: right;
+        font-weight: 600;
+      }
+      .ledger-table td:nth-child(6) {
+        font-weight: 800;
+        color: #005a9e;
+      }
+
+      /* ── MODAL ── */
+      .modal-overlay {
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 10000;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        backdrop-filter: blur(2px);
+      }
+      .modal-content {
+        background: white;
+        padding: 32px 28px;
+        border-radius: 16px;
+        width: 92%;
+        max-width: 520px;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+      }
+      .modal-content h2 {
+        color: #005a9e;
+        margin-top: 0;
+      }
+      .modal-content label {
+        display: block;
+        margin-bottom: 5px;
+        font-weight: 700;
+        color: #495057;
+        font-size: 14px;
+      }
+      .modal-content input[type="number"],
+      .modal-content input[type="text"],
+      .modal-content input[type="date"] {
+        width: 100%;
+        padding: 11px 14px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 15px;
+        color: #495057;
+        box-sizing: border-box;
+        margin-bottom: 14px;
+        font-family: inherit;
+      }
+      .modal-content input:focus {
+        border-color: #005a9e;
+        box-shadow: 0 0 0 3px rgba(0, 90, 158, 0.1);
+        outline: none;
+      }
+      .modal-divider {
+        border: none;
+        border-top: 1px solid #e0e0e0;
+        margin: 16px 0;
+      }
+      .modal-button-container {
+        display: flex;
+        gap: 12px;
+        margin-top: 8px;
+      }
+      .modal-button-container button {
+        flex: 1;
+        padding: 13px;
+        font-size: 15px;
+        border-radius: 8px;
+        border: none;
+        cursor: pointer;
+        font-weight: 700;
+        font-family: inherit;
+        transition: all 0.2s;
+      }
+      #save-payment-btn {
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+        color: white;
+      }
+      #close-payment-modal-btn {
+        background: #e9ecef;
+        color: #495057;
+      }
+      #close-payment-modal-btn:hover {
+        background: #ced4da;
+      }
+
+      #selection-summary {
+        background: #e7f3ff;
+        border: 1px solid #b3d4f5;
+        color: #005a9e;
+        padding: 10px;
+        margin-bottom: 14px;
+        border-radius: 8px;
+        text-align: center;
+        font-size: 1em;
+        display: none;
+      }
+
+      /* Print */
+      #print-header {
+        display: none;
+      }
+      @media print {
+        .no-print {
+          display: none !important;
+        }
+        .top-navbar {
+          display: none !important;
+        }
+        #print-header {
+          display: block !important;
+        }
+        body,
+        .page-wrapper {
+          margin: 0;
+          padding: 0;
+        }
+        .section-card {
+          box-shadow: none;
+          border: none;
+          padding: 0;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <!-- NAVBAR -->
+    <nav class="top-navbar no-print">
+      <a class="navbar-brand" href="index.html">
+        <img src="IMG-20250716-WA0121.jpg" alt="Logo" />
+        <span>Ganesh Agri</span>
+      </a>
+      <div class="navbar-links">
+        <a class="nav-link" href="index.html"><span class="nav-icon">🧾</span><span>New Bill</span></a>
+        <a class="nav-link" href="index.html"><span class="nav-icon">📋</span><span>Bills</span></a>
+        <a class="nav-link" href="dashboard.html"><span class="nav-icon">📊</span><span>Dashboard</span></a>
+        <a class="nav-link active" href="ledger.html"><span class="nav-icon">📒</span><span>Ledger</span></a>
+        <a class="nav-link" href="core_settings.html"><span class="nav-icon">⚙️</span><span>Settings</span></a>
+      </div>
+    </nav>
+
+    <div id="loading-bar" class="loading-bar hidden"></div>
+    <div id="print-header"><h1>Customer Statement — Ganesh Agri</h1></div>
+
+    <div class="page-wrapper">
+      <!-- CUSTOMER SELECTION -->
+      <div id="customer-selection-view" class="no-print">
+        <div class="section-card">
+          <div class="section-card-title"><span>📒</span> Customer Ledger (ખાતાવહી)</div>
+          <div class="customer-search-wrap">
+            <input type="text" id="customer-search-input" placeholder="Search for a customer by name or village..." />
+          </div>
+          <div id="customer-list-container"></div>
+        </div>
+      </div>
+
+      <!-- LEDGER VIEW -->
+      <div id="ledger-view" style="display: none">
+        <!-- Toolbar -->
+        <div class="ledger-toolbar no-print">
+          <button id="back-to-list-btn" class="filter-btn btn-back">← Back</button>
+          <input type="date" id="start_date" />
+          <span style="font-weight: 700; color: #6c757d">to</span>
+          <input type="date" id="end_date" />
+          <button
+            class="filter-btn"
+            id="date-filter-btn"
+            style="background: linear-gradient(135deg, #007bff, #005a9e); color: white"
+          >
+            Apply
+          </button>
+          <button id="record-payment-btn" class="filter-btn btn-pay">💰 Record Payment</button>
+          <button id="print-ledger-btn" class="filter-btn btn-print">🖨️ Print Statement</button>
+        </div>
+
+        <div id="selection-summary" class="no-print"></div>
+
+        <!-- Customer Name -->
+        <div class="section-card" style="text-align: center; padding: 20px">
+          <h2 id="ledger-customer-name" style="color: #005a9e; margin: 0 0 4px"></h2>
+          <p id="ledger-customer-village" style="color: #6c757d; margin: 0"></p>
+        </div>
+
+        <!-- Summary Stats -->
+        <div class="supplier-summary-grid">
+          <div class="summary-card">
+            <div class="summary-label">🧾 Total Bills</div>
+            <div class="summary-value" id="summary-total-bills">0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">📈 Avg. Bill Value</div>
+            <div class="summary-value" id="summary-avg-bill">₹0</div>
+          </div>
+          <div class="summary-card">
+            <div class="summary-label">📅 Last Supply</div>
+            <div class="summary-value" id="summary-last-supply">N/A</div>
+          </div>
+        </div>
+
+        <!-- KPI -->
+        <div class="kpi-grid-3">
+          <div class="kpi-card">
+            <div class="kpi-label">Total Debit (કુલ ઉધાર)</div>
+            <div class="kpi-value" id="kpi-total-debit">₹0</div>
+          </div>
+          <div class="kpi-card">
+            <div class="kpi-label">Total Credit (કુલ જમા)</div>
+            <div class="kpi-value" id="kpi-total-credit" style="color: #28a745">₹0</div>
+          </div>
+          <div class="kpi-card balance-card">
+            <div class="kpi-label">Balance Due (બાકી રકમ)</div>
+            <div class="kpi-value" id="kpi-balance-due">₹0</div>
+          </div>
+        </div>
+
+        <!-- Ledger Table -->
+        <div class="section-card">
+          <div class="section-card-title"><span>📋</span> Transaction History</div>
+          <table class="ledger-table bill-list-table">
+            <thead>
+              <tr>
+                <th class="no-print"><input type="checkbox" id="select-all-bills-ledger" /></th>
+                <th>Date</th>
+                <th>Particulars (વિગત)</th>
+                <th>Debit (ઉધાર)</th>
+                <th>Credit (જમા)</th>
+                <th>Balance (બાકી)</th>
+              </tr>
+            </thead>
+            <tbody id="ledger-table-body"></tbody>
+          </table>
+        </div>
+      </div>
+      <!-- end ledger-view -->
+    </div>
+    <!-- end page-wrapper -->
+
+    <!-- PAYMENT MODAL -->
+    <div id="payment-modal" class="modal-overlay" style="display: none">
+      <div class="modal-content">
+        <h2>💰 Record Payment & Settlement</h2>
+        <p style="color: #6c757d; margin-bottom: 16px">
+          Enter details for payment to <strong id="modal-customer-name"></strong>.
+        </p>
+        <label for="payment-amount-input">Cash Paid Amount (રોકડ ચુકવણી)</label>
+        <input type="number" id="payment-amount-input" step="any" placeholder="Enter amount..." />
+        <label for="payment-date-input">Payment Date (ચુકવણી તારીખ)</label>
+        <input type="date" id="payment-date-input" required />
+        <hr class="modal-divider" />
+        <label for="payment-deduction-amount">Settlement Deduction (વળતર / કપાત)</label>
+        <input type="number" id="payment-deduction-amount" step="any" placeholder="0" />
+        <label for="payment-deduction-reason">Deduction Reason (કારણ)</label>
+        <input type="text" id="payment-deduction-reason" placeholder="e.g., Truck Freight, Quality issue" />
+        <div class="modal-button-container">
+          <button id="save-payment-btn">💾 Save Entry</button>
+          <button id="close-payment-modal-btn">✕ Cancel</button>
+        </div>
+      </div>
+    </div>
+  </body>
+</html>

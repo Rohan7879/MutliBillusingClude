@@ -49,7 +49,46 @@ function initializeIndexPage() {
       document.getElementById("bag_supply_section").style.display = isLoose ? "none" : "table-row-group";
       document.getElementById("vakal_section").style.display = isLoose ? "none" : "table-row-group";
       document.getElementById("loose_price_input").required = isLoose;
+
+      const supplyTypeSelector = document.querySelector(".supply-type-selector");
+      if (supplyTypeSelector) {
+        supplyTypeSelector.style.display = isLoose ? "none" : "flex";
+      }
     });
+  }
+
+  // Logic to automatically control both deduction toggles
+  const supplyTypeRadios = document.querySelectorAll('input[name="supply_type"]');
+  const kantanDeductToggle = document.querySelector('input[name="deduct_kantan"]');
+  const plasticDeductToggle = document.querySelector('input[name="deduct_plastic"]');
+
+  supplyTypeRadios.forEach((radio) => {
+    radio.addEventListener("change", (event) => {
+      if (kantanDeductToggle && plasticDeductToggle) {
+        // If "Kantan Pack" is selected, turn OFF BOTH toggles.
+        if (event.target.value === "કંતાન પેક") {
+          kantanDeductToggle.checked = false;
+          plasticDeductToggle.checked = false;
+        }
+        // Otherwise (if "Loose" is selected), turn them both back ON.
+        else {
+          kantanDeductToggle.checked = true;
+          plasticDeductToggle.checked = true;
+        }
+      }
+    });
+  });
+
+  const kasarDisplay = document.getElementById("kasar-percentage-display");
+  if (kasarDisplay && globalSettings && typeof globalSettings.kasarPercentage !== "undefined") {
+    const percentage = (globalSettings.kasarPercentage * 100).toFixed(1);
+    kasarDisplay.textContent = `(${percentage}%)`;
+  }
+
+  const utraiDisplay = document.getElementById("utrai-value-display");
+  if (utraiDisplay && globalSettings && typeof globalSettings.utraiPercentage !== "undefined") {
+    // The Utrai value is a rate, not a percentage
+    utraiDisplay.textContent = `(${globalSettings.utraiPercentage}₹/100kg)`;
   }
 
   const form = document.getElementById("estimateForm");
@@ -127,6 +166,27 @@ function updateTotalBags() {
     total += Number(input.value) || 0;
   });
   document.getElementById("total-bags-count").textContent = total;
+
+  // Live warning if vakal bags > bharela bags
+  const bharela600 = Number(document.querySelector('input[name="bharela_600"]')?.value) || 0;
+  const bharela200 = Number(document.querySelector('input[name="bharela_200"]')?.value) || 0;
+  const totalBharela = bharela600 + bharela200;
+
+  const bagsBadge = document.getElementById("total-bags-count");
+  const warningEl = document.getElementById("vakal-bag-warning");
+
+  if (totalBharela > 0 && total > totalBharela) {
+    if (bagsBadge) bagsBadge.style.color = "#dc3545";
+    if (warningEl) {
+      warningEl.style.display = "block";
+      warningEl.textContent = `⚠️ વકલ (${total}) > ભરેલા (${totalBharela}) — ${
+        total - totalBharela
+      } bag(s) zyada hain!`;
+    }
+  } else {
+    if (bagsBadge) bagsBadge.style.color = "";
+    if (warningEl) warningEl.style.display = "none";
+  }
 }
 function updateExpensesSubtotal() {
   let total = 0;
@@ -160,10 +220,33 @@ function calculateBillData(formData) {
 
   // --- Get Form Values ---
   const isLooseSupply = formData.get("is_loose_supply") !== null;
+  data["Supply Type"] = formData.get("supply_type");
   const deductKasar = formData.get("deduct_kasar") !== null;
   const deductKantan = formData.get("deduct_kantan") !== null;
   const deductPlastic = formData.get("deduct_plastic") !== null;
   const deductUtrai = formData.get("deduct_utrai") !== null;
+
+  // --- MOISTURE DEDUCTIONS ---
+  const deductWeighbridgeMoisture = formData.get("deduct_weighbridge_moisture") !== null;
+  const weighbridgeMoisturePct = Number(formData.get("weighbridge_moisture_pct")) || 0;
+  const deductVakalMoisture = formData.get("deduct_vakal_moisture") !== null;
+
+  const bharela_600 = Number(formData.get("bharela_600")) || 0;
+  const khali_600 = Number(formData.get("khali_600")) || 0;
+  const bharela_200 = Number(formData.get("bharela_200")) || 0;
+  const khali_200 = Number(formData.get("khali_200")) || 0;
+
+  // --- NEW: Save bag counts to the data object ---
+  data["Bharela 600"] = bharela_600;
+  data["Khali 600"] = khali_600;
+  data["Bharela 200"] = bharela_200;
+  data["Khali 200"] = khali_200;
+
+  data["Supply Type"] = formData.get("supply_type");
+  // If it's a loose supply bill, ALWAYS set the type to 'લૂઝ'
+  if (isLooseSupply) {
+    data["Supply Type"] = "લૂઝ";
+  }
 
   let expenses = [];
   const expenseRows = document.querySelectorAll(".expense-row");
@@ -186,14 +269,26 @@ function calculateBillData(formData) {
     const weight = Number(formData.get("weighbridge_weight")) || 0;
     const price = Number(formData.get("loose_price")) || 0;
     const katta_kasar = deductKasar ? customRound(weight * globalSettings.kasarPercentage) : 0;
-    net_vajan = customRound(weight - katta_kasar);
-    total = customRound((net_vajan / 20) * price);
+    const wb_moisture_kg = deductWeighbridgeMoisture ? customRound(weight * (weighbridgeMoisturePct / 100)) : 0;
+    net_vajan = customRound(weight - katta_kasar - wb_moisture_kg);
+
+    // Vakal moisture for loose
+    const vakal_moisture_pct_1 = deductVakalMoisture ? Number(formData.get("vakal_1_moisture")) || 0 : 0;
+    const vakal_moisture_kg_1 = customRound(net_vajan * (vakal_moisture_pct_1 / 100));
+    const net_vajan_after_vakal_moisture = customRound(net_vajan - vakal_moisture_kg_1);
+    total = customRound((net_vajan_after_vakal_moisture / 20) * price);
 
     data["Weighbridge Weight"] = weight;
     data["Kasar"] = katta_kasar;
+    data["Weighbridge Moisture %"] = weighbridgeMoisturePct;
+    data["Weighbridge Moisture Kg"] = wb_moisture_kg;
+    data["Vakal 1 Moisture %"] = vakal_moisture_pct_1;
+    data["Vakal 1 Moisture Kg"] = vakal_moisture_kg_1;
     data["Bardan Weight"] = 0;
+    data["Kantan Weight"] = 0; // Add this
+    data["Plastic Weight"] = 0; // Add this
     data["Vakal 1 Katta"] = "-";
-    data["Vakal 1 Kilo"] = net_vajan;
+    data["Vakal 1 Kilo"] = net_vajan_after_vakal_moisture;
     data["Vakal 1 Bhav"] = price;
     data["Vakal 1 Amount"] = total;
     for (let i = 2; i <= 5; i++) {
@@ -215,11 +310,19 @@ function calculateBillData(formData) {
       ? customRound((bharela_200 + khali_200) * globalSettings.plasticWeight)
       : 0;
     const Bardan = bardanWeightKantan + bardanWeightPlastic;
+    data["Kantan Weight"] = bardanWeightKantan; // Save Kantan weight
+    data["Plastic Weight"] = bardanWeightPlastic; // Save Plastic weight
+    data["Bardan Weight"] = Bardan; // Still save the total for calculation
     const katta_kasar = deductKasar ? customRound(weighbridge_weight * globalSettings.kasarPercentage) : 0;
-    net_vajan = customRound(weighbridge_weight - katta_kasar - Bardan);
+    const wb_moisture_kg = deductWeighbridgeMoisture
+      ? customRound(weighbridge_weight * (weighbridgeMoisturePct / 100))
+      : 0;
+    net_vajan = customRound(weighbridge_weight - katta_kasar - Bardan - wb_moisture_kg);
 
     data["Weighbridge Weight"] = weighbridge_weight;
     data["Kasar"] = katta_kasar;
+    data["Weighbridge Moisture %"] = weighbridgeMoisturePct;
+    data["Weighbridge Moisture Kg"] = wb_moisture_kg;
     data["Bardan Weight"] = Bardan;
 
     const vakals = [
@@ -229,6 +332,15 @@ function calculateBillData(formData) {
       { katta: Number(formData.get("vakal_4_katta")) || 0, bhav: Number(formData.get("vakal_4_bhav")) || 0 },
       { katta: Number(formData.get("vakal_5_katta")) || 0, bhav: Number(formData.get("vakal_5_bhav")) || 0 },
     ];
+
+    // ── VALIDATION: Vakal bags cannot exceed total bharela bags ──
+    const totalBharela = bharela_600 + bharela_200;
+    const totalVakalEntered = vakals.reduce((sum, v) => sum + v.katta, 0);
+    if (totalVakalEntered > totalBharela) {
+      throw new Error(`VALIDATION_ERROR: વકલમાં કુલ કટ્ટા (${totalVakalEntered}) ભરેલા કટ્ટા (${totalBharela}) કરતાં વધારે છે!
+
+Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${totalBharela}).`);
+    }
 
     let totalVakalBags = vakals.reduce((sum, v) => sum + v.katta, 0);
     let perUnitWeight = totalVakalBags ? net_vajan / totalVakalBags : 0;
@@ -246,9 +358,15 @@ function calculateBillData(formData) {
         }
       }
       data[`Vakal ${i + 1} Katta`] = vakals[i].katta;
-      data[`Vakal ${i + 1} Kilo`] = kilo;
+      // Per vakal moisture
+      const vakalMoisturePct = deductVakalMoisture ? Number(formData.get(`vakal_${i + 1}_moisture`)) || 0 : 0;
+      const vakalMoistureKg = vakals[i].katta > 0 ? customRound(kilo * (vakalMoisturePct / 100)) : 0;
+      const kiloAfterMoisture = kilo - vakalMoistureKg;
+      data[`Vakal ${i + 1} Moisture %`] = vakalMoisturePct;
+      data[`Vakal ${i + 1} Moisture Kg`] = vakalMoistureKg;
+      data[`Vakal ${i + 1} Kilo`] = kiloAfterMoisture;
       data[`Vakal ${i + 1} Bhav`] = vakals[i].bhav;
-      const amount = customRound((kilo / 20) * vakals[i].bhav);
+      const amount = customRound((kiloAfterMoisture / 20) * vakals[i].bhav);
       data[`Vakal ${i + 1} Amount`] = amount;
       total += amount;
     }
@@ -332,7 +450,6 @@ async function collectData() {
         { merge: true }
       );
     }
-    // --- END OF NEW CODE BLOCK ---
 
     // --- UPDATED TRANSACTION LOGIC ---
     const newSerialNo = await db.runTransaction(async (transaction) => {
@@ -350,9 +467,13 @@ async function collectData() {
       }
     });
 
-    // Format the new bill number (e.g., "26-00001")
+    // --- MODIFIED BILL NUMBER FORMATTING ---
+    // Get the current month (1-12) and pad with a leading zero if needed
+    const currentMonth = String(now.getMonth() + 1).padStart(2, "0");
+
+    // Format the new bill number with the month (e.g., "25/09-00001")
     const paddedSerialNo = String(newSerialNo).padStart(5, "0");
-    const formattedBillNo = `${shortYear}-${paddedSerialNo}`;
+    const formattedBillNo = `${shortYear}/${currentMonth}-${paddedSerialNo}`;
 
     data["Serial No"] = formattedBillNo;
     data["Date"] = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(
@@ -364,8 +485,13 @@ async function collectData() {
 
     window.location.href = `final.html?id=${docRef.id}`;
   } catch (error) {
-    console.error("Transaction failed or error adding document: ", error);
-    alert("Could not save the bill. Please try again.");
+    if (error.message && error.message.startsWith("VALIDATION_ERROR:")) {
+      const msg = error.message.replace("VALIDATION_ERROR: ", "");
+      Swal.fire({ icon: "error", title: "⚠️ Validation Error", text: msg, confirmButtonColor: "#005a9e" });
+    } else {
+      console.error("Transaction failed or error adding document: ", error);
+      alert("Could not save the bill. Please try again.");
+    }
   } finally {
     submitButton.disabled = false;
     hideLoading();
@@ -401,8 +527,13 @@ async function updateData(docId) {
 
     window.location.href = `final.html?id=${docId}`;
   } catch (error) {
-    console.error("Error updating document: ", error);
-    alert("Could not update the bill. Please try again.");
+    if (error.message && error.message.startsWith("VALIDATION_ERROR:")) {
+      const msg = error.message.replace("VALIDATION_ERROR: ", "");
+      Swal.fire({ icon: "error", title: "⚠️ Validation Error", text: msg, confirmButtonColor: "#005a9e" });
+    } else {
+      console.error("Error updating document: ", error);
+      alert("Could not update the bill. Please try again.");
+    }
   } finally {
     submitButton.disabled = false;
     hideLoading();
