@@ -108,10 +108,10 @@ function displayData(data) {
 
   // Moisture display
   const wbMoistureBox = document.getElementById("wb_moisture_box");
-  const wbMoistureKg = data["Weighbridge Moisture Kg"] || 0;
-  const wbMoisturePct = data["Weighbridge Moisture %"] || 0;
-  if (wbMoistureBox) {
-    if (wbMoistureKg > 0) {
+  const wbMoistureKg  = data["Weighbridge Moisture Kg"] || 0;
+  const wbMoisturePct = data["Weighbridge Moisture %"]  || 0;
+  if(wbMoistureBox){
+    if(wbMoistureKg > 0){
       wbMoistureBox.style.display = "block";
       setText("display_wb_moisture", `-${formatNumber(wbMoistureKg)} (${wbMoisturePct}%)`);
     } else {
@@ -209,16 +209,16 @@ function displayData(data) {
         setValue(`display_vakal_${i}_katta`, katta);
 
         const moisturePct = data[`Vakal ${i} Moisture %`] || 0;
-        const moistureKg = data[`Vakal ${i} Moisture Kg`] || 0;
+        const moistureKg  = data[`Vakal ${i} Moisture Kg`] || 0;
 
         // kilo stored is already AFTER moisture deduction
         const kiloAfterMoisture = kilo; // final net kilo
         // raw kilo before moisture = kilo + moistureKg
         const rawKilo = kiloAfterMoisture + moistureKg;
 
-        const moistureTd = document.getElementById(`vakal_${i}_moisture_td`);
-        const netKiloTd = document.getElementById(`vakal_${i}_net_kilo_td`);
-        const kiloEl = document.getElementById(`display_vakal_${i}_kilo`);
+        const moistureTd  = document.getElementById(`vakal_${i}_moisture_td`);
+        const netKiloTd   = document.getElementById(`vakal_${i}_net_kilo_td`);
+        const kiloEl      = document.getElementById(`display_vakal_${i}_kilo`);
 
         if (moisturePct > 0 && moistureKg > 0) {
           // Show raw kilo in kilo column
@@ -226,9 +226,7 @@ function displayData(data) {
           // Show moisture column
           if (moistureTd) {
             moistureTd.style.display = "table-cell";
-            moistureTd.innerHTML = `-${formatNumber(
-              moistureKg
-            )}<br><small style="font-size:11px;">(${moisturePct}%)</small>`;
+            moistureTd.innerHTML = `-${formatNumber(moistureKg)}<br><small style="font-size:11px;">(${moisturePct}%)</small>`;
           }
           // Show net kilo column
           if (netKiloTd) {
@@ -238,8 +236,8 @@ function displayData(data) {
         } else {
           // No moisture — show net kilo directly
           if (kiloEl) kiloEl.innerHTML = formatNumber(kiloAfterMoisture);
-          if (moistureTd) moistureTd.style.display = "none";
-          if (netKiloTd) netKiloTd.style.display = "none";
+          if (moistureTd)  moistureTd.style.display  = "none";
+          if (netKiloTd)   netKiloTd.style.display   = "none";
         }
 
         setValue(`display_vakal_${i}_bhav`, data[`Vakal ${i} Bhav`]);
@@ -251,27 +249,24 @@ function displayData(data) {
   }
 
   // Show/hide moisture header columns based on data
-  const anyVakalMoisture = [1, 2, 3, 4, 5].some((i) => (data[`Vakal ${i} Moisture %`] || 0) > 0);
-  const thMoisture = document.getElementById("th_moisture");
-  const thNetKilo = document.getElementById("th_net_kilo");
-  if (thMoisture) thMoisture.style.display = anyVakalMoisture ? "table-cell" : "none";
-  if (thNetKilo) thNetKilo.style.display = anyVakalMoisture ? "table-cell" : "none";
+  const anyVakalMoisture = [1,2,3,4,5].some(i => (data[`Vakal ${i} Moisture %`] || 0) > 0);
+  const thMoisture  = document.getElementById("th_moisture");
+  const thNetKilo   = document.getElementById("th_net_kilo");
+  if (thMoisture)  thMoisture.style.display  = anyVakalMoisture ? "table-cell" : "none";
+  if (thNetKilo)   thNetKilo.style.display   = anyVakalMoisture ? "table-cell" : "none";
 
   // Moisture total summary box
   let existingMoistureBox = document.getElementById("moisture_total_box");
   if (anyVakalMoisture) {
-    const totalMoistureKg = [1, 2, 3, 4, 5].reduce((sum, i) => sum + (data[`Vakal ${i} Moisture Kg`] || 0), 0);
+    const totalMoistureKg = [1,2,3,4,5].reduce((sum, i) => sum + (data[`Vakal ${i} Moisture Kg`] || 0), 0);
     if (!existingMoistureBox) {
       const box = document.createElement("div");
       box.id = "moisture_total_box";
       box.className = "detail-item";
-      box.style.cssText =
-        "background:#fff8e7; border:2px solid #ffe08a; border-radius:10px; padding:12px; text-align:center; margin-top:10px;";
+      box.style.cssText = "background:#fff8e7; border:2px solid #ffe08a; border-radius:10px; padding:12px; text-align:center; margin-top:10px;";
       box.innerHTML = `
         <span class="detail-label" style="color:#7a5700; font-weight:700;">💧 કુલ મોઇ. કપાત (Total Moisture Cut)</span>
-        <span class="detail-value" style="color:#e67e00; font-size:1.8em; font-weight:800; display:block; margin-top:4px;">-${Number(
-          totalMoistureKg
-        ).toLocaleString("en-IN")} kg</span>
+        <span class="detail-value" style="color:#e67e00; font-size:1.8em; font-weight:800; display:block; margin-top:4px;">-${Number(totalMoistureKg).toLocaleString("en-IN")} kg</span>
       `;
       const finalBillTable = document.querySelector(".final-bill-table");
       if (finalBillTable && finalBillTable.parentNode) {

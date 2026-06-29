@@ -6,190 +6,72 @@
     <title>Settings — Ganesh Agri</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="firebase-init.js"></script>
-    <script src="core_settings.js"></script>
-    <link rel="stylesheet" href="html.css" />
-    <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
+    <script src="js/core/firebase-init.js"></script>
+    <script src="js/features/settings.js"></script>
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
     <style>
       .top-navbar {
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-        background: linear-gradient(135deg, #003d6e, #005a9e);
-        box-shadow: 0 4px 20px rgba(0, 62, 110, 0.35);
-        padding: 0 24px;
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        height: 64px;
-        margin: -20px -16px 28px;
+        position:sticky; top:0; z-index:1000;
+        background:linear-gradient(135deg,#003d6e,#005a9e);
+        box-shadow:0 4px 20px rgba(0,62,110,0.35);
+        padding:0 24px; display:flex; align-items:center;
+        justify-content:space-between; height:64px; margin:-20px -16px 28px;
       }
-      .navbar-brand {
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        text-decoration: none;
-      }
-      .navbar-brand img {
-        height: 40px;
-        border-radius: 8px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-      }
-      .navbar-brand span {
-        color: white;
-        font-size: 1.2em;
-        font-weight: 800;
-      }
-      .navbar-links {
-        display: flex;
-        gap: 6px;
-        align-items: center;
-      }
-      .nav-link {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        padding: 8px 14px;
-        border-radius: 8px;
-        color: rgba(255, 255, 255, 0.85);
-        font-size: 14px;
-        font-weight: 600;
-        text-decoration: none;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-family: inherit;
-      }
-      .nav-link:hover {
-        background: rgba(255, 255, 255, 0.15);
-        color: white;
-      }
-      .nav-link.active {
-        background: rgba(255, 255, 255, 0.22);
-        color: white;
-      }
-      @media (max-width: 640px) {
-        .navbar-links .nav-link span:not(.nav-icon) {
-          display: none;
-        }
-        .top-navbar {
-          padding: 0 12px;
-        }
-      }
+      .navbar-brand { display:flex; align-items:center; gap:12px; text-decoration:none; }
+      .navbar-brand img { height:40px; border-radius:8px; border:2px solid rgba(255,255,255,0.3); }
+      .navbar-brand span { color:white; font-size:1.2em; font-weight:800; }
+      .navbar-links { display:flex; gap:6px; align-items:center; }
+      .nav-link { display:flex; align-items:center; gap:7px; padding:8px 14px; border-radius:8px; color:rgba(255,255,255,0.85); font-size:14px; font-weight:600; text-decoration:none; border:none; background:transparent; cursor:pointer; transition:all 0.2s; font-family:inherit; }
+      .nav-link:hover { background:rgba(255,255,255,0.15); color:white; }
+      .nav-link.active { background:rgba(255,255,255,0.22); color:white; }
+      @media(max-width:640px){ .navbar-links .nav-link span:not(.nav-icon){display:none;} .top-navbar{padding:0 12px;} }
 
-      .page-wrapper {
-        max-width: 680px;
-        margin: 0 auto;
-      }
-      .section-card {
-        background: white;
-        border-radius: 16px;
-        padding: 28px;
-        margin-bottom: 20px;
-        border: 1px solid #dee2e6;
-        box-shadow: 0 2px 12px rgba(0, 90, 158, 0.07);
-      }
-      .section-card-title {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        font-size: 1em;
-        font-weight: 800;
-        color: #005a9e;
-        margin: 0 0 22px;
-        padding-bottom: 14px;
-        border-bottom: 2px solid #e7f3ff;
-        text-transform: uppercase;
-        letter-spacing: 0.5px;
-      }
+      .page-wrapper { max-width:680px; margin:0 auto; }
+      .section-card { background:white; border-radius:16px; padding:28px; margin-bottom:20px; border:1px solid #dee2e6; box-shadow:0 2px 12px rgba(0,90,158,0.07); }
+      .section-card-title { display:flex; align-items:center; gap:10px; font-size:1em; font-weight:800; color:#005a9e; margin:0 0 22px; padding-bottom:14px; border-bottom:2px solid #e7f3ff; text-transform:uppercase; letter-spacing:0.5px; }
 
       .settings-row {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        padding: 16px 18px;
-        border-radius: 10px;
-        background: #f8f9fa;
-        border: 1.5px solid #e9ecef;
-        margin-bottom: 12px;
-        transition: border-color 0.2s;
+        display:flex; align-items:center; justify-content:space-between;
+        padding:16px 18px; border-radius:10px; background:#f8f9fa;
+        border:1.5px solid #e9ecef; margin-bottom:12px;
+        transition:border-color 0.2s;
       }
-      .settings-row:hover {
-        border-color: #b3d4f5;
-      }
-      .settings-row-label {
-        font-weight: 700;
-        color: #343a40;
-        font-size: 15px;
-      }
-      .settings-row-desc {
-        font-size: 12px;
-        color: #6c757d;
-        margin-top: 3px;
-      }
+      .settings-row:hover { border-color:#b3d4f5; }
+      .settings-row-label { font-weight:700; color:#343a40; font-size:15px; }
+      .settings-row-desc { font-size:12px; color:#6c757d; margin-top:3px; }
       .settings-row input {
-        width: 130px;
-        padding: 10px 14px;
-        border: 1.5px solid #dee2e6;
-        border-radius: 8px;
-        font-size: 15px;
-        font-family: inherit;
-        text-align: center;
-        font-weight: 700;
-        color: #005a9e;
-        transition: border-color 0.2s, box-shadow 0.2s;
+        width:130px; padding:10px 14px; border:1.5px solid #dee2e6;
+        border-radius:8px; font-size:15px; font-family:inherit;
+        text-align:center; font-weight:700; color:#005a9e;
+        transition:border-color 0.2s, box-shadow 0.2s;
       }
-      .settings-row input:focus {
-        border-color: #005a9e;
-        box-shadow: 0 0 0 3px rgba(0, 90, 158, 0.1);
-        outline: none;
-      }
+      .settings-row input:focus { border-color:#005a9e; box-shadow:0 0 0 3px rgba(0,90,158,0.1); outline:none; }
 
       .save-btn {
-        width: 100%;
-        padding: 16px;
-        border: none;
-        border-radius: 12px;
-        background: linear-gradient(135deg, #005a9e, #003d6e);
-        color: white;
-        font-size: 17px;
-        font-weight: 800;
-        cursor: pointer;
-        font-family: inherit;
-        transition: all 0.22s;
-        box-shadow: 0 4px 16px rgba(0, 90, 158, 0.3);
-        letter-spacing: 0.3px;
-        display: flex;
-        align-items: center;
-        justify-content: center;
-        gap: 10px;
+        width:100%; padding:16px; border:none; border-radius:12px;
+        background:linear-gradient(135deg,#005a9e,#003d6e);
+        color:white; font-size:17px; font-weight:800;
+        cursor:pointer; font-family:inherit; transition:all 0.22s;
+        box-shadow:0 4px 16px rgba(0,90,158,0.3); letter-spacing:0.3px;
+        display:flex; align-items:center; justify-content:center; gap:10px;
       }
-      .save-btn:hover {
-        background: linear-gradient(135deg, #003d6e, #002550);
-        transform: translateY(-2px);
-        box-shadow: 0 8px 24px rgba(0, 90, 158, 0.38);
-      }
+      .save-btn:hover { background:linear-gradient(135deg,#003d6e,#002550); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,90,158,0.38); }
 
       .info-banner {
-        background: linear-gradient(135deg, #e7f3ff, #cfe0ff);
-        border: 1.5px solid #b3d4f5;
-        border-radius: 10px;
-        padding: 14px 18px;
-        margin-bottom: 22px;
-        color: #003d6e;
-        font-size: 14px;
-        font-weight: 600;
-        display: flex;
-        align-items: center;
-        gap: 10px;
+        background:linear-gradient(135deg,#e7f3ff,#cfe0ff);
+        border:1.5px solid #b3d4f5; border-radius:10px;
+        padding:14px 18px; margin-bottom:22px;
+        color:#003d6e; font-size:14px; font-weight:600;
+        display:flex; align-items:center; gap:10px;
       }
     </style>
   </head>
   <body>
+
     <nav class="top-navbar">
       <a class="navbar-brand" href="index.html">
-        <img src="IMG-20250716-WA0121.jpg" alt="Logo" />
+        <img src="assets/logo.jpg" alt="Logo" />
         <span>Ganesh Agri</span>
       </a>
       <div class="navbar-links">
@@ -239,9 +121,10 @@
             <input type="number" name="utraiPercentage" step="1" min="0" required placeholder="7" />
           </div>
 
-          <button type="submit" class="save-btn" style="margin-top: 8px">💾 Save Settings</button>
+          <button type="submit" class="save-btn" style="margin-top:8px;">💾 Save Settings</button>
         </form>
       </div>
     </div>
+
   </body>
 </html>

@@ -179,9 +179,7 @@ function updateTotalBags() {
     if (bagsBadge) bagsBadge.style.color = "#dc3545";
     if (warningEl) {
       warningEl.style.display = "block";
-      warningEl.textContent = `⚠️ વકલ (${total}) > ભરેલા (${totalBharela}) — ${
-        total - totalBharela
-      } bag(s) zyada hain!`;
+      warningEl.textContent = `⚠️ વકલ (${total}) > ભરેલા (${totalBharela}) — ${total - totalBharela} bag(s) zyada hain!`;
     }
   } else {
     if (bagsBadge) bagsBadge.style.color = "";
@@ -273,7 +271,7 @@ function calculateBillData(formData) {
     net_vajan = customRound(weight - katta_kasar - wb_moisture_kg);
 
     // Vakal moisture for loose
-    const vakal_moisture_pct_1 = deductVakalMoisture ? Number(formData.get("vakal_1_moisture")) || 0 : 0;
+    const vakal_moisture_pct_1 = deductVakalMoisture ? (Number(formData.get("vakal_1_moisture")) || 0) : 0;
     const vakal_moisture_kg_1 = customRound(net_vajan * (vakal_moisture_pct_1 / 100));
     const net_vajan_after_vakal_moisture = customRound(net_vajan - vakal_moisture_kg_1);
     total = customRound((net_vajan_after_vakal_moisture / 20) * price);
@@ -314,9 +312,7 @@ function calculateBillData(formData) {
     data["Plastic Weight"] = bardanWeightPlastic; // Save Plastic weight
     data["Bardan Weight"] = Bardan; // Still save the total for calculation
     const katta_kasar = deductKasar ? customRound(weighbridge_weight * globalSettings.kasarPercentage) : 0;
-    const wb_moisture_kg = deductWeighbridgeMoisture
-      ? customRound(weighbridge_weight * (weighbridgeMoisturePct / 100))
-      : 0;
+    const wb_moisture_kg = deductWeighbridgeMoisture ? customRound(weighbridge_weight * (weighbridgeMoisturePct / 100)) : 0;
     net_vajan = customRound(weighbridge_weight - katta_kasar - Bardan - wb_moisture_kg);
 
     data["Weighbridge Weight"] = weighbridge_weight;
@@ -359,7 +355,7 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
       }
       data[`Vakal ${i + 1} Katta`] = vakals[i].katta;
       // Per vakal moisture
-      const vakalMoisturePct = deductVakalMoisture ? Number(formData.get(`vakal_${i + 1}_moisture`)) || 0 : 0;
+      const vakalMoisturePct = deductVakalMoisture ? (Number(formData.get(`vakal_${i+1}_moisture`)) || 0) : 0;
       const vakalMoistureKg = vakals[i].katta > 0 ? customRound(kilo * (vakalMoisturePct / 100)) : 0;
       const kiloAfterMoisture = kilo - vakalMoistureKg;
       data[`Vakal ${i + 1} Moisture %`] = vakalMoisturePct;

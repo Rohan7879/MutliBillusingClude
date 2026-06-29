@@ -1,16 +1,10 @@
 {
   "hosting": {
     "public": ".",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**"],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "config/**"],
     "rewrites": [
-      {
-        "source": "/d1j3h2k",
-        "destination": "/download.html"
-      },
-      {
-        "source": "/f7p4l9q",
-        "destination": "/final.html"
-      }
+      { "source": "/d1j3h2k", "destination": "/download.html" },
+      { "source": "/f7p4l9q", "destination": "/final.html" }
     ]
   }
 }

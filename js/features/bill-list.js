@@ -14,13 +14,13 @@ function showBillListView() {
   if (!billListInitialized) {
     billListInitialized = true;
     const searchEl = document.getElementById("search_input_list");
-    const prevBtn = document.getElementById("prev_page_list_btn");
-    const nextBtn = document.getElementById("next_page_list_btn");
-    const paidBtn = document.getElementById("mark_paid_btn");
+    const prevBtn  = document.getElementById("prev_page_list_btn");
+    const nextBtn  = document.getElementById("next_page_list_btn");
+    const paidBtn  = document.getElementById("mark_paid_btn");
     if (searchEl) searchEl.addEventListener("input", (e) => filterAndRenderList(e.target.value));
-    if (prevBtn) prevBtn.addEventListener("click", goToPrevListPage);
-    if (nextBtn) nextBtn.addEventListener("click", goToNextListPage);
-    if (paidBtn) paidBtn.addEventListener("click", markSelectedBillsAsPaid);
+    if (prevBtn)  prevBtn.addEventListener("click", goToPrevListPage);
+    if (nextBtn)  nextBtn.addEventListener("click", goToNextListPage);
+    if (paidBtn)  paidBtn.addEventListener("click", markSelectedBillsAsPaid);
   }
 
   billsCollection.orderBy("Serial No", "desc").onSnapshot((snapshot) => {
@@ -116,6 +116,7 @@ async function markSelectedBillsAsPaid() {
 function showBillCreationForm() {
   document.getElementById("bill_list_view").style.display = "none";
   document.getElementById("bill_creation_form").style.display = "block";
+  
 }
 // Add this new function to bill-list.js and dashboard.js
 

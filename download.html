@@ -12,11 +12,11 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-    <script src="firebase-init.js"></script>
-    <script src="utils.js"></script>
-    <script src="bill-view.js"></script>
-    <link rel="stylesheet" href="html.css" />
-    <link rel="icon" href="IMG-20250716-WA0121.jpg" type="image/x-icon" />
+    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/utils.js"></script>
+    <script src="js/features/bill-view.js"></script>
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
     <style>
       /* Styles for bill number and date layout */
       .bill-meta {
@@ -41,7 +41,7 @@
   <body>
     <div class="container" id="finalcontainer">
       <div class="header">
-        <img src="IMG-20250716-WA0121.jpg" alt="Company Logo" class="logo" />
+        <img src="assets/logo.jpg" alt="Company Logo" class="logo" />
         <h1>Final Bill</h1>
       </div>
 
@@ -85,7 +85,7 @@
           <span class="detail-label">કાંટા કસર (૦.૩%)</span>
           <span class="detail-value" id="display_kasar">0</span>
         </div>
-        <div class="detail-item" id="wb_moisture_box" style="display: none">
+        <div class="detail-item" id="wb_moisture_box" style="display:none;">
           <span class="detail-label">💧 મોઇ. (Moisture)</span>
           <span class="detail-value" id="display_wb_moisture">0</span>
         </div>
@@ -109,8 +109,8 @@
             <th>વકલ <span class="print-hide">(Item)</span></th>
             <th>કટ્ટા <span class="print-hide">(Bags)</span></th>
             <th>કિલો <span class="print-hide">(Kg)</span></th>
-            <th id="th_moisture" style="display: none">💧 મોઇ. <span class="print-hide">(Moisture)</span></th>
-            <th id="th_net_kilo" style="display: none">નેટ કિલો <span class="print-hide">(Net Kg)</span></th>
+            <th id="th_moisture" style="display:none;">💧 મોઇ. <span class="print-hide">(Moisture)</span></th>
+            <th id="th_net_kilo" style="display:none;">નેટ કિલો <span class="print-hide">(Net Kg)</span></th>
             <th>ભાવ <span class="print-hide">(Price)</span></th>
             <th>રૂપિયા <span class="print-hide">(Amount)</span></th>
           </tr>
@@ -120,8 +120,8 @@
             <td>વકલ ૧</td>
             <td id="display_vakal_1_katta">0</td>
             <td id="display_vakal_1_kilo">0</td>
-            <td id="vakal_1_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
-            <td id="vakal_1_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
+            <td id="vakal_1_moisture_td" style="display:none; color:#e67e00; font-weight:700;">0</td>
+            <td id="vakal_1_net_kilo_td" style="display:none; font-weight:700; color:#005a9e;">0</td>
             <td id="display_vakal_1_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_1_amount">0</td>
           </tr>
@@ -129,8 +129,8 @@
             <td>વકલ ૨</td>
             <td id="display_vakal_2_katta">0</td>
             <td id="display_vakal_2_kilo">0</td>
-            <td id="vakal_2_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
-            <td id="vakal_2_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
+            <td id="vakal_2_moisture_td" style="display:none; color:#e67e00; font-weight:700;">0</td>
+            <td id="vakal_2_net_kilo_td" style="display:none; font-weight:700; color:#005a9e;">0</td>
             <td id="display_vakal_2_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_2_amount">0</td>
           </tr>
@@ -138,8 +138,8 @@
             <td>વકલ ૩</td>
             <td id="display_vakal_3_katta">0</td>
             <td id="display_vakal_3_kilo">0</td>
-            <td id="vakal_3_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
-            <td id="vakal_3_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
+            <td id="vakal_3_moisture_td" style="display:none; color:#e67e00; font-weight:700;">0</td>
+            <td id="vakal_3_net_kilo_td" style="display:none; font-weight:700; color:#005a9e;">0</td>
             <td id="display_vakal_3_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_3_amount">0</td>
           </tr>
@@ -147,8 +147,8 @@
             <td>વકલ ૪</td>
             <td id="display_vakal_4_katta">0</td>
             <td id="display_vakal_4_kilo">0</td>
-            <td id="vakal_4_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
-            <td id="vakal_4_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
+            <td id="vakal_4_moisture_td" style="display:none; color:#e67e00; font-weight:700;">0</td>
+            <td id="vakal_4_net_kilo_td" style="display:none; font-weight:700; color:#005a9e;">0</td>
             <td id="display_vakal_4_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_4_amount">0</td>
           </tr>
@@ -156,8 +156,8 @@
             <td>વકલ ૫</td>
             <td id="display_vakal_5_katta">0</td>
             <td id="display_vakal_5_kilo">0</td>
-            <td id="vakal_5_moisture_td" style="display: none; color: #e67e00; font-weight: 700">0</td>
-            <td id="vakal_5_net_kilo_td" style="display: none; font-weight: 700; color: #005a9e">0</td>
+            <td id="vakal_5_moisture_td" style="display:none; color:#e67e00; font-weight:700;">0</td>
+            <td id="vakal_5_net_kilo_td" style="display:none; font-weight:700; color:#005a9e;">0</td>
             <td id="display_vakal_5_bhav">0</td>
             <td style="font-weight: bolder; font-size: 2em" id="display_vakal_5_amount">0</td>
           </tr>
