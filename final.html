@@ -27,6 +27,22 @@
     <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
     <link rel="stylesheet" href="css/print.css" media="print" />
     <style>
+      /* ── Phase 2: Print dropdown menu ── */
+      .print-dropdown-wrap { position: relative; display: inline-block; flex: 1; min-width: 130px; }
+      .print-menu {
+        position: absolute; bottom: calc(100% + 6px); left: 0; right: 0;
+        background: #fff; border: 1.5px solid #dee2e6; border-radius: 10px;
+        box-shadow: 0 6px 20px rgba(0,0,0,.18); overflow: hidden; z-index: 50;
+      }
+      .print-menu button {
+        display: block; width: 100%; padding: 11px 14px;
+        background: #fff; border: none; border-bottom: 1px solid #f0f0f0;
+        text-align: left; font-size: 13px; font-weight: 600; color: #343a40;
+        cursor: pointer; font-family: inherit; transition: background .2s;
+      }
+      .print-menu button:last-child { border-bottom: none; }
+      .print-menu button:hover { background: #e7f3ff; color: #005a9e; }
+
       /* Added simple style for bill number and date layout */
       .meta-item {
         font-size: 0.9em;
@@ -226,7 +242,14 @@
         <button onclick="sendBillViaWhatsApp()" class="button" style="background-color: #25d366">
           Share via WhatsApp
         </button>
-        <button onclick="prepareAndPrint()" class="button" id="printButton">Print Bill</button>
+        <div class="print-dropdown-wrap">
+          <button onclick="togglePrintMenu()" class="button" id="printButton">🖨️ Print Bill ▾</button>
+          <div id="print-menu" class="print-menu" style="display:none;">
+            <button onclick="prepareAndPrint('original')">📄 Original Only</button>
+            <button onclick="prepareAndPrint('duplicate')">📄 Duplicate Only</button>
+            <button onclick="prepareAndPrint('both')">📑 Both Copies</button>
+          </div>
+        </div>
       </div>
     </div>
     

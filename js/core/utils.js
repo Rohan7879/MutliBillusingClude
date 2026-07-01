@@ -203,6 +203,9 @@ function generateBillHtmlForView(data) {
   let supplyTypeHtml = "";
   let displayText = "";
 
+  // Phase 1: Use the selected product's name instead of hardcoded "ઘઉં" (wheat).
+  const productLabel = data["ProductTemplate"] ? `${data["ProductTemplate"]}ના કટ્ટા` : "કટ્ટા";
+
   // Case 1: A true "Loose Supply" bill
   if (data["Bill Type"] === "Loose") {
     displayText = "લૂઝ";
@@ -210,12 +213,12 @@ function generateBillHtmlForView(data) {
   // Case 2: A "Kantan Pack" bag bill
   else if (data["Bill Type"] === "Bag" && data["Supply Type"] === "કંતાન પેક") {
     const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
-    displayText = `ઘઉંના કટ્ટા - ${totalBharela} કંતાન પેક`;
+    displayText = `${productLabel} - ${totalBharela} કંતાન પેક`;
   }
   // Case 3: A "Loose" description for a "Bag" bill
   else if (data["Bill Type"] === "Bag" && data["Supply Type"] === "લૂઝ") {
     const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
-    displayText = `ઘઉંના કટ્ટા - ${totalBharela} લૂઝ`;
+    displayText = `${productLabel} - ${totalBharela} લૂઝ`;
   }
 
   if (displayText) {

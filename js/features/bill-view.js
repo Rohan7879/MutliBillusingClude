@@ -71,6 +71,12 @@ function displayData(data) {
   if (supplyTypeElement) {
     let displayText = "";
 
+    // Phase 1: Use the selected product's name (saved on the bill as
+    // data["ProductTemplate"]) instead of a hardcoded "ઘઉં" (wheat) label.
+    // Falls back to a generic "કટ્ટા" label for bills with no product selected
+    // (e.g. older bills, or a manual bill with no template).
+    const productLabel = data["ProductTemplate"] ? `${data["ProductTemplate"]}ના કટ્ટા` : "કટ્ટા";
+
     // Case 1: A true "Loose Supply" bill
     if (data["Bill Type"] === "Loose") {
       displayText = "લૂઝ";
@@ -78,12 +84,12 @@ function displayData(data) {
     // Case 2: A "Kantan Pack" bag bill
     else if (data["Bill Type"] === "Bag" && data["Supply Type"] === "કંતાન પેક") {
       const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
-      displayText = `ઘઉંના કટ્ટા - ${totalBharela} કંતાન પેક`;
+      displayText = `${productLabel} - ${totalBharela} કંતાન પેક`;
     }
     // Case 3: A "Loose" description for a "Bag" bill
     else if (data["Bill Type"] === "Bag" && data["Supply Type"] === "લૂઝ") {
       const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
-      displayText = `ઘઉંના કટ્ટા - ${totalBharela} લૂઝ`;
+      displayText = `${productLabel} - ${totalBharela} લૂઝ`;
     }
 
     supplyTypeElement.textContent = displayText;
@@ -278,6 +284,8 @@ function displayData(data) {
   }
 
   renderExpenses(data);
+  renderRemarks(data);
+  renderTemplateDeductionsForPrint(data);
 
   if (data["Truck Freight"] && data["Truck Freight"] > 0) {
     const totalsGrid = document.querySelector(".totals-grid");
@@ -294,6 +302,85 @@ function displayData(data) {
   }
 
   hideLoading();
+}
+
+/**
+ * Renders bill remarks/notes if present (Phase 1 addition).
+ * Creates the remarks box dynamically if it doesn't already exist in the HTML.
+ * @param {Object} data - Bill data object
+ */
+/**
+ * Renders template deductions (Admixture, GST etc.) in a dedicated
+ * print-visible section below the vakal table.
+ * Hidden on screen by default — only shows in @media print.
+ * @param {Object} data - Bill data object
+ */
+function renderTemplateDeductionsForPrint(data) {
+  // Remove existing box if any
+  const existing = document.getElementById("template-deductions-applied");
+  if (existing) existing.remove();
+
+  const applied = data["TemplateDeductionsApplied"];
+  if (!applied || applied.length === 0) return;
+
+  const box = document.createElement("div");
+  box.id = "template-deductions-applied";
+
+  const rows = applied.map((d) => {
+    const sign      = d.applyAs === "add" ? "+" : "-";
+    const cls       = d.applyAs === "add" ? "tda-plus" : "tda-minus";
+    const impactStr = d.stage === "weight"
+      ? `${sign}${Number(d.impact).toLocaleString("en-IN")} kg`
+      : `${sign}₹${Number(d.impact).toLocaleString("en-IN")}`;
+    return `
+      <div class="tda-row">
+        <span class="tda-name">${d.name}</span>
+        <span class="tda-value ${cls}">${impactStr}</span>
+      </div>`;
+  }).join("");
+
+  box.innerHTML = rows;
+
+  // Insert after vakal table
+  const vakalTable = document.querySelector(".final-bill-table");
+  if (vakalTable && vakalTable.parentNode) {
+    vakalTable.parentNode.insertBefore(box, vakalTable.nextSibling);
+  }
+}
+
+function renderRemarks(data) {
+  // Screen version
+  let box = document.getElementById("bill_remarks_box");
+  if (!data["Remarks"] || data["Remarks"].trim() === "") {
+    if (box) box.style.display = "none";
+    const printBox = document.getElementById("bill_remarks_print");
+    if (printBox) printBox.remove();
+    return;
+  }
+
+  // Screen display
+  if (!box) {
+    box = document.createElement("div");
+    box.id = "bill_remarks_box";
+    box.style.cssText =
+      "margin-top:14px;padding:10px 14px;background:#fffbf0;border:1.5px dashed #ffe08a;border-radius:8px;font-size:13px;color:#5a4a00;";
+    const vakalTable = document.querySelector(".final-bill-table");
+    if (vakalTable && vakalTable.parentNode) {
+      vakalTable.parentNode.insertBefore(box, vakalTable.nextSibling);
+    }
+  }
+  box.style.display = "block";
+  box.innerHTML = `<strong>📝 Remarks:</strong> ${data["Remarks"]}`;
+
+  // Print-only version (shown only in @media print via CSS)
+  let printBox = document.getElementById("bill_remarks_print");
+  if (!printBox) {
+    printBox = document.createElement("div");
+    printBox.id = "bill_remarks_print";
+    const totalsGrid = document.querySelector(".totals-grid");
+    if (totalsGrid) totalsGrid.insertAdjacentElement("beforebegin", printBox);
+  }
+  printBox.textContent = `📝 ${data["Remarks"]}`;
 }
 
 function renderExpenses(data) {
@@ -394,9 +481,62 @@ function downloadBillAsPDF() {
   }, 100);
 }
 
-function prepareAndPrint() {
+/**
+ * Toggles the print options dropdown menu (Original / Duplicate / Both).
+ */
+function togglePrintMenu() {
+  const menu = document.getElementById("print-menu");
+  if (!menu) { prepareAndPrint("both"); return; } // fallback for older pages
+  menu.style.display = menu.style.display === "block" ? "none" : "block";
+}
+
+// Close the print menu if user clicks elsewhere
+document.addEventListener("click", (e) => {
+  const wrap = document.querySelector(".print-dropdown-wrap");
+  const menu = document.getElementById("print-menu");
+  if (wrap && menu && !wrap.contains(e.target)) menu.style.display = "none";
+});
+
+/**
+ * Prepares the bill container for printing and triggers window.print().
+ * Phase 2: Supports choosing which copy to print (Original / Duplicate / Both).
+ * Since the page only contains one bill container, a second "Duplicate"
+ * copy is cloned dynamically right before printing, then removed after.
+ * @param {string} copyType - "original" | "duplicate" | "both" (default)
+ */
+function prepareAndPrint(copyType = "both") {
+  const menu = document.getElementById("print-menu");
+  if (menu) menu.style.display = "none";
+
+  const original = document.getElementById("finalcontainer");
+  if (!original) { window.print(); return; }
+
+  // Clean up any leftover clone from a previous print
+  const existingClone = document.getElementById("finalcontainer-duplicate");
+  if (existingClone) existingClone.remove();
+
+  if (copyType === "duplicate") {
+    // Single copy printed, but labeled "Duplicate"
+    original.id = "container-copy";
+  } else {
+    original.id = "container-original";
+  }
+
+  if (copyType === "both") {
+    // Clone the bill as the "Duplicate" copy and insert it right after
+    const clone = original.cloneNode(true);
+    clone.id    = "container-copy";
+    original.insertAdjacentElement("afterend", clone);
+  }
+
   setTimeout(() => {
     window.print();
+    // Cleanup the cloned duplicate after the print dialog closes
+    setTimeout(() => {
+      const clone = document.getElementById("container-copy");
+      if (clone && copyType === "both") clone.remove();
+      original.id = "finalcontainer";
+    }, 500);
   }, 10);
 }
 

@@ -39,6 +39,17 @@ async function setupAutocomplete() {
 }
 function initializeIndexPage() {
   addExpense();
+
+  // Phase 1: Default the date field to today (user can still change it)
+  const dateInput = document.getElementById("bill_date_input");
+  if (dateInput && !dateInput.value) {
+    const now = new Date();
+    const yyyy = now.getFullYear();
+    const mm   = String(now.getMonth() + 1).padStart(2, "0");
+    const dd   = String(now.getDate()).padStart(2, "0");
+    dateInput.value = `${yyyy}-${mm}-${dd}`;
+  }
+
   // Call the new autocomplete setup function
   setupAutocomplete();
   const toggle = document.getElementById("loose_supply_toggle");
@@ -130,6 +141,19 @@ function populateFormForEdit(data) {
   document.querySelector('input[name="weighbridge_weight"]').value = data["Weighbridge Weight"] || 0;
   document.querySelector('input[name="truck_freight"]').value = data["Truck Freight"] || 0;
 
+  // Phase 1: Pre-fill date (convert DD/MM/YYYY -> YYYY-MM-DD for the date input)
+  const dateInput = document.getElementById("bill_date_input");
+  if (dateInput && data["Date"]) {
+    const parts = data["Date"].split("/"); // [DD, MM, YYYY]
+    if (parts.length === 3) {
+      dateInput.value = `${parts[2]}-${parts[1]}-${parts[0]}`;
+    }
+  }
+
+  // Phase 1: Pre-fill remarks
+  const remarksInput = document.querySelector('textarea[name="bill_remarks"]');
+  if (remarksInput) remarksInput.value = data["Remarks"] || "";
+
   if (data["Bill Type"] === "Loose") {
     document.getElementById("loose_supply_toggle").checked = true;
     document.getElementById("loose_supply_toggle").dispatchEvent(new Event("change"));
@@ -157,7 +181,45 @@ function populateFormForEdit(data) {
     }
   }
 
-  document.querySelector('button[type="submit"]').textContent = "Update Bill";
+  document.querySelector('button[type="submit"]').textContent = "✏️ Update Bill";
+
+  // ── Phase 2: Edit mode visual feedback ──
+  // Scroll the form into view and highlight it with an orange border
+  // so the user clearly sees they are editing an existing bill.
+  const formCard = document.getElementById("bill_creation_form");
+  if (formCard) {
+    formCard.scrollIntoView({ behavior: "smooth", block: "start" });
+    formCard.classList.add("edit-mode-active");
+  }
+
+  // Show an "editing bill #X" banner at the top of the form
+  let banner = document.getElementById("edit-mode-banner");
+  if (!banner) {
+    banner = document.createElement("div");
+    banner.id = "edit-mode-banner";
+    banner.className = "edit-mode-banner";
+    formCard.prepend(banner);
+  }
+  banner.innerHTML = `✏️ Editing Bill <strong>#${data["Serial No"] || ""}</strong> —
+    <button type="button" onclick="cancelEditMode()" class="edit-cancel-btn">Cancel Edit</button>`;
+}
+
+/**
+ * Cancels edit mode and resets the form back to "New Bill" state.
+ */
+function cancelEditMode() {
+  const form = document.getElementById("estimateForm");
+  delete form.dataset.editId;
+  form.reset();
+
+  const formCard = document.getElementById("bill_creation_form");
+  if (formCard) formCard.classList.remove("edit-mode-active");
+
+  const banner = document.getElementById("edit-mode-banner");
+  if (banner) banner.remove();
+
+  document.querySelector('button[type="submit"]').textContent = "🧾 Generate Bill";
+  initializeIndexPage(); // re-apply default date, reset expense rows, etc.
 }
 function updateTotalBags() {
   let total = 0;
@@ -403,6 +465,88 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
     utraiPercentage: globalSettings.utraiPercentage,
   };
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // PRODUCT TEMPLATE (Phase 1 addition)
+  // Applied ON TOP of the core calculation above — core logic is untouched.
+  // Weight-stage deductions adjust Net Weight (informational re-calc).
+  // Amount-stage deductions adjust Final Total directly.
+  // The product name is saved whenever a template is selected, even if it
+  // has zero extra deductions — this is what drives the bill's product
+  // label (e.g. "ગ્રાઉન્ડનટના કટ્ટા") instead of a hardcoded "ઘઉં" (wheat).
+  // ═══════════════════════════════════════════════════════════════════════
+  if (window.activeTemplate) {
+    data["ProductTemplate"] = window.activeTemplate.name || "";
+  }
+
+  if (typeof getActiveTemplateDeductionValues === "function") {
+    const templateDeductions = getActiveTemplateDeductionValues();
+
+    if (templateDeductions.length > 0) {
+      let extraWeightCutKg = 0;
+      let extraAmountChange = 0;
+      const appliedLog = [];
+
+      templateDeductions.forEach((d) => {
+        let impact = 0;
+
+        if (d.stage === "weight") {
+          // Weight-based: % of Weight | Fixed/Bag | Fixed/Kg
+          if (d.type === "pct_weight") {
+            impact = customRound(data["Weighbridge Weight"] * (d.value / 100));
+          } else if (d.type === "fixed_bag") {
+            const totalBags = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
+            impact = customRound(totalBags * d.value);
+          } else if (d.type === "fixed_kg") {
+            impact = customRound(net_vajan * d.value);
+          }
+          extraWeightCutKg += (d.applyAs === "add" ? -impact : impact);
+        } else {
+          // Amount-based: % of Amount | Fixed Amount
+          if (d.type === "pct_amount") {
+            impact = customRound(finaltotal * (d.value / 100));
+          } else if (d.type === "fixed_amt") {
+            impact = d.value;
+          }
+          extraAmountChange += (d.applyAs === "add" ? impact : -impact);
+        }
+
+        appliedLog.push({
+          name: d.name, type: d.type, value: d.value,
+          applyAs: d.applyAs, stage: d.stage, impact: impact,
+        });
+      });
+
+      // Apply extra weight-stage cut to Net Weight (informational)
+      if (extraWeightCutKg !== 0) {
+        data["Net Weight"] = customRound(data["Net Weight"] - extraWeightCutKg);
+      }
+
+      // Apply extra amount-stage change to Final Total
+      if (extraAmountChange !== 0) {
+        data["Final Total"] = customRound(data["Final Total"] + extraAmountChange);
+      }
+
+      data["TemplateDeductionsApplied"] = appliedLog;
+    }
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PHASE 1: Date & Remarks
+  // Date defaults to today (set by initializeIndexPage) but the user can
+  // change it — useful for late entries. Works for both new bills and edits.
+  // ═══════════════════════════════════════════════════════════════════════
+  const selectedDateValue = formData.get("bill_date"); // "YYYY-MM-DD"
+  if (selectedDateValue) {
+    const [yyyy, mm, dd] = selectedDateValue.split("-");
+    data["Date"] = `${dd}/${mm}/${yyyy}`;
+  } else {
+    const now = new Date();
+    data["Date"] = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(
+      2, "0"
+    )}/${now.getFullYear()}`;
+  }
+  data["Remarks"] = formData.get("bill_remarks") || "";
+
   // --- Return the final calculated data ---
   return data;
 }
@@ -426,8 +570,18 @@ async function collectData() {
     const nextShortYear = (year + 1).toString().slice(-2);
     const financialYearId = `FY${shortYear}${nextShortYear}`; // e.g., "FY2526"
 
+    // --- Phase 1: Use product template's series prefix if one is selected ---
+    const seriesPrefix = (window.activeTemplate && window.activeTemplate.seriesPrefix)
+      ? window.activeTemplate.seriesPrefix
+      : null;
+    // Each product series gets its own independent counter so numbering
+    // doesn't clash between e.g. Wheat (WH-...) and Groundnut (GN-...).
+    const counterDocId = seriesPrefix
+      ? `billCounter_${seriesPrefix}_${financialYearId}`
+      : `billCounter_${financialYearId}`;
+
     // 2. Set the correct counter document reference
-    const counterRef = db.collection("counters").doc(`billCounter_${financialYearId}`);
+    const counterRef = db.collection("counters").doc(counterDocId);
 
     const formData = new FormData(form);
     let data = calculateBillData(formData);
@@ -469,13 +623,12 @@ async function collectData() {
 
     // Format the new bill number with the month (e.g., "25/09-00001")
     const paddedSerialNo = String(newSerialNo).padStart(5, "0");
-    const formattedBillNo = `${shortYear}/${currentMonth}-${paddedSerialNo}`;
+    const formattedBillNo = seriesPrefix
+      ? `${seriesPrefix}-${shortYear}${nextShortYear}-${paddedSerialNo}`
+      : `${shortYear}/${currentMonth}-${paddedSerialNo}`;
 
     data["Serial No"] = formattedBillNo;
-    data["Date"] = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(
-      2,
-      "0"
-    )}/${now.getFullYear()}`;
+    // Note: Date and Remarks are already set inside calculateBillData() above.
 
     const docRef = await billsCollection.add(data);
 
@@ -509,7 +662,9 @@ async function updateData(docId) {
     let newData = calculateBillData(formData);
 
     newData["Serial No"] = originalData["Serial No"];
-    newData["Date"] = originalData["Date"];
+    // Phase 1: Date and Remarks now come from calculateBillData() itself
+    // (already reads the form's date input + remarks textarea), so we
+    // no longer force-overwrite Date here — only Serial No stays fixed.
 
     await billRef.update(newData);
 

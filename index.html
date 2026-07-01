@@ -16,6 +16,7 @@
   <script src="js/core/utils.js"></script>
   <script src="js/features/bill-form.js" defer></script>
   <script src="js/features/bill-list.js" defer></script>
+  <script src="js/features/product-templates.js" defer></script>
   <link rel="stylesheet" href="css/main.css"/>
   <link rel="stylesheet" href="css/dashboard.css"/>
   <link rel="icon" href="assets/logo.jpg" type="image/x-icon"/>
@@ -275,6 +276,64 @@
   #selection-summary{background:#e7f3ff;border:1px solid #b3d4f5;color:#005a9e;padding:10px;margin-bottom:13px;border-radius:8px;text-align:center;font-size:1em;display:none;}
 
   /* Responsive */
+  /* ── Product Template Selector ── */
+  .no-template-banner {
+    padding: 12px 16px; background: #fff8e1; border: 1.5px solid #ffe08a;
+    border-radius: 9px; color: #a8710a; font-size: 13px; font-weight: 600;
+  }
+  .no-template-banner a { color: #005a9e; font-weight: 700; }
+  .product-select-row { display: flex; align-items: center; gap: 12px; }
+  .product-select-row label { font-weight: 700; font-size: 13px; color: #495057; white-space: nowrap; }
+  .product-select-row select {
+    flex: 1; padding: 11px 13px; border: 1.5px solid #dee2e6; border-radius: 8px;
+    font-size: 15px; font-family: inherit; background: #fafbff;
+  }
+  .product-select-row select:focus { border-color: #005a9e; outline: none; box-shadow: 0 0 0 3px rgba(0,90,158,.1); }
+  .series-preview-text { margin-top: 8px; font-size: 12px; color: #6c757d; font-style: italic; }
+
+  /* ── Template Deductions in Bill Form ── */
+  .tpl-deductions-box { margin-top: 14px; display: flex; flex-direction: column; gap: 12px; }
+  .tpl-ded-group {
+    background: #f8f9fa; border: 1.5px solid #dee2e6; border-radius: 10px; padding: 12px 14px;
+  }
+  .tpl-ded-group-title { font-weight: 800; font-size: 12px; color: #005a9e; text-transform: uppercase; letter-spacing: .4px; margin-bottom: 10px; }
+  .tpl-ded-field {
+    display: flex; align-items: center; gap: 10px;
+    padding: 8px 0; border-bottom: 1px solid #eee;
+  }
+  .tpl-ded-field:last-child { border-bottom: none; }
+  .tpl-ded-toggle-label { display: flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; flex: 1; cursor: pointer; }
+  .tpl-ded-field.fixed > span { flex: 1; font-weight: 700; font-size: 13px; }
+  .tpl-ded-value-input {
+    width: 90px; padding: 7px 10px; border: 1.5px solid #dee2e6; border-radius: 7px;
+    font-size: 13px; font-family: inherit; text-align: center;
+  }
+  .tpl-ded-unit { font-size: 11px; color: #6c757d; font-weight: 600; min-width: 50px; }
+
+  /* ── Phase 2: Edit Mode Highlight ── */
+  #bill_creation_form.edit-mode-active {
+    border: 2px solid #fd7e14;
+    border-radius: 16px;
+    padding: 16px;
+    background: #fff8f0;
+    box-shadow: 0 0 0 4px rgba(253,126,20,.12);
+  }
+  .edit-mode-banner {
+    display: flex; align-items: center; gap: 12px;
+    background: linear-gradient(135deg, #fd7e14, #e8590c);
+    color: #fff; padding: 12px 18px; border-radius: 10px;
+    font-weight: 700; font-size: 14px; margin-bottom: 16px;
+    box-shadow: 0 3px 12px rgba(253,126,20,.3);
+  }
+  .edit-cancel-btn {
+    margin-left: auto; padding: 6px 14px;
+    background: rgba(255,255,255,.2); color: #fff;
+    border: 1px solid rgba(255,255,255,.4); border-radius: 7px;
+    font-weight: 700; font-size: 12px; cursor: pointer;
+    font-family: inherit; transition: all .2s;
+  }
+  .edit-cancel-btn:hover { background: rgba(255,255,255,.35); }
+
   @media(max-width:640px){
     .top-navbar{padding:0 12px;height:56px;}
     .navbar-brand span{font-size:.95em;}
@@ -337,10 +396,21 @@
   <div id="bill_creation_form">
     <form id="estimateForm">
 
+      <!-- Product Template Selector -->
+      <div class="sc" id="product-template-card">
+        <div class="sc-title">🌾 Product</div>
+        <div id="product-template-selector"></div>
+        <div id="series-preview" class="series-preview-text"></div>
+      </div>
+
       <!-- Customer Details -->
       <div class="sc">
         <div class="sc-title">👤 Customer Details</div>
         <div class="fg2">
+          <div class="ff">
+            <label>📅 તારીખ (Date) *</label>
+            <input type="date" name="bill_date" id="bill_date_input" required/>
+          </div>
           <div class="ff">
             <label>નામ (Name) *</label>
             <input type="text" name="customer_name" oninput="this.value=this.value.toUpperCase()" required placeholder="Customer name..."/>
@@ -520,6 +590,16 @@
         <div class="ff" style="margin-top:14px;">
           <label>🚛 ભાડું (Truck Freight)</label>
           <input type="number" name="truck_freight" placeholder="ટ્રક ભાડું ઉમેરો..."/>
+        </div>
+      </div>
+
+      <!-- Bill Remarks -->
+      <div class="sc">
+        <div class="sc-title">📝 Remarks / Notes</div>
+        <div class="ff">
+          <label>નોંધ (Optional)</label>
+          <textarea name="bill_remarks" rows="3" placeholder="Quality remarks, special instructions, etc..."
+            style="width:100%;padding:11px 13px;border:1.5px solid #dee2e6;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
         </div>
       </div>
 

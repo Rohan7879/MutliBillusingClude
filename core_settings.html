@@ -1,130 +1,319 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Settings — Ganesh Agri</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-    <script src="js/core/firebase-init.js"></script>
-    <script src="js/features/settings.js"></script>
-    <link rel="stylesheet" href="css/main.css" />
-    <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
-    <style>
-      .top-navbar {
-        position:sticky; top:0; z-index:1000;
-        background:linear-gradient(135deg,#003d6e,#005a9e);
-        box-shadow:0 4px 20px rgba(0,62,110,0.35);
-        padding:0 24px; display:flex; align-items:center;
-        justify-content:space-between; height:64px; margin:-20px -16px 28px;
-      }
-      .navbar-brand { display:flex; align-items:center; gap:12px; text-decoration:none; }
-      .navbar-brand img { height:40px; border-radius:8px; border:2px solid rgba(255,255,255,0.3); }
-      .navbar-brand span { color:white; font-size:1.2em; font-weight:800; }
-      .navbar-links { display:flex; gap:6px; align-items:center; }
-      .nav-link { display:flex; align-items:center; gap:7px; padding:8px 14px; border-radius:8px; color:rgba(255,255,255,0.85); font-size:14px; font-weight:600; text-decoration:none; border:none; background:transparent; cursor:pointer; transition:all 0.2s; font-family:inherit; }
-      .nav-link:hover { background:rgba(255,255,255,0.15); color:white; }
-      .nav-link.active { background:rgba(255,255,255,0.22); color:white; }
-      @media(max-width:640px){ .navbar-links .nav-link span:not(.nav-icon){display:none;} .top-navbar{padding:0 12px;} }
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Settings — MandiBook</title>
 
-      .page-wrapper { max-width:680px; margin:0 auto; }
-      .section-card { background:white; border-radius:16px; padding:28px; margin-bottom:20px; border:1px solid #dee2e6; box-shadow:0 2px 12px rgba(0,90,158,0.07); }
-      .section-card-title { display:flex; align-items:center; gap:10px; font-size:1em; font-weight:800; color:#005a9e; margin:0 0 22px; padding-bottom:14px; border-bottom:2px solid #e7f3ff; text-transform:uppercase; letter-spacing:0.5px; }
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css"/>
 
-      .settings-row {
-        display:flex; align-items:center; justify-content:space-between;
-        padding:16px 18px; border-radius:10px; background:#f8f9fa;
-        border:1.5px solid #e9ecef; margin-bottom:12px;
-        transition:border-color 0.2s;
-      }
-      .settings-row:hover { border-color:#b3d4f5; }
-      .settings-row-label { font-weight:700; color:#343a40; font-size:15px; }
-      .settings-row-desc { font-size:12px; color:#6c757d; margin-top:3px; }
-      .settings-row input {
-        width:130px; padding:10px 14px; border:1.5px solid #dee2e6;
-        border-radius:8px; font-size:15px; font-family:inherit;
-        text-align:center; font-weight:700; color:#005a9e;
-        transition:border-color 0.2s, box-shadow 0.2s;
-      }
-      .settings-row input:focus { border-color:#005a9e; box-shadow:0 0 0 3px rgba(0,90,158,0.1); outline:none; }
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
-      .save-btn {
-        width:100%; padding:16px; border:none; border-radius:12px;
-        background:linear-gradient(135deg,#005a9e,#003d6e);
-        color:white; font-size:17px; font-weight:800;
-        cursor:pointer; font-family:inherit; transition:all 0.22s;
-        box-shadow:0 4px 16px rgba(0,90,158,0.3); letter-spacing:0.3px;
-        display:flex; align-items:center; justify-content:center; gap:10px;
-      }
-      .save-btn:hover { background:linear-gradient(135deg,#003d6e,#002550); transform:translateY(-2px); box-shadow:0 8px 24px rgba(0,90,158,0.38); }
+  <script src="js/core/firebase-init.js"></script>
+  <script src="js/features/settings.js"></script>
 
-      .info-banner {
-        background:linear-gradient(135deg,#e7f3ff,#cfe0ff);
-        border:1.5px solid #b3d4f5; border-radius:10px;
-        padding:14px 18px; margin-bottom:22px;
-        color:#003d6e; font-size:14px; font-weight:600;
-        display:flex; align-items:center; gap:10px;
-      }
-    </style>
-  </head>
-  <body>
+  <link rel="stylesheet" href="css/main.css"/>
+  <link rel="icon" href="assets/logo.jpg" type="image/x-icon"/>
 
-    <nav class="top-navbar">
-      <a class="navbar-brand" href="index.html">
-        <img src="assets/logo.jpg" alt="Logo" />
-        <span>Ganesh Agri</span>
-      </a>
-      <div class="navbar-links">
-        <a class="nav-link" href="index.html"><span class="nav-icon">🧾</span><span>New Bill</span></a>
-        <a class="nav-link" href="index.html"><span class="nav-icon">📋</span><span>Bills</span></a>
-        <a class="nav-link" href="dashboard.html"><span class="nav-icon">📊</span><span>Dashboard</span></a>
-        <a class="nav-link" href="ledger.html"><span class="nav-icon">📒</span><span>Ledger</span></a>
-        <a class="nav-link active" href="core_settings.html"><span class="nav-icon">⚙️</span><span>Settings</span></a>
-      </div>
-    </nav>
+  <style>
+  /* ── Version Badge ── */
+  #version-display {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px 16px; background: #e7f3ff;
+    border: 1.5px solid #b3d4f5; border-radius: 10px;
+    margin-bottom: 20px; flex-wrap: wrap;
+  }
+  .version-badge {
+    background: #005a9e; color: #fff;
+    font-weight: 800; font-size: 13px;
+    padding: 3px 10px; border-radius: 20px;
+  }
+  .version-label { font-weight: 700; color: #003d6e; font-size: 13px; }
+  .version-date  { font-size: 12px; color: #6c757d; margin-left: auto; }
 
-    <div class="page-wrapper">
-      <div class="section-card">
-        <div class="section-card-title"><span>⚙️</span> Core Settings — Deduction Values</div>
+  /* ── Settings Row ── */
+  .settings-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 18px; background: #f8f9fa;
+    border: 1.5px solid #dee2e6; border-radius: 10px;
+    margin-bottom: 10px; transition: border-color .2s;
+  }
+  .settings-row:hover { border-color: #b3d4f5; }
+  .settings-row-label { font-weight: 700; color: #343a40; font-size: 15px; }
+  .settings-row-desc  { font-size: 12px; color: #6c757d; margin-top: 2px; }
+  .settings-row input {
+    width: 130px; padding: 10px 12px;
+    border: 1.5px solid #dee2e6; border-radius: 8px;
+    font-size: 15px; font-family: inherit;
+    text-align: center; font-weight: 700; color: #005a9e;
+  }
+  .settings-row input:focus {
+    border-color: #005a9e;
+    box-shadow: 0 0 0 3px rgba(0,90,158,.1);
+    outline: none;
+  }
 
-        <div class="info-banner">
-          ℹ️ These values affect all <strong>new bills</strong>. Existing bills are not changed.
+  /* ── Template Cards ── */
+  .template-card {
+    background: #fff; border: 1.5px solid #dee2e6;
+    border-radius: 12px; padding: 16px 18px;
+    margin-bottom: 12px;
+    box-shadow: 0 2px 8px rgba(0,90,158,.07);
+    transition: all .2s;
+  }
+  .template-card:hover { box-shadow: 0 4px 16px rgba(0,90,158,.12); border-color: #b3d4f5; }
+  .template-card-header { display: flex; align-items: flex-start; justify-content: space-between; gap: 10px; margin-bottom: 10px; }
+  .template-name { font-weight: 800; font-size: 16px; color: #005a9e; }
+  .template-meta { font-size: 12px; color: #6c757d; margin-top: 3px; }
+  .template-actions { display: flex; gap: 8px; flex-shrink: 0; }
+
+  .tbtn { padding: 7px 14px; border: none; border-radius: 7px; font-weight: 700; font-size: 12px; cursor: pointer; font-family: inherit; transition: all .2s; }
+  .tbtn-edit   { background: #e7f3ff; color: #005a9e; }
+  .tbtn-edit:hover { background: #005a9e; color: #fff; }
+  .tbtn-delete { background: #fff0f0; color: #dc3545; }
+  .tbtn-delete:hover { background: #dc3545; color: #fff; }
+
+  .deduction-pills { display: flex; flex-wrap: wrap; gap: 6px; }
+  .ded-pill {
+    display: inline-flex; align-items: center; gap: 4px;
+    padding: 4px 10px; border-radius: 20px; font-size: 12px; font-weight: 700;
+  }
+  .pill-minus { background: #fff0f0; color: #dc3545; border: 1px solid #f5c2c7; }
+  .pill-add   { background: #f0fff4; color: #28a745; border: 1px solid #b2dfdb; }
+  .empty-state { text-align: center; color: #6c757d; padding: 30px; font-size: 15px; }
+
+  /* ── Template Modal ── */
+  #template-modal {
+    position: fixed; inset: 0;
+    background: rgba(0,0,0,.6);
+    z-index: 99999; display: none;
+    justify-content: center; align-items: flex-start;
+    overflow-y: auto; padding: 20px 16px;
+    backdrop-filter: blur(3px);
+  }
+  .tmodal-content {
+    background: #fff; border-radius: 16px;
+    width: 100%; max-width: 680px;
+    padding: 28px; box-shadow: 0 16px 48px rgba(0,0,0,.35);
+    margin: 0 auto;
+    position: relative;
+    z-index: 100000;
+  }
+  .tmodal-header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 20px; }
+  #modal-title { font-size: 1.2em; font-weight: 800; color: #005a9e; margin: 0; }
+  .tmodal-close { background: none; border: none; font-size: 22px; cursor: pointer; color: #6c757d; line-height: 1; }
+  .tmodal-close:hover { color: #dc3545; }
+
+  .tmodal-field { margin-bottom: 14px; }
+  .tmodal-field label { display: block; font-weight: 700; font-size: 13px; color: #495057; margin-bottom: 5px; text-transform: uppercase; letter-spacing: .3px; }
+  .tmodal-field input,
+  .tmodal-field select {
+    width: 100%; padding: 10px 13px;
+    border: 1.5px solid #dee2e6; border-radius: 8px;
+    font-size: 14px; font-family: inherit;
+    box-sizing: border-box;
+  }
+  .tmodal-field input:focus,
+  .tmodal-field select:focus { border-color: #005a9e; outline: none; box-shadow: 0 0 0 3px rgba(0,90,158,.1); }
+
+  /* Deduction rows */
+  #ded-list { margin-bottom: 12px; }
+  .ded-row {
+    display: flex; align-items: center; gap: 8px;
+    background: #f8f9fa; border: 1.5px solid #dee2e6;
+    border-radius: 10px; padding: 10px 12px; margin-bottom: 8px;
+    cursor: grab; transition: all .2s;
+  }
+  .ded-row.dragging  { opacity: .5; }
+  .ded-row.drag-over { border-color: #005a9e; background: #e7f3ff; }
+  .ded-drag-handle { font-size: 18px; color: #adb5bd; cursor: grab; flex-shrink: 0; }
+  .ded-fields { display: flex; flex-wrap: wrap; gap: 7px; flex: 1; align-items: center; }
+  .ded-stage-badge {
+    font-size: 10px; font-weight: 800; padding: 4px 8px;
+    border-radius: 6px; white-space: nowrap; flex-shrink: 0;
+    letter-spacing: .3px;
+  }
+  .ded-stage-badge.stage-weight { background: #e7f3ff; color: #005a9e; border: 1px solid #b3d4f5; }
+  .ded-stage-badge.stage-amount { background: #fff8e1; color: #a8710a; border: 1px solid #ffe08a; }
+  .pill-stage { font-size: 11px; margin-right: 2px; }
+  .ded-name  { flex: 1.5; min-width: 120px; padding: 8px 10px; border: 1.5px solid #dee2e6; border-radius: 7px; font-size: 13px; font-family: inherit; }
+  .ded-type  { flex: 2; min-width: 160px; padding: 8px 10px; border: 1.5px solid #dee2e6; border-radius: 7px; font-size: 12px; font-family: inherit; background: #fff; }
+  .ded-value { width: 80px; padding: 8px 10px; border: 1.5px solid #dee2e6; border-radius: 7px; font-size: 13px; font-family: inherit; text-align: center; }
+  .ded-custom-formula { flex: 1.5; min-width: 140px; padding: 8px 10px; border: 1.5px solid #dee2e6; border-radius: 7px; font-size: 13px; font-family: inherit; }
+  .ded-custom-stage { min-width: 150px; padding: 8px 10px; border: 1.5px solid #dee2e6; border-radius: 7px; font-size: 12px; font-family: inherit; background: #fff; }
+  .ded-apply { width: 110px; padding: 8px 10px; border: 1.5px solid #dee2e6; border-radius: 7px; font-size: 12px; font-family: inherit; background: #fff; }
+  .ded-optional-wrap { display: flex; align-items: center; gap: 5px; font-size: 12px; color: #6c757d; white-space: nowrap; }
+  .ded-remove-btn { background: #fff0f0; color: #dc3545; border: none; border-radius: 7px; padding: 6px 10px; cursor: pointer; font-weight: 800; flex-shrink: 0; }
+  .ded-remove-btn:hover { background: #dc3545; color: #fff; }
+
+  .ded-row { cursor: grab; }
+  .ded-row:active { cursor: grabbing; }
+  .ded-row.dragging  { opacity: .4; border-style: dashed; }
+  .ded-row.drag-over { border-color: #005a9e; background: #e7f3ff; border-width: 2px; transform: scale(1.01); }
+  .ded-drag-handle { font-size: 18px; color: #adb5bd; cursor: grab; flex-shrink: 0; user-select: none; letter-spacing: -3px; }
+
+  .add-ded-btn {
+    width: 100%; padding: 10px; border: 2px dashed #b3d4f5;
+    border-radius: 9px; background: #f0f7ff; color: #005a9e;
+    font-weight: 700; font-size: 14px; cursor: pointer;
+    font-family: inherit; transition: all .2s;
+    margin-bottom: 16px;
+  }
+  .add-ded-btn:hover { background: #e7f3ff; border-color: #005a9e; }
+
+  .tmodal-footer { display: flex; gap: 12px; justify-content: flex-end; }
+  .btn-save   { padding: 12px 24px; background: linear-gradient(135deg,#005a9e,#003d6e); color: #fff; border: none; border-radius: 9px; font-weight: 800; font-size: 15px; cursor: pointer; font-family: inherit; transition: all .2s; }
+  .btn-save:hover { transform: translateY(-2px); box-shadow: 0 5px 16px rgba(0,90,158,.3); }
+  .btn-cancel { padding: 12px 24px; background: #e9ecef; color: #495057; border: none; border-radius: 9px; font-weight: 700; font-size: 15px; cursor: pointer; font-family: inherit; }
+
+  /* Save button */
+  .save-btn {
+    width: 100%; padding: 15px; border: none; border-radius: 12px;
+    background: linear-gradient(135deg,#005a9e,#003d6e);
+    color: #fff; font-size: 16px; font-weight: 800;
+    cursor: pointer; font-family: inherit; transition: all .22s;
+    box-shadow: 0 4px 16px rgba(0,90,158,.3); margin-top: 6px;
+  }
+  .save-btn:hover { transform: translateY(-2px); box-shadow: 0 8px 24px rgba(0,90,158,.38); }
+
+  .section-card { background: #fff; border-radius: 14px; padding: 22px 24px; margin-bottom: 20px; border: 1px solid #dee2e6; box-shadow: 0 2px 10px rgba(0,90,158,.07); }
+  .section-card-title { display: flex; align-items: center; justify-content: space-between; gap: 10px; font-size: .9em; font-weight: 800; color: #005a9e; margin: 0 0 18px; padding-bottom: 11px; border-bottom: 2px solid #e7f3ff; text-transform: uppercase; letter-spacing: .5px; }
+
+  /* Navbar (same as other pages) */
+  .top-navbar { position: sticky; top: 0; z-index: 1000; background: linear-gradient(135deg,#003d6e,#005a9e); box-shadow: 0 4px 20px rgba(0,62,110,.35); display: flex; align-items: center; justify-content: space-between; height: 62px; padding: 0 24px; margin: -20px -16px 24px; }
+  .navbar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+  .navbar-brand img { height: 38px; border-radius: 8px; border: 2px solid rgba(255,255,255,.3); }
+  .navbar-brand span { color: #fff; font-size: 1.1em; font-weight: 800; }
+  .navbar-links { display: flex; gap: 4px; align-items: center; }
+  .nav-link { display: flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 8px; color: rgba(255,255,255,.85); font-size: 13px; font-weight: 600; text-decoration: none; border: none; background: transparent; cursor: pointer; transition: all .2s; font-family: inherit; }
+  .nav-link:hover, .nav-link.active { background: rgba(255,255,255,.18); color: #fff; }
+  @media(max-width:640px) { .navbar-links .nav-link span:not(:first-child) { display: none; } }
+
+  .info-banner { background: #e7f3ff; border: 1.5px solid #b3d4f5; border-radius: 10px; padding: 12px 16px; margin-bottom: 18px; color: #003d6e; font-size: 13px; font-weight: 600; display: flex; align-items: center; gap: 8px; }
+  .page-wrapper { max-width: 760px; margin: 0 auto; }
+  </style>
+</head>
+<body>
+
+<!-- NAVBAR -->
+<nav class="top-navbar">
+  <a class="navbar-brand" href="index.html">
+    <img src="assets/logo.jpg" alt="Logo"/>
+    <span>MandiBook</span>
+  </a>
+  <div class="navbar-links">
+    <a class="nav-link" href="index.html">🧾 <span>New Bill</span></a>
+    <a class="nav-link" href="index.html">📋 <span>Bills</span></a>
+    <a class="nav-link" href="dashboard.html">📊 <span>Dashboard</span></a>
+    <a class="nav-link" href="ledger.html">📒 <span>Ledger</span></a>
+    <a class="nav-link active" href="core_settings.html">⚙️ <span>Settings</span></a>
+  </div>
+</nav>
+
+<div class="page-wrapper">
+
+  <!-- Version Info -->
+  <div id="version-display"></div>
+
+  <!-- Core Deductions -->
+  <div class="section-card">
+    <div class="section-card-title">
+      <span>⚙️ Core Deduction Values</span>
+    </div>
+    <div class="info-banner">
+      ℹ️ These values apply to all new bills. Existing bills are not affected.
+    </div>
+    <form id="settingsForm">
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">📉 Kasar Percentage</div>
+          <div class="settings-row-desc">0.3% = enter 0.003</div>
         </div>
-
-        <form id="settingsForm">
-          <div class="settings-row">
-            <div>
-              <div class="settings-row-label">📉 Kasar Percentage</div>
-              <div class="settings-row-desc">0.3% = enter 0.003</div>
-            </div>
-            <input type="number" name="kasarPercentage" step="0.001" min="0" required placeholder="0.003" />
-          </div>
-          <div class="settings-row">
-            <div>
-              <div class="settings-row-label">🟤 Kantan Bag Weight</div>
-              <div class="settings-row-desc">Weight in kg per bag</div>
-            </div>
-            <input type="number" name="kantanWeight" step="0.1" min="0" required placeholder="0.6" />
-          </div>
-          <div class="settings-row">
-            <div>
-              <div class="settings-row-label">⬜ Plastic Bag Weight</div>
-              <div class="settings-row-desc">Weight in kg per bag</div>
-            </div>
-            <input type="number" name="plasticWeight" step="0.1" min="0" required placeholder="0.2" />
-          </div>
-          <div class="settings-row">
-            <div>
-              <div class="settings-row-label">🚛 Utrāī Percentage</div>
-              <div class="settings-row-desc">Unloading charge in %</div>
-            </div>
-            <input type="number" name="utraiPercentage" step="1" min="0" required placeholder="7" />
-          </div>
-
-          <button type="submit" class="save-btn" style="margin-top:8px;">💾 Save Settings</button>
-        </form>
+        <input type="number" name="kasarPercentage" step="0.001" min="0" required placeholder="0.003"/>
       </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">🟤 Kantan Bag Weight</div>
+          <div class="settings-row-desc">Weight in kg per bag</div>
+        </div>
+        <input type="number" name="kantanWeight" step="0.1" min="0" required placeholder="0.6"/>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">⬜ Plastic Bag Weight</div>
+          <div class="settings-row-desc">Weight in kg per bag</div>
+        </div>
+        <input type="number" name="plasticWeight" step="0.1" min="0" required placeholder="0.2"/>
+      </div>
+      <div class="settings-row">
+        <div>
+          <div class="settings-row-label">🚛 Utrāī Rate</div>
+          <div class="settings-row-desc">₹ per 100kg</div>
+        </div>
+        <input type="number" name="utraiPercentage" step="1" min="0" required placeholder="7"/>
+      </div>
+      <button type="submit" class="save-btn">💾 Save Core Settings</button>
+    </form>
+  </div>
+
+  <!-- Product Templates -->
+  <div class="section-card">
+    <div class="section-card-title">
+      <span>🌾 Product Templates</span>
+      <button class="btn-save" onclick="openNewTemplateModal()" style="font-size:13px;padding:8px 16px;">
+        ➕ New Template
+      </button>
+    </div>
+    <div id="template-list">
+      <div class="empty-state">Loading templates...</div>
+    </div>
+  </div>
+
+</div><!-- end page-wrapper -->
+
+<!-- TEMPLATE MODAL -->
+<div id="template-modal">
+  <div class="tmodal-content">
+    <div class="tmodal-header">
+      <h2 id="modal-title">New Product Template</h2>
+      <button class="tmodal-close" onclick="closeTemplateModal()">✕</button>
     </div>
 
-  </body>
+    <div class="tmodal-field">
+      <label>Product Name *</label>
+      <input type="text" id="modal-template-name" placeholder="e.g. ઘઉં, મગફળી, મગ (ya English mein bhi)"/>
+      <small style="display:block;margin-top:4px;color:#6c757d;font-size:11px;">
+        💡 Yeh naam bill pe dikhega — Gujarati ya English, jo chaho likho
+      </small>
+    </div>
+    <div class="tmodal-field">
+      <label>Bill Series Prefix</label>
+      <input type="text" id="modal-series-prefix" placeholder="e.g. GN, WH, MG" maxlength="5"/>
+    </div>
+    <div class="tmodal-field">
+      <label>Price Unit</label>
+      <select id="modal-price-unit">
+        <option value="20kg">Per 20 kg (Man)</option>
+        <option value="100kg">Per 100 kg (Quintal)</option>
+      </select>
+    </div>
+
+    <div style="font-weight:800;font-size:13px;color:#005a9e;text-transform:uppercase;letter-spacing:.4px;margin-bottom:10px;">
+      Deductions — Drag to reorder
+    </div>
+    <div id="ded-list"></div>
+    <button type="button" class="add-ded-btn" onclick="addDeductionRow()">
+      ➕ Add Deduction / Addition
+    </button>
+
+    <div class="tmodal-footer">
+      <button class="btn-cancel" onclick="closeTemplateModal()">Cancel</button>
+      <button class="btn-save"   onclick="saveTemplate()">💾 Save Template</button>
+    </div>
+  </div>
+</div>
+
+</body>
 </html>

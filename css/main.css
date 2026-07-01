@@ -584,3 +584,10 @@ button[type="submit"]:hover {
   #container-original::after { content: "Original"; position: absolute; top: 5px; right: 5px; border: 1px solid #000; padding: 1px 3px; font-size: 7pt; font-weight: bold; }
   #container-copy::after    { content: "Duplicate"; position: absolute; top: 5px; right: 5px; border: 1px solid #000; padding: 1px 3px; font-size: 7pt; font-weight: bold; }
 }
+
+/* ── SweetAlert2 z-index fix ──
+   Ensures SweetAlert popups always appear above navbar (z-index:1000),
+   template modals (z-index:99999), and all other overlays. */
+.swal2-container {
+  z-index: 999999 !important;
+}
