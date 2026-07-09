@@ -14,13 +14,13 @@ function showBillListView() {
   if (!billListInitialized) {
     billListInitialized = true;
     const searchEl = document.getElementById("search_input_list");
-    const prevBtn  = document.getElementById("prev_page_list_btn");
-    const nextBtn  = document.getElementById("next_page_list_btn");
-    const paidBtn  = document.getElementById("mark_paid_btn");
+    const prevBtn = document.getElementById("prev_page_list_btn");
+    const nextBtn = document.getElementById("next_page_list_btn");
+    const paidBtn = document.getElementById("mark_paid_btn");
     if (searchEl) searchEl.addEventListener("input", (e) => filterAndRenderList(e.target.value));
-    if (prevBtn)  prevBtn.addEventListener("click", goToPrevListPage);
-    if (nextBtn)  nextBtn.addEventListener("click", goToNextListPage);
-    if (paidBtn)  paidBtn.addEventListener("click", markSelectedBillsAsPaid);
+    if (prevBtn) prevBtn.addEventListener("click", goToPrevListPage);
+    if (nextBtn) nextBtn.addEventListener("click", goToNextListPage);
+    if (paidBtn) paidBtn.addEventListener("click", markSelectedBillsAsPaid);
   }
 
   billsCollection.orderBy("Serial No", "desc").onSnapshot((snapshot) => {
@@ -118,7 +118,6 @@ async function markSelectedBillsAsPaid() {
 function showBillCreationForm() {
   document.getElementById("bill_list_view").style.display = "none";
   document.getElementById("bill_creation_form").style.display = "block";
-  
 }
 // Add this new function to bill-list.js and dashboard.js
 
@@ -179,11 +178,11 @@ function renderBillList(docs) {
 function renderListPaginationControls(totalItems) {
   const totalPages = Math.ceil(totalItems / itemsPerPageForList) || 1;
   const pageInfoEl = document.getElementById("page_info_list");
-  const prevBtnEl  = document.getElementById("prev_page_list_btn");
-  const nextBtnEl  = document.getElementById("next_page_list_btn");
+  const prevBtnEl = document.getElementById("prev_page_list_btn");
+  const nextBtnEl = document.getElementById("next_page_list_btn");
   if (pageInfoEl) pageInfoEl.textContent = `Page ${currentPageForList} of ${totalPages}`;
-  if (prevBtnEl)  prevBtnEl.disabled = currentPageForList === 1;
-  if (nextBtnEl)  nextBtnEl.disabled = currentPageForList >= totalPages;
+  if (prevBtnEl) prevBtnEl.disabled = currentPageForList === 1;
+  if (nextBtnEl) nextBtnEl.disabled = currentPageForList >= totalPages;
 }
 
 function goToNextListPage() {
@@ -217,7 +216,7 @@ function editBill(docId) {
     .then((doc) => {
       if (doc.exists) {
         localStorage.setItem("editBillData", JSON.stringify({ ...doc.data(), id: doc.id }));
-        window.location.href = "index.html";
+        window.location.href = "bill-create.html";
       } else {
         alert("Could not find this bill. It might not be synced yet.");
       }
