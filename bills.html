@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="robots" content="noindex, nofollow"/>
-  <title>Ganesh Agri</title>
+  <title>Bills — MandiBook</title>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
@@ -15,9 +15,7 @@
   <script src="js/core/firebase-init.js"></script>
   <script src="js/core/utils.js"></script>
   <script src="js/features/company-profile.js"></script>
-  <script src="js/features/bill-form.js" defer></script>
   <script src="js/features/bill-list.js" defer></script>
-  <script src="js/features/product-templates.js" defer></script>
   <link rel="stylesheet" href="css/main.css"/>
   <link rel="stylesheet" href="css/dashboard.css"/>
   <link rel="icon" href="assets/logo.jpg" type="image/x-icon"/>
@@ -431,7 +429,7 @@
   </a>
   <div class="navbar-links">
     <button class="nav-link active" href="bill-create.html">🧾 <span>New Bill</span></button>
-    <button class="nav-link" href="bills.html">📋 <span>Bills</span></button>
+    <button class="nav-link active" href="bills.html" class="nav-link active">📋 <span>Bills</span></button>
     <a class="nav-link" href="dashboard.html">📊 <span>Dashboard</span></a>
     <a class="nav-link" href="ledger.html">📒 <span>Ledger</span></a>
     <a class="nav-link" href="core_settings.html">⚙️ <span>Settings</span></a>
@@ -446,181 +444,71 @@
 
 <div class="pg">
 
-  <!-- LANDING HERO -->
-  <div class="landing-hero">
-    <div class="hero-left">
-      <div class="hero-greeting" id="hero-greeting">Good Morning! 👋</div>
-      <div class="hero-title">MandiBook</div>
-      <div class="hero-sub">Agricultural Purchase Billing System</div>
-      <div class="hero-stats" id="hero-stats">
-        <div class="hstat"><span class="hstat-val" id="hs-bills">—</span><span class="hstat-label">Bills Today</span></div>
-        <div class="hstat"><span class="hstat-val" id="hs-amount">—</span><span class="hstat-label">Today's Amount</span></div>
-        <div class="hstat"><span class="hstat-val" id="hs-pending">—</span><span class="hstat-label">Pending</span></div>
+  <div id="sync_status" style="text-align:center;font-weight:700;margin-bottom:12px;font-size:13px;"></div>
+
+  <div id="bill_list_view">
+    <div class="sc">
+      <div class="sc-title">
+        📋 Saved Bills
+      </div>
+
+      <!-- Toolbar -->
+      <div class="toolbar">
+        <div class="srch">
+          <input type="text" id="search_input_list" placeholder="Search by name, village, vehicle, bill no..."/>
+        </div>
+        <button class="tbtn tbtn-new" onclick="window.location.href='bill-create.html'">✏️ New Bill</button>
+        <button class="tbtn tbtn-print" onclick="printSelectedBills()">🖨️ Print</button>
+        <button class="tbtn tbtn-paid" id="mark_paid_btn">✅ Mark Paid</button>
+      </div>
+
+      <!-- Import/Export -->
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px;">
+        <div style="background:#f8f9fa;border:1.5px solid #dee2e6;border-radius:10px;padding:14px;">
+          <div style="font-weight:800;font-size:13px;color:#005a9e;margin-bottom:8px;">📤 Upload Bills</div>
+          <div class="file-row">
+            <input type="file" id="upload_file_input" accept=".xlsx"/>
+            <button class="tbtn tbtn-exp" onclick="uploadBills()">Upload</button>
+          </div>
+          <p id="upload_status" style="margin:7px 0 0;font-weight:700;font-size:12px;"></p>
+        </div>
+        <div style="background:#f8f9fa;border:1.5px solid #dee2e6;border-radius:10px;padding:14px;">
+          <div style="font-weight:800;font-size:13px;color:#005a9e;margin-bottom:8px;">📥 Export Bills</div>
+          <div class="file-row">
+            <select id="export_format">
+              <option value="excel">Excel (XLSX)</option>
+              <option value="pdf">PDF</option>
+            </select>
+            <button class="tbtn tbtn-exp" onclick="exportSelectedBills()">Download</button>
+          </div>
+        </div>
+      </div>
+
+      <div id="selection-summary"></div>
+
+      <!-- Bill Table -->
+      <table class="blt bill-list-table">
+        <thead>
+          <tr>
+            <th><input type="checkbox" onchange="toggleSelectAll(this)"/></th>
+            <th>Bill No.</th>
+            <th>Date</th>
+            <th>Name</th>
+            <th>Status</th>
+            <th>Type</th>
+            <th>Total</th>
+            <th>Actions</th>
+          </tr>
+        </thead>
+        <tbody id="bill_list_body"></tbody>
+      </table>
+
+      <div class="pgn">
+        <button id="prev_page_list_btn" class="filter-btn">← Prev</button>
+        <span id="page_info_list"></span>
+        <button id="next_page_list_btn" class="filter-btn">Next →</button>
       </div>
     </div>
-    <div class="hero-right">
-      <div class="hero-date" id="hero-date"></div>
-      <div class="hero-time" id="hero-time"></div>
-    </div>
   </div>
 
-  <!-- QUICK NAV CARDS -->
-  <div class="qnav">
-    <a class="qcard c-new" href="bill-create.html">
-      <span class="ci">🧾</span><span>New Bill</span>
-    </a>
-    <a class="qcard c-bills" href="bills.html"><span class="ci">📋</span><span>Saved Bills</span></a>
-    <a class="qcard c-dash" href="dashboard.html">
-      <span class="ci">📊</span><span>Dashboard</span>
-    </a>
-    <a class="qcard c-ledg" href="ledger.html">
-      <span class="ci">📒</span><span>Ledger</span>
-    </a>
-    <a class="qcard c-set" href="core_settings.html">
-      <span class="ci">⚙️</span><span>Settings</span>
-    </a>
-  </div>
-
-</div><!-- end .pg -->
-
-<script>
-// Moisture toggle logic
-document.addEventListener('DOMContentLoaded',()=>{
-  // Weighbridge moisture toggle
-  const wbToggle = document.getElementById('deduct_wb_moisture_toggle');
-  const wbInput  = document.getElementById('wb_moisture_input');
-  if(wbToggle && wbInput){
-    wbToggle.addEventListener('change',()=>{
-      wbInput.style.display = wbToggle.checked ? 'block' : 'none';
-    });
-    // Live preview
-    const pctInput   = document.querySelector('input[name="weighbridge_moisture_pct"]');
-    const wbPreview  = document.getElementById('wb_moisture_preview');
-    const wbWeightEl = document.querySelector('input[name="weighbridge_weight"]');
-    function updateWbPreview(){
-      if(!pctInput||!wbPreview||!wbWeightEl) return;
-      const pct = parseFloat(pctInput.value)||0;
-      const wt  = parseFloat(wbWeightEl.value)||0;
-      if(pct>0 && wt>0){
-        const kg = Math.round(wt*(pct/100));
-        wbPreview.textContent = `= ${kg} kg katega`;
-      } else {
-        wbPreview.textContent='';
-      }
-    }
-    if(pctInput) pctInput.addEventListener('input', updateWbPreview);
-    if(wbWeightEl) wbWeightEl.addEventListener('input', updateWbPreview);
-  }
-
-  // Vakal moisture toggle
-  const vakalToggle = document.getElementById('deduct_vakal_moisture_toggle');
-  const vakalCells  = document.querySelectorAll('.vakal-moisture-cell');
-  const vakalHeader = document.getElementById('vakal_moisture_header');
-  if(vakalToggle){
-    vakalToggle.addEventListener('change',()=>{
-      const show = vakalToggle.checked;
-      vakalCells.forEach(c=>c.style.display = show ? 'table-cell' : 'none');
-      if(vakalHeader) vakalHeader.style.display = show ? 'table-cell' : 'none';
-    });
-  }
-});
-
-// Sync connection dot
-document.addEventListener('DOMContentLoaded',()=>{
-  const dot=document.getElementById('conn-dot');
-  const st=document.getElementById('connection_status');
-  if(!st||!dot)return;
-  const obs=new MutationObserver(()=>{
-    const t=st.textContent.toLowerCase();
-    if(t.includes('connect')&&!t.includes('dis')){dot.className='cdot ok';}
-    else if(t.includes('dis')){dot.className='cdot err';}
-  });
-  obs.observe(st,{childList:true,characterData:true,subtree:true});
-});
-</script>
-
-  <script src="js/features/themes.js" defer></script>
-
-  <script>
-  // ── Landing Hero: Live clock + greeting + today stats ──
-  function updateHeroClock() {
-    const now  = new Date();
-    const h    = now.getHours();
-    const pad  = n => String(n).padStart(2,'0');
-    const time = `${pad(h)}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
-    const days = ['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'];
-    const months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-    const dateStr = `${days[now.getDay()]}, ${now.getDate()} ${months[now.getMonth()]} ${now.getFullYear()}`;
-
-    const greet = h < 12 ? 'Good Morning! ☀️' : h < 17 ? 'Good Afternoon! 🌤️' : 'Good Evening! 🌙';
-
-    const tEl = document.getElementById('hero-time');
-    const dEl = document.getElementById('hero-date');
-    const gEl = document.getElementById('hero-greeting');
-    if(tEl) tEl.textContent = time;
-    if(dEl) dEl.textContent = dateStr;
-    if(gEl) gEl.textContent = greet;
-  }
-
-  async function loadHeroStats() {
-    try {
-      const now   = new Date();
-      const dd    = String(now.getDate()).padStart(2,'0');
-      const mm    = String(now.getMonth()+1).padStart(2,'0');
-      const yyyy  = now.getFullYear();
-      const today = `${dd}/${mm}/${yyyy}`;
-
-      const snap  = await billsCollection.get();
-      let billsToday = 0, amountToday = 0, pending = 0;
-
-      snap.forEach(doc => {
-        const d = doc.data();
-        if(d.Date === today) { billsToday++; amountToday += d['Final Total'] || 0; }
-        if(d.paymentStatus !== 'Paid') pending++;
-      });
-
-      const fmt = n => n >= 100000
-        ? '₹' + (n/100000).toFixed(1) + 'L'
-        : '₹' + n.toLocaleString('en-IN');
-
-      const bEl = document.getElementById('hs-bills');
-      const aEl = document.getElementById('hs-amount');
-      const pEl = document.getElementById('hs-pending');
-      if(bEl) bEl.textContent = billsToday;
-      if(aEl) aEl.textContent = fmt(amountToday);
-      if(pEl) pEl.textContent = pending;
-    } catch(e) { console.warn('Hero stats:', e); }
-  }
-
-  document.addEventListener('DOMContentLoaded', () => {
-    updateHeroClock();
-    setInterval(updateHeroClock, 1000);
-    loadHeroStats();
-  });
-  </script>
-
-  <!-- Theme Panel -->
-  <div id="theme-panel" class="theme-panel">
-    <div class="theme-panel-title">🎨 Select Theme</div>
-    <div id="theme-switcher"></div>
-  </div>
-  <script>
-  function toggleThemePanel(event) {
-    const panel = document.getElementById("theme-panel");
-    if (panel) panel.classList.toggle("open");
-    if (event) event.stopPropagation();
-  }
-  document.addEventListener("click", function(event) {
-    const panel = document.getElementById("theme-panel");
-    if (panel && panel.classList.contains("open")) {
-      if (!event.target.closest(".theme-panel") && !event.target.closest(".theme-btn")) {
-        panel.classList.remove("open");
-      }
-    }
-  });
-  document.addEventListener("DOMContentLoaded", () => {
-    if (typeof renderThemeSwitcher === "function") renderThemeSwitcher();
-  });
-  </script>
-</body>
-</html>
+</div>

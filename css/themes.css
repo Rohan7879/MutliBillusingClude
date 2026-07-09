@@ -1,0 +1,188 @@
+/**
+ * @file themes.css
+ * @description MandiBook Theme System — 8 professional themes.
+ *              Applied via data-theme attribute on <html> element.
+ *              Default (no attribute) = Ocean Blue.
+ * @project MandiBook
+ */
+
+/* ══════════════════════════════════════════════════
+   THEME 1: Ocean Blue (Default)
+══════════════════════════════════════════════════ */
+:root,
+[data-theme="blue"] {
+  --nav-from:      #003d6e;
+  --nav-to:        #005a9e;
+  --primary:       #005a9e;
+  --primary-dark:  #003d6e;
+  --primary-light: #e7f3ff;
+  --primary-mid:   #b3d4f5;
+  --accent:        #00c6ff;
+  --btn-from:      #007bff;
+  --btn-to:        #005a9e;
+}
+
+/* ══════════════════════════════════════════════════
+   THEME 2: Forest Green
+══════════════════════════════════════════════════ */
+[data-theme="green"] {
+  --nav-from:      #1a4731;
+  --nav-to:        #28a745;
+  --primary:       #28a745;
+  --primary-dark:  #1a4731;
+  --primary-light: #eafaf1;
+  --primary-mid:   #a9dfbf;
+  --accent:        #56cf76;
+  --btn-from:      #28a745;
+  --btn-to:        #1a4731;
+}
+
+/* ══════════════════════════════════════════════════
+   THEME 3: Royal Purple
+══════════════════════════════════════════════════ */
+[data-theme="purple"] {
+  --nav-from:      #3a1a6e;
+  --nav-to:        #6f42c1;
+  --primary:       #6f42c1;
+  --primary-dark:  #3a1a6e;
+  --primary-light: #f3eeff;
+  --primary-mid:   #c3a8e8;
+  --accent:        #a78bfa;
+  --btn-from:      #6f42c1;
+  --btn-to:        #3a1a6e;
+}
+
+/* ══════════════════════════════════════════════════
+   THEME 4: Sunset Orange
+══════════════════════════════════════════════════ */
+[data-theme="orange"] {
+  --nav-from:      #7a2e00;
+  --nav-to:        #fd7e14;
+  --primary:       #e8590c;
+  --primary-dark:  #7a2e00;
+  --primary-light: #fff4ee;
+  --primary-mid:   #ffc69e;
+  --accent:        #ffb347;
+  --btn-from:      #fd7e14;
+  --btn-to:        #c84b00;
+}
+
+/* ══════════════════════════════════════════════════
+   THEME 5: Deep Teal
+══════════════════════════════════════════════════ */
+[data-theme="teal"] {
+  --nav-from:      #0a4a4a;
+  --nav-to:        #17a2b8;
+  --primary:       #17a2b8;
+  --primary-dark:  #0a4a4a;
+  --primary-light: #e8f8fa;
+  --primary-mid:   #a0dde6;
+  --accent:        #5ce1e6;
+  --btn-from:      #17a2b8;
+  --btn-to:        #0a4a4a;
+}
+
+/* ══════════════════════════════════════════════════
+   THEME 6: Rose Red
+══════════════════════════════════════════════════ */
+[data-theme="red"] {
+  --nav-from:      #7a0020;
+  --nav-to:        #dc3545;
+  --primary:       #dc3545;
+  --primary-dark:  #7a0020;
+  --primary-light: #fff0f2;
+  --primary-mid:   #f5c2c7;
+  --accent:        #ff6b6b;
+  --btn-from:      #dc3545;
+  --btn-to:        #a71d2a;
+}
+
+/* ══════════════════════════════════════════════════
+   THEME 7: Dark Mode
+══════════════════════════════════════════════════ */
+[data-theme="dark"] {
+  --nav-from:      #0a0a0a;
+  --nav-to:        #1a1a2e;
+  --primary:       #4fc3f7;
+  --primary-dark:  #0288d1;
+  --primary-light: #1a2a3a;
+  --primary-mid:   #2a4a6a;
+  --accent:        #81d4fa;
+  --btn-from:      #0288d1;
+  --btn-to:        #01579b;
+}
+[data-theme="dark"] body        { background: #0f0f1a; color: #e0e0e0; }
+[data-theme="dark"] .sc,
+[data-theme="dark"] .section-card,
+[data-theme="dark"] .template-card,
+[data-theme="dark"] .kpi-card   { background: #1a1a2e; border-color: #2a2a4a; color: #e0e0e0; }
+[data-theme="dark"] .sc-title,
+[data-theme="dark"] .section-card-title { border-color: #2a2a4a; }
+[data-theme="dark"] .ff input,
+[data-theme="dark"] input[type="text"],
+[data-theme="dark"] input[type="number"],
+[data-theme="dark"] input[type="date"],
+[data-theme="dark"] select,
+[data-theme="dark"] textarea    { background: #2a2a3e; border-color: #3a3a5a; color: #e0e0e0; }
+[data-theme="dark"] .blt td,
+[data-theme="dark"] .bill-list-table td { background: #1a1a2e; border-color: #2a2a4a; color: #e0e0e0; }
+
+/* ══════════════════════════════════════════════════
+   THEME 8: Earthy Brown
+══════════════════════════════════════════════════ */
+[data-theme="brown"] {
+  --nav-from:      #3e2000;
+  --nav-to:        #8b5e3c;
+  --primary:       #8b5e3c;
+  --primary-dark:  #3e2000;
+  --primary-light: #fdf6f0;
+  --primary-mid:   #d4a87a;
+  --accent:        #c49a6c;
+  --btn-from:      #8b5e3c;
+  --btn-to:        #5c3d1e;
+}
+
+/* ══════════════════════════════════════════════════
+   APPLY CSS VARIABLES TO ALL ELEMENTS
+   (All themes use the same variables below)
+══════════════════════════════════════════════════ */
+.top-navbar { background: linear-gradient(135deg, var(--nav-from), var(--nav-to)) !important; }
+.navbar-brand span { color: white; }
+
+/* Buttons */
+.gen-btn,
+button[type="submit"],
+.btn-save { background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important; }
+.filter-btn,
+.view-btn,
+.tbtn-print { background: linear-gradient(135deg, var(--btn-from), var(--btn-to)) !important; }
+
+/* Cards & sections */
+.sc-title, .section-card-title, h2 { color: var(--primary) !important; }
+.template-name, .customer-name { color: var(--primary) !important; }
+
+/* Table headers */
+.final-bill-table thead tr,
+.blt thead tr,
+.bill-list-table thead tr { background: var(--primary) !important; }
+
+/* Final total box */
+.final-total-box { background: linear-gradient(135deg, var(--primary), var(--primary-dark)) !important; }
+
+/* Input focus */
+input:focus, select:focus, textarea:focus {
+  border-color: var(--primary) !important;
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--primary) 15%, transparent) !important;
+}
+
+/* KPI values */
+.kpi-value, .detail-value { color: var(--primary) !important; }
+
+/* Summary item */
+.summary-item { background: linear-gradient(135deg, var(--primary-light), color-mix(in srgb, var(--primary-mid) 50%, white)) !important; border-color: var(--primary-mid) !important; }
+
+/* Series preview */
+.series-preview-text { color: var(--primary) !important; }
+
+/* Version badge */
+#nav-version { border-color: rgba(255,255,255,0.2) !important; }

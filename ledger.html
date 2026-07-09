@@ -11,6 +11,7 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="js/core/firebase-init.js"></script>
     <script src="js/core/utils.js"></script>
+  <script src="js/features/company-profile.js"></script>
     <script src="js/features/ledger.js" defer></script>
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/dashboard.css" />
@@ -192,8 +193,35 @@
         body, .page-wrapper { margin:0; padding:0; }
         .section-card { box-shadow:none; border:none; padding:0; }
       }
-    </style>
-  </head>
+    
+  /* ── Theme Switcher ── */
+  .theme-switcher-wrap { display:flex; align-items:center; gap:6px; margin-left:8px; }
+  .theme-dot {
+    width:20px; height:20px; border-radius:50%; border:2px solid rgba(255,255,255,0.3);
+    cursor:pointer; transition:all .2s; padding:0; flex-shrink:0;
+  }
+  .theme-dot:hover { transform:scale(1.2); border-color:rgba(255,255,255,0.8); }
+  .theme-dot.active { border-color:#fff; transform:scale(1.25); box-shadow:0 0 0 2px rgba(255,255,255,0.5); }
+  .theme-btn {
+    background:rgba(255,255,255,0.12); border:1px solid rgba(255,255,255,0.25);
+    color:#fff; border-radius:8px; padding:6px 12px; font-size:12px;
+    font-weight:700; cursor:pointer; font-family:inherit;
+    display:flex; align-items:center; gap:6px; transition:all .2s;
+  }
+  .theme-btn:hover { background:rgba(255,255,255,0.22); }
+  .theme-panel {
+    position:absolute; top:70px; right:16px;
+    background:#fff; border-radius:14px; padding:16px;
+    box-shadow:0 8px 32px rgba(0,0,0,.2); z-index:9999;
+    display:none; min-width:200px;
+  }
+  .theme-panel.open { display:block; }
+  .theme-panel-title { font-weight:800; font-size:13px; color:#005a9e; margin-bottom:12px; text-transform:uppercase; letter-spacing:.4px; }
+  #theme-switcher { display:flex; flex-wrap:wrap; gap:8px; }
+
+  </style>
+    <link rel="stylesheet" href="css/themes.css"/>
+</head>
   <body>
 
     <!-- NAVBAR -->
@@ -203,18 +231,16 @@
         <span>Ganesh Agri</span>
       </a>
       <div class="navbar-links">
-        <a class="nav-link" href="index.html"><span class="nav-icon">🧾</span><span>New Bill</span></a>
-        <a class="nav-link" href="index.html"><span class="nav-icon">📋</span><span>Bills</span></a>
-        <a class="nav-link" href="dashboard.html"><span class="nav-icon">📊</span><span>Dashboard</span></a>
-        <a class="nav-link active" href="ledger.html"><span class="nav-icon">📒</span><span>Ledger</span></a>
-        <a class="nav-link" href="core_settings.html"><span class="nav-icon">⚙️</span><span>Settings</span></a>
-      
-      <!-- Version Badge -->
-      <div style="display:flex;align-items:center;gap:6px;padding:5px 12px;background:rgba(255,255,255,0.12);border-radius:20px;border:1px solid rgba(255,255,255,0.2);" id="nav-version">
-        <span style="color:#ffd700;font-size:11px;font-weight:800;">v1.1.0</span>
-        <span style="color:rgba(255,255,255,0.7);font-size:11px;">Phase 1</span>
-      </div>
-      </div>
+    <a class="nav-link" href="bill-create.html">🧾 <span>New Bill</span></a>
+    <a class="nav-link" href="bills.html">📋 <span>Bills</span></a>
+    <a class="nav-link" href="dashboard.html">📊 <span>Dashboard</span></a>
+    <a class="nav-link active" href="ledger.html">📒 <span>Ledger</span></a>
+    <a class="nav-link" href="core_settings.html">⚙️ <span>Settings</span></a>
+    <button class="nav-conn" onclick="checkFirebaseConnection()">
+      <span class="cdot" id="conn-dot"></span>
+      <span id="connection_status">Check</span>
+    </button>
+  </div>
     </nav>
 
     <div id="loading-bar" class="loading-bar hidden"></div>
@@ -330,5 +356,30 @@
       </div>
     </div>
 
-  </body>
+    <script src="js/features/themes.js" defer></script>
+
+  <!-- Theme Panel -->
+  <div id="theme-panel" class="theme-panel">
+    <div class="theme-panel-title">🎨 Select Theme</div>
+    <div id="theme-switcher"></div>
+  </div>
+  <script>
+  function toggleThemePanel(event) {
+    const panel = document.getElementById("theme-panel");
+    if (panel) panel.classList.toggle("open");
+    if (event) event.stopPropagation();
+  }
+  document.addEventListener("click", function(event) {
+    const panel = document.getElementById("theme-panel");
+    if (panel && panel.classList.contains("open")) {
+      if (!event.target.closest(".theme-panel") && !event.target.closest(".theme-btn")) {
+        panel.classList.remove("open");
+      }
+    }
+  });
+  document.addEventListener("DOMContentLoaded", () => {
+    if (typeof renderThemeSwitcher === "function") renderThemeSwitcher();
+  });
+  </script>
+</body>
 </html>

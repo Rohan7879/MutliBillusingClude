@@ -4,7 +4,7 @@
   <meta charset="UTF-8"/>
   <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
   <meta name="robots" content="noindex, nofollow"/>
-  <title>Ganesh Agri</title>
+  <title>New Bill — MandiBook</title>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
   <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
@@ -430,7 +430,7 @@
     <span>MandiBook</span>
   </a>
   <div class="navbar-links">
-    <button class="nav-link active" href="bill-create.html">🧾 <span>New Bill</span></button>
+    <button class="nav-link active" href="bill-create.html" class="nav-link active">🧾 <span>New Bill</span></button>
     <button class="nav-link" href="bills.html">📋 <span>Bills</span></button>
     <a class="nav-link" href="dashboard.html">📊 <span>Dashboard</span></a>
     <a class="nav-link" href="ledger.html">📒 <span>Ledger</span></a>
@@ -446,40 +446,222 @@
 
 <div class="pg">
 
-  <!-- LANDING HERO -->
-  <div class="landing-hero">
-    <div class="hero-left">
-      <div class="hero-greeting" id="hero-greeting">Good Morning! 👋</div>
-      <div class="hero-title">MandiBook</div>
-      <div class="hero-sub">Agricultural Purchase Billing System</div>
-      <div class="hero-stats" id="hero-stats">
-        <div class="hstat"><span class="hstat-val" id="hs-bills">—</span><span class="hstat-label">Bills Today</span></div>
-        <div class="hstat"><span class="hstat-val" id="hs-amount">—</span><span class="hstat-label">Today's Amount</span></div>
-        <div class="hstat"><span class="hstat-val" id="hs-pending">—</span><span class="hstat-label">Pending</span></div>
-      </div>
-    </div>
-    <div class="hero-right">
-      <div class="hero-date" id="hero-date"></div>
-      <div class="hero-time" id="hero-time"></div>
-    </div>
-  </div>
+  <!-- ===== BILL CREATION FORM ===== -->
+  <div id="bill_creation_form">
+    <form id="estimateForm">
 
-  <!-- QUICK NAV CARDS -->
-  <div class="qnav">
-    <a class="qcard c-new" href="bill-create.html">
-      <span class="ci">🧾</span><span>New Bill</span>
-    </a>
-    <a class="qcard c-bills" href="bills.html"><span class="ci">📋</span><span>Saved Bills</span></a>
-    <a class="qcard c-dash" href="dashboard.html">
-      <span class="ci">📊</span><span>Dashboard</span>
-    </a>
-    <a class="qcard c-ledg" href="ledger.html">
-      <span class="ci">📒</span><span>Ledger</span>
-    </a>
-    <a class="qcard c-set" href="core_settings.html">
-      <span class="ci">⚙️</span><span>Settings</span>
-    </a>
-  </div>
+      <!-- Product Template Selector -->
+      <div class="sc" id="product-template-card">
+        <div class="sc-title">🌾 Product</div>
+        <div id="product-template-selector"></div>
+        <div id="series-preview" class="series-preview-text"></div>
+      </div>
+
+      <!-- Customer Details -->
+      <div class="sc">
+        <div class="sc-title">👤 Customer Details</div>
+        <div class="fg2">
+          <div class="ff">
+            <label>📅 તારીખ (Date) *</label>
+            <input type="date" name="bill_date" id="bill_date_input" required/>
+          </div>
+          <div class="ff">
+            <label>નામ (Name) *</label>
+            <input type="text" name="customer_name" oninput="this.value=this.value.toUpperCase()" required placeholder="Customer name..."/>
+            <div id="autocomplete-container"></div>
+          </div>
+          <div class="ff">
+            <label>ગાડી નં (Vehicle No.)</label>
+            <input type="text" name="vehicle_no" oninput="this.value=this.value.toUpperCase()" placeholder="GJ-XX-XXXX"/>
+          </div>
+          <div class="ff">
+            <label>ગામ (Village)</label>
+            <input type="text" name="village" oninput="this.value=this.value.toUpperCase()" placeholder="Village..."/>
+          </div>
+          <div class="ff">
+            <label>દલાલ (Broker)</label>
+            <input type="text" name="broker" oninput="this.value=this.value.toUpperCase()" placeholder="Broker..."/>
+          </div>
+        </div>
+      </div>
+
+      <!-- Bill Type & Weight -->
+      <div class="sc">
+        <div class="sc-title">⚖️ Bill Type & Weight</div>
+
+        <div class="trow">
+          <div class="trow-label">🔄 બિલનો પ્રકાર</div>
+          <div style="display:flex;align-items:center;gap:10px;">
+            <span style="font-size:13px;font-weight:600;color:#6c757d;">Bag</span>
+            <label class="switch">
+              <input type="checkbox" id="loose_supply_toggle" name="is_loose_supply"/>
+              <span class="slider"></span>
+            </label>
+            <span style="font-size:13px;font-weight:700;color:#005a9e;">Loose Supply</span>
+          </div>
+        </div>
+
+        <div class="spills supply-type-selector">
+          <strong style="color:#495057;font-size:14px;">ઘઉંના કટ્ટા:</strong>
+          <label class="spill"><input type="radio" name="supply_type" value="કંતાન પેક"/> કંતાન પેક</label>
+          <label class="spill"><input type="radio" name="supply_type" value="લૂઝ" checked/> કંતાન લૂઝ</label>
+        </div>
+
+        <!-- KEEP AS TABLE so JS table-row-group works -->
+        <table style="width:100%;border-collapse:collapse;">
+          <tbody>
+            <tr>
+              <td style="padding:10px 0;font-weight:700;color:#005a9e;width:40%;">⚖️ વેબ્રીજ વજન *</td>
+              <td style="padding:10px 0;">
+                <input type="number" name="weighbridge_weight" step="any" required
+                  style="width:100%;padding:11px 13px;border:1.5px solid #dee2e6;border-radius:8px;font-size:16px;font-weight:700;font-family:inherit;box-sizing:border-box;"/>
+              </td>
+            </tr>
+          </tbody>
+          <!-- Loose supply section — MUST be tbody for JS -->
+          <tbody id="loose_supply_section" style="display:none;">
+            <tr>
+              <td style="padding:10px 0;font-weight:700;color:#005a9e;">💰 ભાવ (Price)</td>
+              <td style="padding:10px 0;">
+                <input type="number" name="loose_price" id="loose_price_input" step="any"
+                  style="width:100%;padding:11px 13px;border:1.5px solid #dee2e6;border-radius:8px;font-size:16px;font-family:inherit;box-sizing:border-box;" placeholder="Price per 20kg..."/>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Bardan — MUST keep id="bag_supply_section" as tbody for JS -->
+      <div class="sc">
+        <div class="sc-title">🧺 બારદાન (Bags)</div>
+        <table style="width:100%;border-collapse:collapse;">
+          <tbody id="bag_supply_section">
+            <tr>
+              <td colspan="5" style="padding:0 0 14px;">
+                <div class="bgrid">
+                  <div class="bcard">
+                    <div class="bcard-title">🟤 કંતાન (600 ગ્રામ)</div>
+                    <div class="binputs">
+                      <div><label>ભરેલા</label><input type="number" name="bharela_600" placeholder="0"/></div>
+                      <div><label>ખાલી</label><input type="number" name="khali_600" placeholder="0"/></div>
+                    </div>
+                    <div class="bded">Deduct<label class="switch" style="transform:scale(.85);"><input type="checkbox" name="deduct_kantan" checked/><span class="slider"></span></label></div>
+                  </div>
+                  <div class="bcard">
+                    <div class="bcard-title">⬜ પ્લાસ્ટિક (200 ગ્રામ)</div>
+                    <div class="binputs">
+                      <div><label>ભરેલા</label><input type="number" name="bharela_200" placeholder="0"/></div>
+                      <div><label>ખાલી</label><input type="number" name="khali_200" placeholder="0"/></div>
+                    </div>
+                    <div class="bded">Deduct<label class="switch" style="transform:scale(.85);"><input type="checkbox" name="deduct_plastic" checked/><span class="slider"></span></label></div>
+                  </div>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="5" style="padding:6px 0;">
+                <div class="trow">
+                  <div class="trow-label">📉 કાંટા કસર<span class="badge" id="kasar-percentage-display"></span></div>
+                  <label class="switch"><input type="checkbox" name="deduct_kasar" checked/><span class="slider"></span></label>
+                </div>
+              </td>
+            </tr>
+            <tr>
+              <td colspan="5" style="padding:6px 0;">
+                <div class="trow">
+                  <div class="trow-label">🚛 ઉતરાઈ<span class="badge" id="utrai-value-display"></span></div>
+                  <label class="switch"><input type="checkbox" name="deduct_utrai" checked/><span class="slider"></span></label>
+                </div>
+              </td>
+            </tr>
+            <!-- WEIGHBRIDGE MOISTURE -->
+            <tr>
+              <td colspan="5" style="padding:6px 0;">
+                <div class="trow" style="background:#fff8e7;border-color:#ffe08a;">
+                  <div class="trow-label" style="color:#7a5700;">
+                    💧 વેબ્રીજ મોઇશ્ચર (Weighbridge Moisture)
+                  </div>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <label class="switch"><input type="checkbox" name="deduct_weighbridge_moisture" id="deduct_wb_moisture_toggle"/><span class="slider"></span></label>
+                  </div>
+                </div>
+                <div id="wb_moisture_input" style="display:none;margin-top:8px;padding:12px 14px;background:#fffbf0;border:1.5px solid #ffe08a;border-radius:9px;">
+                  <label style="font-weight:700;font-size:13px;color:#7a5700;display:block;margin-bottom:6px;">💧 Moisture % (વેબ્રીજ પછી)</label>
+                  <div style="display:flex;align-items:center;gap:10px;">
+                    <input type="number" name="weighbridge_moisture_pct" step="0.1" min="0" max="100" placeholder="e.g. 2"
+                      style="width:140px;padding:10px 12px;border:1.5px solid #ffe08a;border-radius:8px;font-size:16px;font-weight:700;font-family:inherit;text-align:center;"/>
+                    <span style="font-weight:700;color:#7a5700;font-size:15px;">%</span>
+                    <span style="color:#6c757d;font-size:13px;font-weight:600;" id="wb_moisture_preview"></span>
+                  </div>
+                </div>
+              </td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <!-- Vakal — MUST keep id="vakal_section" as tbody for JS -->
+      <div class="sc">
+        <div class="sc-title">📦 વકલ (Items)</div>
+        <div class="tbag">🎒 Total Bags: <span id="total-bags-count" style="font-size:1.3em;">0</span></div>
+        <div id="vakal-bag-warning" style="display:none;background:#fff0f0;border:2px solid #dc3545;border-radius:9px;padding:10px 14px;font-weight:700;font-size:14px;color:#dc3545;margin-bottom:10px;text-align:center;"></div>
+        <div class="trow" style="margin-bottom:12px;background:#fff8e7;border-color:#ffe08a;">
+          <div class="trow-label" style="color:#7a5700;">💧 વકલ મોઇશ્ચર (Per Vakal Moisture Cut)</div>
+          <label class="switch"><input type="checkbox" name="deduct_vakal_moisture" id="deduct_vakal_moisture_toggle"/><span class="slider"></span></label>
+        </div>
+        <div class="vt-wrap">
+          <table class="vt">
+            <thead>
+              <tr>
+                <th>વકલ</th>
+                <th>કટ્ટા (Bags)</th>
+                <th>ભાવ (Price)</th>
+                <th id="vakal_moisture_header" style="display:none;">💧 Moisture %</th>
+              </tr>
+            </thead>
+            <tbody id="vakal_section">
+              <tr><td>વકલ ૧</td><td><input type="number" name="vakal_1_katta" placeholder="0"/></td><td><input type="number" name="vakal_1_bhav" step="any" placeholder="0.00"/></td><td class="vakal-moisture-cell" style="display:none;"><input type="number" name="vakal_1_moisture" step="0.1" min="0" max="100" placeholder="0%" style="width:80px;padding:8px;border:1.5px solid #ffe08a;border-radius:7px;font-size:14px;text-align:center;font-family:inherit;background:#fffbf0;"/></td></tr>
+              <tr><td>વકલ ૨</td><td><input type="number" name="vakal_2_katta" placeholder="0"/></td><td><input type="number" name="vakal_2_bhav" step="any" placeholder="0.00"/></td><td class="vakal-moisture-cell" style="display:none;"><input type="number" name="vakal_2_moisture" step="0.1" min="0" max="100" placeholder="0%" style="width:80px;padding:8px;border:1.5px solid #ffe08a;border-radius:7px;font-size:14px;text-align:center;font-family:inherit;background:#fffbf0;"/></td></tr>
+              <tr><td>વકલ ૩</td><td><input type="number" name="vakal_3_katta" placeholder="0"/></td><td><input type="number" name="vakal_3_bhav" step="any" placeholder="0.00"/></td><td class="vakal-moisture-cell" style="display:none;"><input type="number" name="vakal_3_moisture" step="0.1" min="0" max="100" placeholder="0%" style="width:80px;padding:8px;border:1.5px solid #ffe08a;border-radius:7px;font-size:14px;text-align:center;font-family:inherit;background:#fffbf0;"/></td></tr>
+              <tr><td>વકલ ૪</td><td><input type="number" name="vakal_4_katta" placeholder="0"/></td><td><input type="number" name="vakal_4_bhav" step="any" placeholder="0.00"/></td><td class="vakal-moisture-cell" style="display:none;"><input type="number" name="vakal_4_moisture" step="0.1" min="0" max="100" placeholder="0%" style="width:80px;padding:8px;border:1.5px solid #ffe08a;border-radius:7px;font-size:14px;text-align:center;font-family:inherit;background:#fffbf0;"/></td></tr>
+              <tr><td>વકલ ૫</td><td><input type="number" name="vakal_5_katta" placeholder="0"/></td><td><input type="number" name="vakal_5_bhav" step="any" placeholder="0.00"/></td><td class="vakal-moisture-cell" style="display:none;"><input type="number" name="vakal_5_moisture" step="0.1" min="0" max="100" placeholder="0%" style="width:80px;padding:8px;border:1.5px solid #ffe08a;border-radius:7px;font-size:14px;text-align:center;font-family:inherit;background:#fffbf0;"/></td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- Expenses & Freight -->
+      <div class="sc">
+        <div class="sc-title">💸 ખર્ચ & ભાડું</div>
+        <div class="exp-sec">
+          <h3>📋 અન્ય ખર્ચ (Other Expenses)</h3>
+          <div id="expense_list"></div>
+          <div id="expense-subtotal-container" style="text-align:right;margin-top:9px;font-weight:700;font-size:1.1em;color:#005a9e;">
+            Total: <span id="expenses-subtotal">₹0</span>
+          </div>
+          <button type="button" class="add-expense-btn" onclick="addExpense()">+ ખર્ચ ઉમેરો</button>
+        </div>
+        <div class="ff" style="margin-top:14px;">
+          <label>🚛 ભાડું (Truck Freight)</label>
+          <input type="number" name="truck_freight" placeholder="ટ્રક ભાડું ઉમેરો..."/>
+        </div>
+      </div>
+
+      <!-- Bill Remarks -->
+      <div class="sc">
+        <div class="sc-title">📝 Remarks / Notes</div>
+        <div class="ff">
+          <label>નોંધ (Optional)</label>
+          <textarea name="bill_remarks" rows="3" placeholder="Quality remarks, special instructions, etc..."
+            style="width:100%;padding:11px 13px;border:1.5px solid #dee2e6;border-radius:8px;font-size:14px;font-family:inherit;resize:vertical;box-sizing:border-box;"></textarea>
+        </div>
+      </div>
+
+      <button type="submit" class="gen-btn">🧾 Generate Bill</button>
+    </form>
+  </div><!-- end bill_creation_form -->
+
+
 
 </div><!-- end .pg -->
 

@@ -286,6 +286,7 @@ function displayData(data) {
   renderExpenses(data);
   renderRemarks(data);
   renderTemplateDeductionsForPrint(data);
+  renderCompanyHeader(data);
 
   if (data["Truck Freight"] && data["Truck Freight"] > 0) {
     const totalsGrid = document.querySelector(".totals-grid");
@@ -345,6 +346,29 @@ function renderTemplateDeductionsForPrint(data) {
   const vakalTable = document.querySelector(".final-bill-table");
   if (vakalTable && vakalTable.parentNode) {
     vakalTable.parentNode.insertBefore(box, vakalTable.nextSibling);
+  }
+}
+
+
+/**
+ * Renders company header on bill if enabled in profile settings
+ */
+function renderCompanyHeader() {
+  const p = window.companyProfile || {};
+  const s = p.showOnBill || {};
+  const el = document.getElementById("company-header-box");
+  if (!el) return;
+  const lines = [];
+  if (s.name    && p.name)      lines.push(`<strong style="font-size:1.2em;">${p.name}</strong>`);
+  if (s.ownerName && p.ownerName) lines.push(p.ownerName);
+  if (s.address  && p.address)  lines.push(p.address);
+  if (s.phone    && p.phone)    lines.push(`📞 ${p.phone}`);
+  if (s.gst      && p.gst)      lines.push(`GST: ${p.gst}`);
+  if (lines.length > 0) {
+    el.style.display = "block";
+    el.innerHTML = lines.join("<br>");
+  } else {
+    el.style.display = "none";
   }
 }
 
@@ -409,40 +433,66 @@ function renderExpenses(data) {
   }
 }
 
-function sendBillViaWhatsApp() {
+async function sendBillViaWhatsApp() {
   const urlParams = new URLSearchParams(window.location.search);
-  const billId = urlParams.get("id") || urlParams.get("billId");
-  let storedData = localStorage.getItem("currentBill");
-  if (!storedData || !billId) {
-    alert("Bill data not found. Cannot create share link.");
-    return;
-  }
-  let data = JSON.parse(storedData);
-  const customerName = data["Customer Name"];
-  const finalTotal = Number(data["Final Total"]).toLocaleString("en-IN");
-  const netWeight = Number(data["Net Weight"]).toLocaleString("en-IN");
-  let vakalDetails = "";
-  if (data["Bill Type"] === "Loose") {
-    vakalDetails = `\n- Kilo: ${data["Vakal 1 Kilo"]} kg\n- Price: ₹${data["Vakal 1 Bhav"]}\n- Amount: ₹${Number(
-      data["Vakal 1 Amount"]
-    ).toLocaleString("en-IN")}`;
-  } else {
-    for (let i = 1; i <= 5; i++) {
-      const kattaValue = data[`Vakal ${i} Katta`];
-      if (kattaValue > 0) {
-        vakalDetails += `\n*વકલ ${i}:*\n  - Bags: ${kattaValue}\n  - Kilos: ${
-          data[`Vakal ${i} Kilo`]
-        } kg\n  - Price: ₹${data[`Vakal ${i} Bhav`]}\n  - Amount: ₹${Number(data[`Vakal ${i} Amount`]).toLocaleString(
-          "en-IN"
-        )}`;
+  const billId    = urlParams.get("id") || urlParams.get("billId");
+  if (!billId) { alert("Bill ID not found."); return; }
+
+  // Load latest bill data from Firestore
+  let data;
+  try {
+    const doc = await billsCollection.doc(billId).get();
+    if (!doc.exists) { alert("Bill not found."); return; }
+    data = doc.data();
+  } catch(e) { alert("Could not load bill data."); return; }
+
+  // Load company profile for URL + settings
+  const profile = window.companyProfile || {};
+  const wp      = profile.whatsapp || {};
+
+  // Secure download link
+  const downloadLink = window.generateSecureDownloadUrl
+    ? window.generateSecureDownloadUrl(billId)
+    : `${profile.appUrl || "https://ganesh-agri-new.web.app"}/download.html?id=${billId}`;
+
+  // Build message
+  const lines = [];
+  lines.push(`🧾 *Bill No:* ${data["Serial No"]}`);
+  lines.push(`📅 *Date:* ${data["Date"]}`);
+  lines.push(`👤 *Name:* ${data["Customer Name"]}`);
+  if (data["Village"])  lines.push(`🏘️ *Village:* ${data["Village"]}`);
+  if (wp.showBroker   !== false && data["Broker"])         lines.push(`🤝 *Broker:* ${data["Broker"]}`);
+  if (wp.showProduct  !== false && data["ProductTemplate"]) lines.push(`🌾 *Product:* ${data["ProductTemplate"]}`);
+  if (wp.showNetWeight !== false) lines.push(`⚖️ *Net Weight:* ${Number(data["Net Weight"]).toLocaleString("en-IN")} kg`);
+
+  // Vakal details
+  if (wp.showVakalDetails !== false) {
+    lines.push("\n📦 *Vakal Details:*");
+    if (data["Bill Type"] === "Loose") {
+      lines.push(`  • ${data["Vakal 1 Kilo"]} kg @ ₹${data["Vakal 1 Bhav"]} = ₹${Number(data["Vakal 1 Amount"]).toLocaleString("en-IN")}`);
+    } else {
+      for (let i = 1; i <= 5; i++) {
+        if ((data[`Vakal ${i} Katta`] || 0) > 0) {
+          lines.push(`  • વકલ ${i}: ${data[`Vakal ${i} Katta`]} bags, ${data[`Vakal ${i} Kilo`]} kg @ ₹${data[`Vakal ${i} Bhav`]} = ₹${Number(data[`Vakal ${i} Amount`]).toLocaleString("en-IN")}`);
+        }
       }
     }
   }
-  const downloadLink = `https://ganeshagribilling.web.app/download.html?id=${billId}`; // Assuming this is your deployed app URL
-  const message = `Bill No : ${data["Serial No"]}\nનામ (Name) : ${customerName}\nફાઇનલ ટોટલ : ₹${finalTotal}\nનેટ વજન : ${netWeight} kg\n\n*--- Details ---*${vakalDetails}\n\n*Click here to download your bill:*\n${downloadLink}`;
-  const encodedMessage = encodeURIComponent(message);
-  const whatsappUrl = `https://wa.me/?text=${encodedMessage}`;
-  window.open(whatsappUrl, "_blank");
+
+  lines.push(`\n💰 *Total:* ₹${Number(data["Total Amount"]).toLocaleString("en-IN")}`);
+  lines.push(`📉 *Utrai:* -₹${Number(data["Utrāī"]).toLocaleString("en-IN")}`);
+  if ((data["Truck Freight"] || 0) > 0) lines.push(`🚛 *Freight:* +₹${Number(data["Truck Freight"]).toLocaleString("en-IN")}`);
+  lines.push(`\n✅ *Final Total: ₹${Number(data["Final Total"]).toLocaleString("en-IN")}*`);
+  if (wp.showRemarks !== false && data["Remarks"]) lines.push(`\n📝 *Remarks:* ${data["Remarks"]}`);
+
+  // Company name if set
+  if (profile.name) lines.push(`\n🏢 ${profile.name}`);
+  if (profile.phone) lines.push(`📞 ${profile.phone}`);
+
+  lines.push(`\n🔗 *Bill Download:*\n${downloadLink}`);
+
+  const message = lines.join("\n");
+  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
 }
 
 function downloadBillAsPDF() {

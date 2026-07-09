@@ -25,14 +25,16 @@ function showBillListView() {
 
   billsCollection.orderBy("Serial No", "desc").onSnapshot((snapshot) => {
     const syncStatus = document.getElementById("sync_status");
-    if (snapshot.metadata.hasPendingWrites) {
-      syncStatus.textContent = "Offline. Changes will sync when online.";
-      syncStatus.style.color = "orange";
-    } else {
-      const now = new Date();
-      const formattedTime = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
-      syncStatus.textContent = `All data synced. (Last sync: ${formattedTime})`;
-      syncStatus.style.color = "green";
+    if (syncStatus) {
+      if (snapshot.metadata.hasPendingWrites) {
+        syncStatus.textContent = "Offline. Changes will sync when online.";
+        syncStatus.style.color = "orange";
+      } else {
+        const now = new Date();
+        const formattedTime = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+        syncStatus.textContent = `All data synced. (Last sync: ${formattedTime})`;
+        syncStatus.style.color = "green";
+      }
     }
 
     allBillsForList = snapshot.docs;
@@ -176,14 +178,17 @@ function renderBillList(docs) {
 
 function renderListPaginationControls(totalItems) {
   const totalPages = Math.ceil(totalItems / itemsPerPageForList) || 1;
-  document.getElementById("page_info_list").textContent = `Page ${currentPageForList} of ${totalPages}`;
-  document.getElementById("prev_page_list_btn").disabled = currentPageForList === 1;
-  document.getElementById("next_page_list_btn").disabled = currentPageForList >= totalPages;
+  const pageInfoEl = document.getElementById("page_info_list");
+  const prevBtnEl  = document.getElementById("prev_page_list_btn");
+  const nextBtnEl  = document.getElementById("next_page_list_btn");
+  if (pageInfoEl) pageInfoEl.textContent = `Page ${currentPageForList} of ${totalPages}`;
+  if (prevBtnEl)  prevBtnEl.disabled = currentPageForList === 1;
+  if (nextBtnEl)  nextBtnEl.disabled = currentPageForList >= totalPages;
 }
 
 function goToNextListPage() {
   // We get the total number of items from the currently filtered list to calculate total pages
-  const searchTerm = document.getElementById("search_input_list").value;
+  const searchTerm = document.getElementById("search_input_list")?.value || "";
   const filteredList = searchTerm
     ? allBillsForList.filter((doc) => JSON.stringify(doc.data()).toLowerCase().includes(searchTerm.toLowerCase()))
     : allBillsForList;
@@ -477,3 +482,11 @@ function updateSelectionSummary() {
     summaryElement.innerHTML = ""; // Clear the summary if nothing is selected
   }
 }
+
+// Ye code page load hote hi bills fetch karna shuru kar dega
+document.addEventListener("DOMContentLoaded", () => {
+  // Check karega ki hum bills.html par hain ya nahi
+  if (document.getElementById("bill_list_view")) {
+    showBillListView();
+  }
+});
