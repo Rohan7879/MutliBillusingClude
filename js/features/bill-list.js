@@ -4,6 +4,22 @@ const itemsPerPageForList = 25;
 
 let billListInitialized = false;
 
+// Phase 3 (item #14): keep a reference to the active onSnapshot unsubscribe
+// function so we can detach it before attaching a new one — previously every
+// call to showBillListView() (e.g. after delete/mark-paid) stacked up a NEW
+// listener without ever removing the old one ("ghost listeners").
+let unsubscribeBillsListener = null;
+
+// Phase 3 (item #15): debounce helper for the search input (500ms) so we're
+// not re-filtering the whole list on every single keystroke.
+let searchDebounceTimer = null;
+function debounce(fn, delayMs) {
+  return (...args) => {
+    clearTimeout(searchDebounceTimer);
+    searchDebounceTimer = setTimeout(() => fn(...args), delayMs);
+  };
+}
+
 function showBillListView() {
   const formEl = document.getElementById("bill_creation_form");
   const listEl = document.getElementById("bill_list_view");
@@ -17,40 +33,60 @@ function showBillListView() {
     const prevBtn = document.getElementById("prev_page_list_btn");
     const nextBtn = document.getElementById("next_page_list_btn");
     const paidBtn = document.getElementById("mark_paid_btn");
-    if (searchEl) searchEl.addEventListener("input", (e) => filterAndRenderList(e.target.value));
+    if (searchEl)
+      searchEl.addEventListener(
+        "input",
+        debounce((e) => filterAndRenderList(e.target.value), 500)
+      );
     if (prevBtn) prevBtn.addEventListener("click", goToPrevListPage);
     if (nextBtn) nextBtn.addEventListener("click", goToNextListPage);
     if (paidBtn) paidBtn.addEventListener("click", markSelectedBillsAsPaid);
   }
 
-  billsCollection.orderBy("Serial No", "desc").onSnapshot((snapshot) => {
-    const syncStatus = document.getElementById("sync_status");
-    if (syncStatus) {
-      if (snapshot.metadata.hasPendingWrites) {
-        syncStatus.textContent = "Offline. Changes will sync when online.";
-        syncStatus.style.color = "orange";
-      } else {
-        const now = new Date();
-        const formattedTime = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
-        syncStatus.textContent = `All data synced. (Last sync: ${formattedTime})`;
-        syncStatus.style.color = "green";
+  // Detach any previously-active listener before attaching a new one
+  if (unsubscribeBillsListener) {
+    unsubscribeBillsListener();
+    unsubscribeBillsListener = null;
+  }
+
+  unsubscribeBillsListener = billsCollection
+    .orderBy("Serial No", "desc")
+    .limit(200) // Phase 3 (item #15): cap the live list to the 200 most recent bills
+    .onSnapshot((snapshot) => {
+      const syncStatus = document.getElementById("sync_status");
+      if (syncStatus) {
+        if (snapshot.metadata.hasPendingWrites) {
+          syncStatus.textContent = "Offline. Changes will sync when online.";
+          syncStatus.style.color = "orange";
+        } else {
+          const now = new Date();
+          const formattedTime = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+          syncStatus.textContent = `All data synced. (Last sync: ${formattedTime})`;
+          syncStatus.style.color = "green";
+        }
       }
-    }
 
-    allBillsForList = snapshot.docs;
-    currentPageForList = 1;
+      allBillsForList = snapshot.docs;
+      currentPageForList = 1;
 
-    filterAndRenderList();
-    hideLoading();
-  });
+      filterAndRenderList();
+      hideLoading();
+    });
 }
 
 function filterAndRenderList(searchTerm = null) {
-  let billsToDisplay = allBillsForList;
+  // ✅ NAYA LOGIC: Saare bills mein se 'Cancelled' bills ko pehle hi hata do
+  let activeBills = allBillsForList.filter((doc) => {
+    const bill = doc.data();
+    return bill.isCancelled !== true; // Sirf wahi bills rakho jo cancel NAHI hue hain
+  });
 
+  let billsToDisplay = activeBills;
+
+  // Search wala purana logic
   if (searchTerm) {
     const lowerCaseSearch = searchTerm.toLowerCase();
-    billsToDisplay = allBillsForList.filter((doc) => {
+    billsToDisplay = activeBills.filter((doc) => {
       const bill = doc.data();
       const searchString = [bill["Serial No"], bill["Customer Name"], bill["Village"], bill["Vehicle No"]]
         .join(" ")
@@ -66,7 +102,6 @@ function filterAndRenderList(searchTerm = null) {
   renderBillList(billsForCurrentPage);
   renderListPaginationControls(billsToDisplay.length);
 }
-
 async function markSelectedBillsAsPaid() {
   const selectedCheckboxes = document.querySelectorAll("#bill_list_view .bill-checkbox:checked");
 
@@ -115,32 +150,20 @@ async function markSelectedBillsAsPaid() {
     }
   }
 }
-function showBillCreationForm() {
-  document.getElementById("bill_list_view").style.display = "none";
-  document.getElementById("bill_creation_form").style.display = "block";
+// REMOVED: showBillCreationForm() — this was leftover from the old single-page
+// (index.html) architecture where the form and list lived on the same page and
+// were toggled via style.display. It had NO null-check on #bill_list_view /
+// #bill_creation_form, so calling it on bill-create.html (which no longer has
+// #bill_list_view) would throw "Cannot set properties of null". It also had
+// no remaining callers in the codebase — confirmed dead code.
+//
+// Now that bill-create.html and bills.html are separate pages, navigate with
+// a real page load instead of a display toggle:
+function goToBillCreate() {
+  window.location.href = "bill-create.html";
 }
-// Add this new function to bill-list.js and dashboard.js
+// MOVED to core-engine.js — getStatusHtml() is now a shared utility.
 
-function getStatusHtml(bill) {
-  const status = bill.paymentStatus || "Unpaid";
-  const amountPaid = bill.amountPaid || 0;
-  const finalTotal = bill["Final Total"] || 0;
-  // Use a helper function to format numbers, assuming you have one in utils.js
-  const formattedAmountPaid = typeof formatNumber === "function" ? formatNumber(amountPaid) : amountPaid;
-  const formattedFinalTotal = typeof formatNumber === "function" ? formatNumber(finalTotal) : finalTotal;
-
-  const dotClass = status.toLowerCase().replace(" ", "-");
-
-  switch (status) {
-    case "Paid":
-      return `<span class="status-dot ${dotClass}"></span> Paid`;
-    case "Partially Paid":
-      return `<span class="status-dot ${dotClass}"></span> Partial<br><small>(${formattedAmountPaid} / ${formattedFinalTotal})</small>`;
-    case "Unpaid":
-    default:
-      return `<span class="status-dot unpaid"></span> Unpaid`;
-  }
-}
 function renderBillList(docs) {
   const tableBody = document.getElementById("bill_list_body");
   tableBody.innerHTML = "";
@@ -209,52 +232,41 @@ function viewBill(docId) {
   window.location.href = `final.html?id=${docId}`;
 }
 function editBill(docId) {
-  showLoading("Fetching bill for editing...");
-  billsCollection
-    .doc(docId)
-    .get()
-    .then((doc) => {
-      if (doc.exists) {
-        localStorage.setItem("editBillData", JSON.stringify({ ...doc.data(), id: doc.id }));
-        window.location.href = "bill-create.html";
-      } else {
-        alert("Could not find this bill. It might not be synced yet.");
-      }
-    })
-    .catch((error) => {
-      console.error("Error fetching bill for edit:", error);
-      alert("Could not load the bill. Please try again.");
-    })
-    .finally(() => {
-      hideLoading();
-    });
+  // Phase 3 (item #14): no more pre-fetch + localStorage — bill-create.html
+  // fetches the bill fresh itself using ?editId=, so it's always up to date.
+  window.location.href = `bill-create.html?editId=${docId}`;
 }
 async function deleteBill(docId, serialNo) {
   const result = await Swal.fire({
     title: "Are you sure?",
-    text: `You are about to delete Bill No. ${serialNo}. This cannot be undone.`,
+    text: `You are about to cancel Bill No. ${serialNo}. This cannot be undone.`,
     icon: "warning",
     showCancelButton: true,
     confirmButtonColor: "#dc3545", // Red color for the confirm button
     cancelButtonColor: "#6c757d", // Gray for cancel
-    confirmButtonText: "Yes, delete it!",
+    confirmButtonText: "Yes, cancel it!",
   });
 
-  // If the user clicked the "Yes, delete it!" button
+  // If the user clicked the "Yes, cancel it!" button
   if (result.isConfirmed) {
-    showLoading("Deleting bill...");
+    showLoading("Canceling bill...");
     try {
-      await billsCollection.doc(docId).delete();
+      // ✅ YAHAN CHANGE HUA HAI: Hard delete ki jagah Update (Soft Delete) lagaya hai
+      await billsCollection.doc(docId).update({
+        isCancelled: true,
+        cancelledAt: firebase.firestore.FieldValue.serverTimestamp(), // Cancel hone ka time bhi save hoga
+      });
+
       Swal.fire({
-        title: "Deleted!",
-        text: `Bill No. ${serialNo} has been deleted.`,
+        title: "Cancelled!",
+        text: `Bill No. ${serialNo} has been cancelled.`,
         icon: "success",
         timer: 2000, // Automatically close after 2 seconds
         showConfirmButton: false,
       });
     } catch (error) {
-      console.error("Error removing document: ", error);
-      Swal.fire("Error!", "Could not delete the bill. Please try again when online.", "error");
+      console.error("Error cancelling document: ", error);
+      Swal.fire("Error!", "Could not cancel the bill. Please try again when online.", "error");
     } finally {
       hideLoading();
     }
@@ -325,25 +337,8 @@ function downloadAsPDF(billsData) {
   doc.text("Ganesh Agri Industries - Bill Report", 14, 15);
   doc.save("GaneshAgri_Bills.pdf");
 }
-function checkFirebaseConnection() {
-  showLoading("Checking connection...");
-  const connectionStatus = document.getElementById("connection_status");
-  // Force the get() call to check the server directly
-  billsCollection
-    .limit(1)
-    .get({ source: "server" })
-    .then(() => {
-      connectionStatus.textContent = "Connected!";
-      connectionStatus.className = "connected"; // Set a class for green color
-    })
-    .catch(() => {
-      connectionStatus.textContent = "Disconnected.";
-      connectionStatus.className = "disconnected"; // Set a class for red color
-    })
-    .finally(() => {
-      hideLoading();
-    });
-}
+// MOVED to core-engine.js — checkFirebaseConnection() is now a shared utility
+// since the navbar's connection button needs it on every page, not just here.
 function uploadBills() {
   const fileInput = document.getElementById("upload_file_input");
   const file = fileInput.files[0];
@@ -378,18 +373,53 @@ function uploadBills() {
   };
   reader.readAsArrayBuffer(file);
 }
+/**
+ * Phase 4 (item #19): Excel stores dates as serial numbers (days since
+ * 1899-12-30) OR as native JS Date objects (depending on the cell format
+ * SheetJS detected) — neither is the "DD/MM/YYYY" string this app expects
+ * everywhere else. This converts either form back to that string; if the
+ * value is already a plain string, it's returned as-is.
+ */
+function excelDateToDDMMYYYY(value) {
+  if (!value) return new Date().toLocaleDateString("en-IN");
+  if (typeof value === "string") return value; // already a string — trust it
+  let dateObj;
+  if (value instanceof Date) {
+    dateObj = value;
+  } else if (typeof value === "number") {
+    // Excel serial date -> JS Date (Excel's epoch is 1899-12-30)
+    dateObj = new Date(Math.round((value - 25569) * 86400 * 1000));
+  } else {
+    return new Date().toLocaleDateString("en-IN");
+  }
+  const dd = String(dateObj.getDate()).padStart(2, "0");
+  const mm = String(dateObj.getMonth() + 1).padStart(2, "0");
+  const yyyy = dateObj.getFullYear();
+  return `${dd}/${mm}/${yyyy}`;
+}
+
 async function processUploadedBills(bills, statusElement) {
   let successCount = 0;
   let errorCount = 0;
-  const lastSerialNo = Number(localStorage.getItem("lastSerialNo")) || 0;
-  let currentSerialNo = lastSerialNo;
+  let missingSerialCount = 0;
 
-  for (const bill of bills) {
-    currentSerialNo++;
+  for (let i = 0; i < bills.length; i++) {
+    const bill = bills[i];
+
+    // Phase 4 (item #19, plus item #12's spirit): do NOT invent Serial
+    // Numbers here via a local counter — that could collide with the live
+    // Firestore transactional counter used by the normal bill-creation flow.
+    // Preserve whatever Serial No the file already has (supports both
+    // "Serial No" and "Bill No" column names, since the Excel backup export
+    // in backup.js writes the column as "Bill No"). If a row has neither,
+    // flag it clearly instead of guessing a number.
+    const originalSerial = bill["Serial No"] || bill["Bill No"];
+    const serialNo = originalSerial || `IMPORT-NEEDS-REVIEW-${i + 1}`;
+    if (!originalSerial) missingSerialCount++;
 
     // Remap data from the Excel file columns to the database schema
     const billData = {
-      "Serial No": currentSerialNo,
+      "Serial No": serialNo,
       "Customer Name": bill["Customer Name"] || "",
       "Vehicle No": bill["Vehicle No"] || "",
       Village: bill["Village"] || "",
@@ -408,7 +438,8 @@ async function processUploadedBills(bills, statusElement) {
       Utrāī: bill["Utrāī"] || 0,
       "Final Total": bill["Final Total"] || 0,
       Expenses: JSON.stringify(bill["Expenses"] || []),
-      Date: bill["Date"] || new Date().toLocaleDateString("en-IN"),
+      Date: excelDateToDDMMYYYY(bill["Date"]),
+      importedAt: firebase.firestore.FieldValue.serverTimestamp(),
     };
 
     try {
@@ -420,11 +451,12 @@ async function processUploadedBills(bills, statusElement) {
     }
   }
 
-  // Update last serial number
-  localStorage.setItem("lastSerialNo", currentSerialNo);
-
-  statusElement.textContent = `Upload complete: ${successCount} bills added, ${errorCount} bills failed.`;
-  statusElement.style.color = errorCount === 0 ? "green" : "red";
+  let statusMsg = `Upload complete: ${successCount} bills added, ${errorCount} bills failed.`;
+  if (missingSerialCount > 0) {
+    statusMsg += ` ⚠️ ${missingSerialCount} bill(s) had no Serial No in the file — marked "IMPORT-NEEDS-REVIEW-#", please fix manually.`;
+  }
+  statusElement.textContent = statusMsg;
+  statusElement.style.color = errorCount === 0 && missingSerialCount === 0 ? "green" : "orange";
 
   hideLoading();
   // Reload the bill list to show new data

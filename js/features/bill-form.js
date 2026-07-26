@@ -45,8 +45,8 @@ function initializeIndexPage() {
   if (dateInput && !dateInput.value) {
     const now = new Date();
     const yyyy = now.getFullYear();
-    const mm   = String(now.getMonth() + 1).padStart(2, "0");
-    const dd   = String(now.getDate()).padStart(2, "0");
+    const mm = String(now.getMonth() + 1).padStart(2, "0");
+    const dd = String(now.getDate()).padStart(2, "0");
     dateInput.value = `${yyyy}-${mm}-${dd}`;
   }
 
@@ -113,11 +113,34 @@ function initializeIndexPage() {
     }
   });
 
-  // Check for edit data on page load
-  const editData = localStorage.getItem("editBillData");
-  if (editData) {
-    populateFormForEdit(JSON.parse(editData));
-    localStorage.removeItem("editBillData");
+  // Phase 3 (items #13, #14): edit mode is now driven by a ?editId= URL
+  // param instead of a localStorage snapshot. This always fetches the
+  // CURRENT bill data fresh from Firestore right when the form opens —
+  // no risk of showing a stale cached copy from an earlier visit/tab.
+  const urlParams = new URLSearchParams(window.location.search);
+  const editId = urlParams.get("editId");
+  if (editId) {
+    showLoading("Loading bill for editing...");
+    billsCollection
+      .doc(editId)
+      .get()
+      .then((doc) => {
+        if (doc.exists) {
+          populateFormForEdit({ ...doc.data(), id: doc.id });
+        } else {
+          Swal.fire({
+            icon: "error",
+            title: "Bill not found",
+            text: "This bill may have been deleted.",
+            confirmButtonColor: "#005a9e",
+          });
+        }
+      })
+      .catch((err) => {
+        console.error("Error loading bill for edit:", err);
+        Swal.fire({ icon: "error", title: "Could not load bill", confirmButtonColor: "#005a9e" });
+      })
+      .finally(() => hideLoading());
   }
 
   // Attach a real-time listener to all bags inputs
@@ -129,9 +152,16 @@ function initializeIndexPage() {
   // Update the total immediately when the page loads
   updateTotalBags();
 }
+// Phase 3 (item #13): Optimistic Concurrency — captures the bill's
+// lastUpdatedAt timestamp at the moment the edit form is opened, so
+// updateData() can detect if someone else saved a change to the SAME bill
+// while this form was open (prevents silently overwriting their edit).
+let editModeLastUpdatedAt = null;
+
 function populateFormForEdit(data) {
   const form = document.getElementById("estimateForm");
   form.dataset.editId = data.id;
+  editModeLastUpdatedAt = data.lastUpdatedAt || null;
 
   // Safer way to set values, provides a fallback for missing data
   document.querySelector('input[name="customer_name"]').value = (data["Customer Name"] || "").toUpperCase();
@@ -210,6 +240,7 @@ function populateFormForEdit(data) {
 function cancelEditMode() {
   const form = document.getElementById("estimateForm");
   delete form.dataset.editId;
+  editModeLastUpdatedAt = null;
   form.reset();
 
   const formCard = document.getElementById("bill_creation_form");
@@ -241,7 +272,9 @@ function updateTotalBags() {
     if (bagsBadge) bagsBadge.style.color = "#dc3545";
     if (warningEl) {
       warningEl.style.display = "block";
-      warningEl.textContent = `⚠️ વકલ (${total}) > ભરેલા (${totalBharela}) — ${total - totalBharela} bag(s) zyada hain!`;
+      warningEl.textContent = `⚠️ વકલ (${total}) > ભરેલા (${totalBharela}) — ${
+        total - totalBharela
+      } bag(s) zyada hain!`;
     }
   } else {
     if (bagsBadge) bagsBadge.style.color = "";
@@ -333,7 +366,7 @@ function calculateBillData(formData) {
     net_vajan = customRound(weight - katta_kasar - wb_moisture_kg);
 
     // Vakal moisture for loose
-    const vakal_moisture_pct_1 = deductVakalMoisture ? (Number(formData.get("vakal_1_moisture")) || 0) : 0;
+    const vakal_moisture_pct_1 = deductVakalMoisture ? Number(formData.get("vakal_1_moisture")) || 0 : 0;
     const vakal_moisture_kg_1 = customRound(net_vajan * (vakal_moisture_pct_1 / 100));
     const net_vajan_after_vakal_moisture = customRound(net_vajan - vakal_moisture_kg_1);
     total = customRound((net_vajan_after_vakal_moisture / 20) * price);
@@ -351,6 +384,7 @@ function calculateBillData(formData) {
     data["Vakal 1 Kilo"] = net_vajan_after_vakal_moisture;
     data["Vakal 1 Bhav"] = price;
     data["Vakal 1 Amount"] = total;
+    data["Vakal 1 Variety"] = (formData.get("vakal_1_variety") || "").trim();
     for (let i = 2; i <= 5; i++) {
       data[`Vakal ${i} Katta`] = 0;
       data[`Vakal ${i} Kilo`] = 0;
@@ -374,7 +408,9 @@ function calculateBillData(formData) {
     data["Plastic Weight"] = bardanWeightPlastic; // Save Plastic weight
     data["Bardan Weight"] = Bardan; // Still save the total for calculation
     const katta_kasar = deductKasar ? customRound(weighbridge_weight * globalSettings.kasarPercentage) : 0;
-    const wb_moisture_kg = deductWeighbridgeMoisture ? customRound(weighbridge_weight * (weighbridgeMoisturePct / 100)) : 0;
+    const wb_moisture_kg = deductWeighbridgeMoisture
+      ? customRound(weighbridge_weight * (weighbridgeMoisturePct / 100))
+      : 0;
     net_vajan = customRound(weighbridge_weight - katta_kasar - Bardan - wb_moisture_kg);
 
     data["Weighbridge Weight"] = weighbridge_weight;
@@ -384,11 +420,31 @@ function calculateBillData(formData) {
     data["Bardan Weight"] = Bardan;
 
     const vakals = [
-      { katta: Number(formData.get("vakal_1_katta")) || 0, bhav: Number(formData.get("vakal_1_bhav")) || 0 },
-      { katta: Number(formData.get("vakal_2_katta")) || 0, bhav: Number(formData.get("vakal_2_bhav")) || 0 },
-      { katta: Number(formData.get("vakal_3_katta")) || 0, bhav: Number(formData.get("vakal_3_bhav")) || 0 },
-      { katta: Number(formData.get("vakal_4_katta")) || 0, bhav: Number(formData.get("vakal_4_bhav")) || 0 },
-      { katta: Number(formData.get("vakal_5_katta")) || 0, bhav: Number(formData.get("vakal_5_bhav")) || 0 },
+      {
+        katta: Number(formData.get("vakal_1_katta")) || 0,
+        bhav: Number(formData.get("vakal_1_bhav")) || 0,
+        variety: (formData.get("vakal_1_variety") || "").trim(),
+      },
+      {
+        katta: Number(formData.get("vakal_2_katta")) || 0,
+        bhav: Number(formData.get("vakal_2_bhav")) || 0,
+        variety: (formData.get("vakal_2_variety") || "").trim(),
+      },
+      {
+        katta: Number(formData.get("vakal_3_katta")) || 0,
+        bhav: Number(formData.get("vakal_3_bhav")) || 0,
+        variety: (formData.get("vakal_3_variety") || "").trim(),
+      },
+      {
+        katta: Number(formData.get("vakal_4_katta")) || 0,
+        bhav: Number(formData.get("vakal_4_bhav")) || 0,
+        variety: (formData.get("vakal_4_variety") || "").trim(),
+      },
+      {
+        katta: Number(formData.get("vakal_5_katta")) || 0,
+        bhav: Number(formData.get("vakal_5_bhav")) || 0,
+        variety: (formData.get("vakal_5_variety") || "").trim(),
+      },
     ];
 
     // ── VALIDATION: Vakal bags cannot exceed total bharela bags ──
@@ -417,35 +473,44 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
       }
       data[`Vakal ${i + 1} Katta`] = vakals[i].katta;
       // Per vakal moisture
-      const vakalMoisturePct = deductVakalMoisture ? (Number(formData.get(`vakal_${i+1}_moisture`)) || 0) : 0;
+      const vakalMoisturePct = deductVakalMoisture ? Number(formData.get(`vakal_${i + 1}_moisture`)) || 0 : 0;
       const vakalMoistureKg = vakals[i].katta > 0 ? customRound(kilo * (vakalMoisturePct / 100)) : 0;
       const kiloAfterMoisture = kilo - vakalMoistureKg;
       data[`Vakal ${i + 1} Moisture %`] = vakalMoisturePct;
       data[`Vakal ${i + 1} Moisture Kg`] = vakalMoistureKg;
       data[`Vakal ${i + 1} Kilo`] = kiloAfterMoisture;
       data[`Vakal ${i + 1} Bhav`] = vakals[i].bhav;
+      data[`Vakal ${i + 1} Variety`] = vakals[i].variety;
       const amount = customRound((kiloAfterMoisture / 20) * vakals[i].bhav);
       data[`Vakal ${i + 1} Amount`] = amount;
       total += amount;
     }
   }
 
+  // ═══════════════════════════════════════════════════════════════════════
+  // PHASE 2 — Utrai rounding order fix (checklist item #7)
+  // Utrai's job is to round the bill to the nearest ₹10. Previously it was
+  // calculated against `total` BEFORE Expenses/Truck Freight were added, so
+  // the actual Final Total (after expenses+freight) often did NOT land on
+  // a round ₹10 — defeating the purpose. Now: compute everything else
+  // first, then apply the ₹10-rounding Utrai adjustment last.
+  // ═══════════════════════════════════════════════════════════════════════
+  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
+  const truckFreight = Number(formData.get("truck_freight")) || 0;
+
+  // Everything except Utrai, combined first:
+  const preUtraiTotal = total - totalExpenses + truckFreight;
+
   if (deductUtrai) {
     let utrai_base = customRound((net_vajan / 100) * globalSettings.utraiPercentage);
-    let diff = (total % 10) - (utrai_base % 10);
+    let diff = (preUtraiTotal % 10) - (utrai_base % 10);
     if (diff > 5) finalutrai = utrai_base + diff - 10;
     else if (diff < -5) finalutrai = utrai_base + diff + 10;
     else if (diff === 5 || diff === -5) finalutrai = utrai_base - 5;
     else finalutrai = utrai_base + diff;
   }
 
-  const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-
-  // 1. Get the new truck freight value
-  const truckFreight = Number(formData.get("truck_freight")) || 0;
-
-  // 2. Add it to the final total calculation
-  const finaltotal = total - finalutrai - totalExpenses + truckFreight;
+  const finaltotal = preUtraiTotal - finalutrai;
 
   // --- Populate the rest of the data object ---
   data["Customer Name"] = formData.get("customer_name");
@@ -499,7 +564,7 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
           } else if (d.type === "fixed_kg") {
             impact = customRound(net_vajan * d.value);
           }
-          extraWeightCutKg += (d.applyAs === "add" ? -impact : impact);
+          extraWeightCutKg += d.applyAs === "add" ? -impact : impact;
         } else {
           // Amount-based: % of Amount | Fixed Amount
           if (d.type === "pct_amount") {
@@ -507,12 +572,16 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
           } else if (d.type === "fixed_amt") {
             impact = d.value;
           }
-          extraAmountChange += (d.applyAs === "add" ? impact : -impact);
+          extraAmountChange += d.applyAs === "add" ? impact : -impact;
         }
 
         appliedLog.push({
-          name: d.name, type: d.type, value: d.value,
-          applyAs: d.applyAs, stage: d.stage, impact: impact,
+          name: d.name,
+          type: d.type,
+          value: d.value,
+          applyAs: d.applyAs,
+          stage: d.stage,
+          impact: impact,
         });
       });
 
@@ -542,10 +611,68 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
   } else {
     const now = new Date();
     data["Date"] = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(
-      2, "0"
+      2,
+      "0"
     )}/${now.getFullYear()}`;
   }
   data["Remarks"] = formData.get("bill_remarks") || "";
+
+  // ── Broker Commission ──
+  const applyBrokerCommission = formData.get("apply_broker_commission") !== null;
+  const commissionPerBag = Number(formData.get("broker_commission_per_bag")) || 0;
+  if (applyBrokerCommission && commissionPerBag > 0 && data["Broker"]) {
+    const totalBags = [1, 2, 3, 4, 5].reduce((s, i) => s + (data[`Vakal ${i} Katta`] || 0), 0);
+    const totalCommission = Math.round(totalBags * commissionPerBag);
+    data["BrokerCommission"] = totalCommission;
+    data["BrokerCommissionPerBag"] = commissionPerBag;
+    data["Final Total"] = data["Final Total"] - totalCommission;
+  } else {
+    data["BrokerCommission"] = 0;
+  }
+
+  // ═══════════════════════════════════════════════════════════════════════
+  // PHASE 5 (items #21, #22) — New items[] schema + supplierName alias.
+  // ADDITIVE ONLY: every flat "Vakal N ..." field above is left completely
+  // unchanged, so reports.js, ledger.js, dashboard.js, generateBillHtmlForView,
+  // WhatsApp/PDF/Excel export — none of them need to change, they keep
+  // reading the flat fields exactly as before. This `items` array is for
+  // FUTURE consumers only. Per explicit decision: OLD bills are NOT migrated
+  // — any new code reading `items` must treat its absence as "this is an
+  // old-format bill" and fall back to the flat Vakal-N-* fields instead.
+  //
+  // BUG FIX: this block used to run BEFORE "Customer Name" and
+  // "ProductTemplate" were set on `data`, so supplierName was always
+  // `undefined` — and Firestore rejects undefined field values, so EVERY
+  // bill save/edit failed. Moved to the very end, after everything else on
+  // `data` is finalized.
+  // ═══════════════════════════════════════════════════════════════════════
+  data["supplierName"] = data["Customer Name"] || "";
+  const items = [];
+  if (data["Bill Type"] === "Loose") {
+    items.push({
+      product: data["ProductTemplate"] || null,
+      variety: data["Vakal 1 Variety"] || "",
+      quantity: data["Vakal 1 Kilo"] || 0,
+      unit: "kg",
+      rate: data["Vakal 1 Bhav"] || 0,
+      amount: data["Vakal 1 Amount"] || 0,
+    });
+  } else {
+    for (let i = 1; i <= 5; i++) {
+      const katta = data[`Vakal ${i} Katta`];
+      if (katta && katta > 0) {
+        items.push({
+          product: data["ProductTemplate"] || null,
+          variety: data[`Vakal ${i} Variety`] || "",
+          quantity: katta,
+          unit: "bags",
+          rate: data[`Vakal ${i} Bhav`] || 0,
+          amount: data[`Vakal ${i} Amount`] || 0,
+        });
+      }
+    }
+  }
+  data["items"] = items;
 
   // --- Return the final calculated data ---
   return data;
@@ -571,9 +698,8 @@ async function collectData() {
     const financialYearId = `FY${shortYear}${nextShortYear}`; // e.g., "FY2526"
 
     // --- Phase 1: Use product template's series prefix if one is selected ---
-    const seriesPrefix = (window.activeTemplate && window.activeTemplate.seriesPrefix)
-      ? window.activeTemplate.seriesPrefix
-      : null;
+    const seriesPrefix =
+      window.activeTemplate && window.activeTemplate.seriesPrefix ? window.activeTemplate.seriesPrefix : null;
     // Each product series gets its own independent counter so numbering
     // doesn't clash between e.g. Wheat (WH-...) and Groundnut (GN-...).
     const counterDocId = seriesPrefix
@@ -589,8 +715,9 @@ async function collectData() {
     // Save or update the customer in the 'customers' collection
     const customerName = data["Customer Name"];
     const customerVillage = data["Village"];
+    let customerId = null;
     if (customerName) {
-      const customerId = customerName.toLowerCase().replace(/\s+/g, "");
+      customerId = customerName.toLowerCase().replace(/\s+/g, "");
       const customerRef = db.collection("customers").doc(customerId);
       await customerRef.set(
         {
@@ -599,6 +726,10 @@ async function collectData() {
         },
         { merge: true }
       );
+      // Phase 2 (item #10): save customerId on the bill itself so ledger.js
+      // can group transactions by a stable ID instead of by Name (names can
+      // have typos/casing differences across bills — the ID never drifts).
+      data["customerId"] = customerId;
     }
 
     // --- UPDATED TRANSACTION LOGIC ---
@@ -628,9 +759,61 @@ async function collectData() {
       : `${shortYear}/${currentMonth}-${paddedSerialNo}`;
 
     data["Serial No"] = formattedBillNo;
+    // Save linked order reference if any
+    data["LinkedOrderId"] = formData.get("linked_order_id") || "";
+    data["LinkedSupplierIdx"] = formData.get("linked_supplier_idx") || "";
     // Note: Date and Remarks are already set inside calculateBillData() above.
+    // Phase 2 (item #11): server-side timestamp for reliable chronological
+    // sorting in the ledger — the "Date" field above is a display string
+    // (DD/MM/YYYY) picked by the user and isn't safe to sort by directly.
+    data["createdAt"] = firebase.firestore.FieldValue.serverTimestamp();
+    data["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
 
     const docRef = await billsCollection.add(data);
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PHASE 2 (item #10) — Master Ledger Balance
+    // Keep a running currentBalance on customers_master/{customerId} via a
+    // Transaction, so a customer's outstanding balance can be looked up in
+    // one read instead of scanning every bill/payment. This is a best-effort
+    // CACHE, not the source of truth — ledger.js still computes the real
+    // balance live from bills+payments, so if this update ever fails it
+    // does NOT affect the actual bill save or ledger accuracy.
+    // ═══════════════════════════════════════════════════════════════════
+    if (customerId) {
+      try {
+        const masterRef = db.collection("customers_master").doc(customerId);
+        await db.runTransaction(async (transaction) => {
+          const masterDoc = await transaction.get(masterRef);
+          const prevBalance = masterDoc.exists ? masterDoc.data().currentBalance || 0 : 0;
+          const newBalance = prevBalance + (data["Final Total"] || 0);
+          transaction.set(
+            masterRef,
+            {
+              name: customerName,
+              village: customerVillage,
+              currentBalance: newBalance,
+              lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            },
+            { merge: true }
+          );
+        });
+      } catch (masterErr) {
+        console.warn("customers_master balance update failed (non-critical — bill was still saved):", masterErr);
+      }
+    }
+
+    // ═══════════════════════════════════════════════════════════════════
+    // PHASE 4 (items #16, #17) — Automated Order Book Sync
+    // updateOrderDeliveredQty() already existed in order-integration.js but
+    // was never actually called anywhere — order delivered-quantity tracking
+    // was effectively dead. Wiring it in here, with the manual "Close this
+    // Order" checkbox as an override.
+    // ═══════════════════════════════════════════════════════════════════
+    if (data["LinkedOrderId"] && typeof updateOrderDeliveredQty === "function") {
+      const closeOrderOverride = document.getElementById("close_order_checkbox")?.checked || false;
+      await updateOrderDeliveredQty(data, closeOrderOverride);
+    }
 
     window.location.href = `final.html?id=${docRef.id}`;
   } catch (error) {
@@ -654,19 +837,44 @@ async function updateData(docId) {
 
   const billRef = billsCollection.doc(docId);
   try {
-    const originalBillDoc = await billRef.get();
-    if (!originalBillDoc.exists) throw "Original bill not found!";
-    const originalData = originalBillDoc.data();
-
     const formData = new FormData(form);
     let newData = calculateBillData(formData);
+    newData["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
 
-    newData["Serial No"] = originalData["Serial No"];
-    // Phase 1: Date and Remarks now come from calculateBillData() itself
-    // (already reads the form's date input + remarks textarea), so we
-    // no longer force-overwrite Date here — only Serial No stays fixed.
+    let originalData; // captured inside the transaction for the bags-count logic below
 
-    await billRef.update(newData);
+    // ═══════════════════════════════════════════════════════════════════
+    // PHASE 3 (item #13) — Optimistic Concurrency
+    // Re-read the bill INSIDE the transaction and compare its lastUpdatedAt
+    // to the value captured when this edit form was opened. If they differ,
+    // someone else saved a change to this same bill in the meantime — abort
+    // rather than silently overwriting their edit.
+    // ═══════════════════════════════════════════════════════════════════
+    await db.runTransaction(async (transaction) => {
+      const freshDoc = await transaction.get(billRef);
+      if (!freshDoc.exists) throw new Error("NOT_FOUND: Original bill not found!");
+      originalData = freshDoc.data();
+
+      const currentTimestamp = originalData.lastUpdatedAt || null;
+      const capturedTimestamp = editModeLastUpdatedAt || null;
+      const bothHaveTimestamps = currentTimestamp && capturedTimestamp;
+      const timestampsDiffer = bothHaveTimestamps
+        ? !currentTimestamp.isEqual(capturedTimestamp)
+        : currentTimestamp !== capturedTimestamp; // true only if exactly one is null
+
+      if (timestampsDiffer) {
+        throw new Error(
+          "CONFLICT: This bill was edited by someone else since you opened it. Please reload and try again."
+        );
+      }
+
+      newData["Serial No"] = originalData["Serial No"];
+      // Phase 1: Date and Remarks now come from calculateBillData() itself
+      // (already reads the form's date input + remarks textarea), so we
+      // no longer force-overwrite Date here — only Serial No stays fixed.
+
+      transaction.update(billRef, newData);
+    });
 
     // Calculate bags in the original bill
     let bagsInOriginalBill = 0;
@@ -678,9 +886,27 @@ async function updateData(docId) {
 
     window.location.href = `final.html?id=${docId}`;
   } catch (error) {
-    if (error.message && error.message.startsWith("VALIDATION_ERROR:")) {
-      const msg = error.message.replace("VALIDATION_ERROR: ", "");
+    const message = error && error.message ? error.message : String(error);
+    if (message.startsWith("VALIDATION_ERROR:")) {
+      const msg = message.replace("VALIDATION_ERROR: ", "");
       Swal.fire({ icon: "error", title: "⚠️ Validation Error", text: msg, confirmButtonColor: "#005a9e" });
+    } else if (message.startsWith("CONFLICT:")) {
+      Swal.fire({
+        icon: "warning",
+        title: "⚠️ Bill Changed by Someone Else",
+        text: message.replace("CONFLICT: ", ""),
+        confirmButtonText: "Reload Bill",
+        confirmButtonColor: "#005a9e",
+      }).then(() => {
+        window.location.href = `bill-create.html?editId=${docId}`;
+      });
+    } else if (message.startsWith("NOT_FOUND:")) {
+      Swal.fire({
+        icon: "error",
+        title: "Bill Not Found",
+        text: "This bill may have been deleted.",
+        confirmButtonColor: "#005a9e",
+      });
     } else {
       console.error("Error updating document: ", error);
       alert("Could not update the bill. Please try again.");

@@ -90,7 +90,10 @@ async function fetchUniqueCustomers() {
         const village = data["Village"] || data.customerVillage || "N/A";
         const key = `${customerName.toLowerCase()}|${village.toLowerCase()}`;
         if (!customerMap.has(key)) {
-          customerMap.set(key, { name: customerName, village: village });
+          customerMap.set(key, { name: customerName, village: village, customerId: data.customerId || null });
+        } else if (data.customerId && !customerMap.get(key).customerId) {
+          // Backfill customerId onto an already-seen entry if this doc has it
+          customerMap.get(key).customerId = data.customerId;
         }
       }
     };
@@ -131,10 +134,31 @@ async function showCustomerLedger(customer) {
   document.getElementById("ledger-customer-village").textContent = customer.village;
 
   try {
-    const [billsSnapshot, paymentsSnapshot] = await Promise.all([
+    // Phase 2 (item #10): query by Customer Name (works for ALL bills, old
+    // and new) AND by customerId if we have one (catches bills where the
+    // name was typed slightly differently but the customerId still matches —
+    // customerId is only present on bills created after this update, so the
+    // Name-based query remains the primary/required path for backward
+    // compatibility with historical data).
+    const queries = [
       billsCollection.where("Customer Name", "==", customer.name).get(),
       paymentsCollection.where("customerName", "==", customer.name).get(),
-    ]);
+    ];
+    if (customer.customerId) {
+      queries.push(billsCollection.where("customerId", "==", customer.customerId).get());
+    }
+    const results = await Promise.all(queries);
+    const billsSnapshot = results[0];
+    const paymentsSnapshot = results[1];
+    const extraBillsSnapshot = results[2]; // undefined if no customerId
+
+    // Merge bill docs from both queries, de-duplicated by doc id
+    const billDocsById = new Map();
+    billsSnapshot.docs.forEach((doc) => billDocsById.set(doc.id, doc));
+    if (extraBillsSnapshot) {
+      extraBillsSnapshot.docs.forEach((doc) => billDocsById.set(doc.id, doc));
+    }
+    const mergedBillDocs = Array.from(billDocsById.values());
 
     allTransactions = [];
     const billIdToSerialMap = new Map();
@@ -149,7 +173,7 @@ async function showCustomerLedger(customer) {
       }
     });
 
-    billsSnapshot.docs.forEach((doc) => {
+    mergedBillDocs.forEach((doc) => {
       const bill = doc.data();
       const billDateParts = bill.Date.split("/");
       const billDate = new Date(`${billDateParts[2]}-${billDateParts[1]}-${billDateParts[0]}`);
@@ -213,7 +237,7 @@ async function showCustomerLedger(customer) {
     allTransactions.sort((a, b) => a.sortKey - b.sortKey);
     renderLedgerTable(allTransactions);
 
-    const totalBills = billsSnapshot.docs.length;
+    const totalBills = mergedBillDocs.length;
     document.getElementById("summary-total-bills").textContent = totalBills;
     document.getElementById("summary-avg-bill").textContent = `₹${
       totalBills > 0 ? formatNumber(Math.round(totalBillValue / totalBills)) : 0
@@ -360,6 +384,39 @@ function closePaymentModal() {
   paymentModal.style.display = "none";
 }
 
+/**
+ * PHASE 2 (item #10) — Master Ledger Balance.
+ * Adjusts customers_master/{customerId}.currentBalance by `delta` inside a
+ * Firebase Transaction (safe against concurrent writes from two users).
+ * This is a best-effort CACHE, not the source of truth — ledger.js still
+ * computes the real balance live from bills+payments, so a failure here
+ * is logged but never blocks the actual payment/bill save.
+ * @param {{name:string, village:string, customerId?:string}} customer
+ * @param {number} delta - positive to increase balance, negative to decrease
+ */
+async function updateCustomerMasterBalance(customer, delta) {
+  if (!customer || !customer.customerId) return;
+  try {
+    const masterRef = db.collection("customers_master").doc(customer.customerId);
+    await db.runTransaction(async (transaction) => {
+      const masterDoc = await transaction.get(masterRef);
+      const prevBalance = masterDoc.exists ? masterDoc.data().currentBalance || 0 : 0;
+      transaction.set(
+        masterRef,
+        {
+          name: customer.name,
+          village: customer.village,
+          currentBalance: prevBalance + delta,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        },
+        { merge: true }
+      );
+    });
+  } catch (err) {
+    console.warn("customers_master balance update failed (non-critical):", err);
+  }
+}
+
 async function savePayment() {
   const selectedCheckboxes = document.querySelectorAll(".bill-checkbox-ledger:checked");
   const cashAmount = Number(amountInput.value) || 0;
@@ -386,6 +443,7 @@ async function savePayment() {
       await paymentsCollection.add({
         customerName: currentCustomer.name,
         customerVillage: currentCustomer.village,
+        customerId: currentCustomer.customerId || null,
         cashAmount,
         deductionAmount,
         deductionReason,
@@ -421,10 +479,14 @@ async function savePayment() {
         }
       }
       await batch.commit();
+
+      // Phase 2 (item #10): reduce the cached running balance by the payment amount
+      await updateCustomerMasterBalance(currentCustomer, -totalCredit);
     } else {
       await paymentsCollection.add({
         customerName: currentCustomer.name,
         customerVillage: currentCustomer.village,
+        customerId: currentCustomer.customerId || null,
         cashAmount,
         deductionAmount,
         deductionReason,
@@ -432,6 +494,9 @@ async function savePayment() {
         paymentDate,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
+
+      // Phase 2 (item #10): reduce the cached running balance by the payment amount
+      await updateCustomerMasterBalance(currentCustomer, -totalCredit);
     }
 
     closePaymentModal();

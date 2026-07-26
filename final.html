@@ -20,6 +20,7 @@
 
     <script src="js/core/firebase-init.js"></script>
     <script src="js/core/utils.js"></script>
+    <script src="js/core/core-engine.js"></script>
   <script src="js/features/company-profile.js"></script>
 
     <script src="js/features/bill-view.js"></script>
@@ -114,7 +115,7 @@
 
 
       <div class="details-grid" style="grid-template-columns: repeat(5, 1fr);">
-        <div class="detail-item">
+        <div class="detail-item" id="weighbridge_box">
           <span class="detail-label">વેબ્રીજ</span>
           <span class="detail-value" id="display_weighbridge_weight">0</span>
         </div>
@@ -136,7 +137,7 @@
         </div>
 
         
-        <div class="detail-item summary-item">
+        <div class="detail-item summary-item" id="netweight_box">
           <span class="detail-label">નેટ વજન</span>
           <span style="font-weight: bolder; font-size: 2.5em" class="detail-value" id="display_net_weight">0</span>
         </div>
@@ -219,7 +220,7 @@
         </div>
       </div>
       <div class="totals-grid">
-        <div class="detail-item">
+        <div class="detail-item" id="total_amount_box">
           <span class="detail-label">ટોટલ રૂપિયા</span>
           <span class="detail-value" id="display_total_amount">0</span>
         </div>

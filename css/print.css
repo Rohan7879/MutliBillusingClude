@@ -10,15 +10,18 @@ body {
 }
 
 /* ── Default page: A5 ── */
-@page { size: A5 portrait; margin: 0.5cm; }
+@page {
+  size: A5 portrait;
+  margin: 0.5cm;
+}
 
 /* ── Hide non-print elements ── */
 .no-print, .header, .button-container,
-#loading-bar, #payment-modal, .match-status,
-.print-dropdown-wrap, #bill_remarks_box,
-/* Hide template deduction preview — already calculated in totals */
-.tpl-deductions-box, #template-deductions-preview,
-#product-template-card, .edit-mode-banner {
+  #loading-bar, #payment-modal, .match-status,
+  .print-dropdown-wrap, #bill_remarks_box,
+  /* Hide template deduction preview — already calculated in totals */
+  .tpl-deductions-box, #template-deductions-preview,
+  #product-template-card, .edit-mode-banner {
   display: none !important;
 }
 
@@ -53,7 +56,7 @@ body.use-a4 .container {
 }
 
 /* ── Original / Duplicate tag ──
-   Position in TOP-LEFT so it never overlaps the date on the right */
+     Position in TOP-LEFT so it never overlaps the date on the right */
 #container-original::before,
 #container-copy::before {
   position: absolute;
@@ -66,8 +69,12 @@ body.use-a4 .container {
   background: #fff;
   z-index: 10;
 }
-#container-original::before { content: "Original"; }
-#container-copy::before     { content: "Duplicate"; }
+#container-original::before {
+  content: "Original";
+}
+#container-copy::before {
+  content: "Duplicate";
+}
 
 /* ── Bill Meta (Bill No + Date) ── */
 .bill-meta {
@@ -79,13 +86,33 @@ body.use-a4 .container {
   margin-bottom: 4px;
   padding-top: 10px; /* space for Original/Duplicate tag in top-left */
 }
-.bill-meta .meta-item { font-size: 10pt; font-weight: bold; }
+.bill-meta .meta-item {
+  font-size: 10pt;
+  font-weight: bold;
+}
 
 /* ── Customer Details ── */
-.print-only-details { display: block !important; }
-.detail-line { display: flex; gap: 8px; margin-bottom: 3px; font-size: 9pt; }
-.detail-label-enter { font-size: 9pt; font-weight: 700; white-space: nowrap; }
-.detail-value-line  { font-size: 9pt; font-weight: bold; border-bottom: 1px solid #000; flex: 1; margin-left: 4px; }
+.print-only-details {
+  display: block !important;
+}
+.detail-line {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 3px;
+  font-size: 9pt;
+}
+.detail-label-enter {
+  font-size: 9pt;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.detail-value-line {
+  font-size: 9pt;
+  font-weight: bold;
+  border-bottom: 1px solid #000;
+  flex: 1;
+  margin-left: 4px;
+}
 
 /* ── Details Grid (Weighbridge, Kasar etc) ── */
 .details-grid {
@@ -95,23 +122,61 @@ body.use-a4 .container {
   margin-top: 5px;
   margin-bottom: 4px;
 }
-.detail-item { border: 1px solid #ccc; padding: 2px 3px; text-align: center; background: transparent !important; }
-.detail-label { font-size: 7pt; display: block; }
-.detail-value { font-size: 10pt; font-weight: bold; color: #000 !important; display: block; }
-.summary-item .detail-value { font-size: 12pt; }
+.detail-item {
+  border: 1px solid #ccc;
+  padding: 2px 3px;
+  text-align: center;
+  background: transparent !important;
+}
+.detail-label {
+  font-size: 7pt;
+  display: block;
+}
+.detail-value {
+  font-size: 10pt;
+  font-weight: bold;
+  color: #000 !important;
+  display: block;
+}
+.summary-item .detail-value {
+  font-size: 12pt;
+}
 
 /* ── Supply type / bag count ── */
-#display_supply_type, #total-bags-final-view {
-  font-size: 9pt; font-weight: bold;
-  text-align: center; margin: 3px 0; color: #000 !important;
+#display_supply_type,
+#total-bags-final-view {
+  font-size: 9pt;
+  font-weight: bold;
+  text-align: center;
+  margin: 3px 0;
+  color: #000 !important;
 }
 
 /* ── Vakal Table ── */
-.final-bill-table { width: 100%; border-collapse: collapse; font-size: 8pt; margin-top: 4px; }
-.final-bill-table th, .final-bill-table td { border: 1px solid #ccc; padding: 2px 3px; text-align: center; }
-.final-bill-table th { background: #eee !important; font-size: 7pt; font-weight: bold; }
-.final-bill-table td { font-size: 8.5pt; }
-.final-bill-table td:last-child { font-weight: bold; font-size: 9.5pt; }
+.final-bill-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 8pt;
+  margin-top: 4px;
+}
+.final-bill-table th,
+.final-bill-table td {
+  border: 1px solid #ccc;
+  padding: 2px 3px;
+  text-align: center;
+}
+.final-bill-table th {
+  background: #eee !important;
+  font-size: 7pt;
+  font-weight: bold;
+}
+.final-bill-table td {
+  font-size: 8.5pt;
+}
+.final-bill-table td:last-child {
+  font-weight: bold;
+  font-size: 9.5pt;
+}
 
 /* ── Moisture box ── */
 #moisture_total_box {
@@ -123,12 +188,20 @@ body.use-a4 .container {
   margin: 2px 0 !important;
   text-align: center;
 }
-#moisture_total_box .detail-label { font-size: 7pt !important; color: #000 !important; font-weight: 700 !important; }
-#moisture_total_box .detail-value { font-size: 9pt !important; color: #000 !important; font-weight: 800 !important; }
+#moisture_total_box .detail-label {
+  font-size: 7pt !important;
+  color: #000 !important;
+  font-weight: 700 !important;
+}
+#moisture_total_box .detail-value {
+  font-size: 9pt !important;
+  color: #000 !important;
+  font-weight: 800 !important;
+}
 
 /* ── Template Deductions Applied — show in print ──
-   These are the EXTRA deductions (Admixture, GST etc.) that were applied
-   via product template. They appear below the vakal table in print. */
+     These are the EXTRA deductions (Admixture, GST etc.) that were applied
+     via product template. They appear below the vakal table in print. */
 #template-deductions-applied {
   display: block !important;
   border: 1px dashed #aaa;
@@ -142,11 +215,22 @@ body.use-a4 .container {
   border-bottom: 1px dotted #ddd;
   padding: 1px 0;
 }
-#template-deductions-applied .tda-row:last-child { border-bottom: none; }
-#template-deductions-applied .tda-name  { font-weight: 700; color: #000; }
-#template-deductions-applied .tda-value { font-weight: 700; }
-#template-deductions-applied .tda-minus { color: #000; }
-#template-deductions-applied .tda-plus  { color: #000; }
+#template-deductions-applied .tda-row:last-child {
+  border-bottom: none;
+}
+#template-deductions-applied .tda-name {
+  font-weight: 700;
+  color: #000;
+}
+#template-deductions-applied .tda-value {
+  font-weight: 700;
+}
+#template-deductions-applied .tda-minus {
+  color: #000;
+}
+#template-deductions-applied .tda-plus {
+  color: #000;
+}
 
 /* ── Totals Grid ── */
 .totals-grid {
@@ -158,8 +242,13 @@ body.use-a4 .container {
   page-break-inside: avoid !important;
   break-inside: avoid !important;
 }
-.totals-grid .detail-item { border-radius: 0; }
-.final-total-box-container { grid-column: 1 / -1; page-break-inside: avoid !important; }
+.totals-grid .detail-item {
+  border-radius: 0;
+}
+.final-total-box-container {
+  grid-column: 1 / -1;
+  page-break-inside: avoid !important;
+}
 
 /* ── Final Total Box ── */
 .final-total-box {
@@ -168,10 +257,22 @@ body.use-a4 .container {
   padding: 5px !important;
   page-break-inside: avoid !important;
 }
-.final-total-box .detail-label { color: #fff !important; font-size: 8pt !important; font-weight: 800 !important; display: block !important; }
-.final-total-box .detail-value { color: #fff !important; font-size: 15pt !important; font-weight: 900 !important; display: block !important; }
+.final-total-box .detail-label {
+  color: #fff !important;
+  font-size: 8pt !important;
+  font-weight: 800 !important;
+  display: block !important;
+}
+.final-total-box .detail-value {
+  color: #fff !important;
+  font-size: 15pt !important;
+  font-weight: 900 !important;
+  display: block !important;
+}
 
-#final_total_box_container, #utrai_box, #expenses_container {
+#final_total_box_container,
+#utrai_box,
+#expenses_container {
   page-break-inside: avoid !important;
   break-inside: avoid !important;
 }
@@ -179,9 +280,14 @@ body.use-a4 .container {
 /* ── Remarks in print ── */
 #bill_remarks_print {
   display: block !important;
-  font-size: 7.5pt;
-  border-top: 1px dashed #aaa;
-  padding-top: 3px;
-  margin-top: 3px;
+  font-size: 8pt;
+  border: 1px dashed #c9a800;
+  border-radius: 4px;
+  padding: 4px 7px;
+  margin-top: 4px;
+  margin-bottom: 2px;
+  color: #5a4a00;
+}
+#bill_remarks_print strong {
   color: #333;
 }
