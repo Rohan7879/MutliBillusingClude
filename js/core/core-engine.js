@@ -141,162 +141,249 @@ function getStatusHtml(bill) {
 // Used for: bill view/print, WhatsApp share prep, multi-bill print
 // ═══════════════════════════════════════════════════════════════════════════
 
-function generateBillHtmlForView(data) {
-  const deductionSettings = data.DeductionSettings || {
-    kasarPercentage: 0.003,
-    kantanWeight: 0.6,
-    plasticWeight: 0.2,
-    utraiPercentage: 7,
-  };
-  let vakalRows = "";
-  const kasarLabel = `કાંટા`;
-  const utraiLabel = `ઉતરાઈ`;
+// ═══════════════════════════════════════════════════════════════════════════
+// BILL HTML GENERATOR (UPDATED TO MATCH PERFECT NATIVE LAYOUT)
+// ═══════════════════════════════════════════════════════════════════════════
 
-  let bardanHtml;
-  if (data["Kantan Weight"] !== undefined && data["Plastic Weight"] !== undefined) {
-    const kantanLabel = `કંતાન`;
-    const plasticLabel = `પ્લાસ્ટિક`;
-    bardanHtml = `
-      <div class="detail-item"><span class="detail-label">${kantanLabel}</span><span class="detail-value">-${data["Kantan Weight"]}</span></div>
-      <div class="detail-item"><span class="detail-label">${plasticLabel}</span><span class="detail-value">-${data["Plastic Weight"]}</span></div>
-    `;
-  } else {
-    const bardanLabel = `બારદાન`;
-    bardanHtml = `<div class="detail-item"><span class="detail-label">${bardanLabel}</span><span class="detail-value">-${data["Bardan Weight"]}</span></div>`;
+function generateBillHtmlForView(data) {
+  const inr = (num) => Number(num || 0).toLocaleString("en-IN");
+
+  // 1. Details Grid (Upper Boxes)
+  let detailsHtml = '<div class="details-grid" style="grid-template-columns: repeat(5, 1fr);">';
+  detailsHtml += `<div class="detail-item"><span class="detail-label">વેબ્રીજ</span><span class="detail-value">${inr(
+    data["Weighbridge Weight"]
+  )}</span></div>`;
+
+  if ((data["Kasar"] || 0) > 0) {
+    detailsHtml += `<div class="detail-item"><span class="detail-label">કાં.ક.</span><span class="detail-value">-${inr(
+      data["Kasar"]
+    )}</span></div>`;
   }
+
+  if ((data["Weighbridge Moisture Kg"] || 0) > 0) {
+    detailsHtml += `<div class="detail-item"><span class="detail-label">💧 મોઇ. (Moisture)</span><span class="detail-value">-${inr(
+      data["Weighbridge Moisture Kg"]
+    )} (${data["Weighbridge Moisture %"]}%)</span></div>`;
+  }
+
+  const appliedDeds = data["TemplateDeductionsApplied"] || [];
+  const weightDeds = appliedDeds.filter((d) => d.stage === "weight");
+  weightDeds.forEach((d) => {
+    const sign = d.applyAs === "add" ? "+" : "-";
+    detailsHtml += `<div class="detail-item"><span class="detail-label">${
+      d.name
+    }</span><span class="detail-value">${sign}${inr(d.impact)}</span></div>`;
+  });
+
+  if ((data["Kantan Weight"] || 0) > 0) {
+    detailsHtml += `<div class="detail-item"><span class="detail-label">કંતાન</span><span class="detail-value">-${inr(
+      data["Kantan Weight"]
+    )}</span></div>`;
+  }
+
+  if ((data["Plastic Weight"] || 0) > 0 || (data["Bardan Weight"] || 0) > 0) {
+    const label = data["Kantan Weight"] > 0 || data["Plastic Weight"] > 0 ? "પ્લાસ્ટિક" : "બારદાન";
+    const val = data["Plastic Weight"] || data["Bardan Weight"] || 0;
+    detailsHtml += `<div class="detail-item"><span class="detail-label">${label}</span><span class="detail-value">-${inr(
+      val
+    )}</span></div>`;
+  }
+
+  detailsHtml += `<div class="detail-item summary-item"><span class="detail-label">નેટ વજન</span><span class="detail-value" style="font-weight:bolder; font-size:2.5em;">${inr(
+    data["Net Weight"]
+  )}</span></div>`;
+  detailsHtml += `</div>`;
+
+  // 2. Vakal Table
+  const anyVakalMoisture = [1, 2, 3, 4, 5].some((i) => (data[`Vakal ${i} Moisture %`] || 0) > 0);
+  let tableHtml = `<table class="final-bill-table" style="margin: 10px 0;"><thead><tr><th>વકલ <span class="print-hide">(Item)</span></th><th>કટ્ટા <span class="print-hide">(Bags)</span></th><th>કિલો <span class="print-hide">(Kg)</span></th>`;
+  if (anyVakalMoisture)
+    tableHtml += `<th>💧 મોઇ. <span class="print-hide">(Moisture)</span></th><th>નેટ કિલો <span class="print-hide">(Net Kg)</span></th>`;
+  tableHtml += `<th>ભાવ <span class="print-hide">(Price)</span></th><th>રૂપિયા <span class="print-hide">(Amount)</span></th></tr></thead><tbody>`;
+
+  for (let i = 1; i <= 5; i++) {
+    const katta = data[`Vakal ${i} Katta`];
+    const kilo = data[`Vakal ${i} Kilo`];
+    if (data["Bill Type"] === "Loose" && i > 1) continue;
+    if (data["Bill Type"] !== "Loose" && (!katta || katta === 0) && (!kilo || kilo === 0) && i > 1) continue;
+
+    tableHtml += `<tr><td>વકલ ${i}</td><td>${katta === "-" ? "-" : inr(katta)}</td>`;
+    const mPct = data[`Vakal ${i} Moisture %`] || 0;
+    const mKg = data[`Vakal ${i} Moisture Kg`] || 0;
+    const rawKilo = (kilo || 0) + mKg;
+
+    if (anyVakalMoisture) {
+      tableHtml += `<td>${inr(rawKilo)}</td>`;
+      if (mPct > 0 && mKg > 0) {
+        tableHtml += `<td style="color:#e67e00; font-weight:700;">-${inr(
+          mKg
+        )}<br><small style="font-size:11px;">(${mPct}%)</small></td>`;
+        tableHtml += `<td style="font-weight:700; color:#005a9e;">${inr(kilo)}</td>`;
+      } else {
+        tableHtml += `<td>-</td><td>${inr(kilo)}</td>`;
+      }
+    } else {
+      tableHtml += `<td>${inr(kilo)}</td>`;
+    }
+    tableHtml += `<td>${inr(data[`Vakal ${i} Bhav`])}</td><td style="font-weight: bolder; font-size: 2em">${inr(
+      data[`Vakal ${i} Amount`]
+    )}</td></tr>`;
+  }
+  tableHtml += `</tbody></table>`;
+
+  if (anyVakalMoisture) {
+    const totalMoistureKg = [1, 2, 3, 4, 5].reduce((sum, i) => sum + (data[`Vakal ${i} Moisture Kg`] || 0), 0);
+    tableHtml += `<div class="detail-item" style="background:#fff8e7; border:2px solid #ffe08a; border-radius:10px; padding:12px; text-align:center; margin-top:10px;">
+          <span class="detail-label" style="color:#7a5700; font-weight:700;">💧 કુલ મોઇ. કપાત (Total Moisture Cut)</span>
+          <span class="detail-value" style="color:#e67e00; font-size:1.8em; font-weight:800; display:block; margin-top:4px;">-${inr(
+            totalMoistureKg
+          )} kg</span>
+      </div>`;
+  }
+
+  // Remarks
+  let remarksHtml = "";
+  if (data["Remarks"] && data["Remarks"].trim() !== "") {
+    remarksHtml = `<div style="margin-top:14px;padding:10px 14px;background:#fffbf0;border:1.5px dashed #ffe08a;border-radius:8px;font-size:13px;color:#5a4a00;"><strong>📝 Remarks:</strong> ${data["Remarks"]}</div>`;
+  }
+
+  // 3. Supply Type & Bags
+  let supplyTypeHtml = "";
+  const productLabel = data["ProductTemplate"] ? `${data["ProductTemplate"]}ના કટ્ટા` : "કટ્ટા";
 
   if (data["Bill Type"] === "Loose") {
-    vakalRows = `<tr><td>Loose Supply</td><td>-</td><td>${data["Vakal 1 Kilo"]}</td><td>${
-      data["Vakal 1 Bhav"]
-    }</td><td style="font-weight:bolder;">${Number(data["Vakal 1 Amount"]).toLocaleString("en-IN")}</td></tr>`;
+    supplyTypeHtml = `<h3 style="text-align: center; font-size: 2.5em; font-weight: bolder; color: #000000; margin: 20px 0 0 0;">લૂઝ</h3>`;
   } else {
-    for (let i = 1; i <= 5; i++) {
-      const kattaValue = data[`Vakal ${i} Katta`];
-      const kiloValue = data[`Vakal ${i} Kilo`];
-      if (kattaValue > 0 || kiloValue > 0) {
-        const varietyLabel = data[`Vakal ${i} Variety`]
-          ? ` <small style="font-weight:400;">(${data[`Vakal ${i} Variety`]})</small>`
-          : "";
-        vakalRows += `<tr><td>વકલ ${i}${varietyLabel}</td><td>${data[`Vakal ${i} Katta`]}</td><td>${
-          data[`Vakal ${i} Kilo`]
-        }</td><td>${data[`Vakal ${i} Bhav`]}</td><td style="font-weight:bolder;">${Number(
-          data[`Vakal ${i} Amount`]
-        ).toLocaleString("en-IN")}</td></tr>`;
-      }
-    }
-  }
-
-  let expensesHtml = "";
-  if (data["Expenses"]) {
-    try {
-      const expenses = JSON.parse(data["Expenses"]);
-      if (expenses.length > 0) {
-        expensesHtml = `<div class="totals-grid expenses-grid">`;
-        expenses.forEach((exp) => {
-          expensesHtml += `<div class="detail-item"><span class="detail-label">${exp.name}</span><span class="detail-value">-${exp.amount}</span></div>`;
-        });
-        expensesHtml += `</div>`;
-      }
-    } catch (e) {
-      console.error("Error parsing expenses:", e);
-    }
-  }
-
-  let headerBagCountHtml = "";
-  if (data["Bill Type"] === "Bag") {
     const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
     const totalKhali = (data["Khali 600"] || 0) + (data["Khali 200"] || 0);
     const grandTotal = totalBharela + totalKhali;
 
+    let supplyText =
+      data["Supply Type"] === "કંતાન પેક"
+        ? `${productLabel} - ${totalBharela} કંતાન પેક`
+        : `${productLabel} - ${totalBharela} લૂઝ`;
+    supplyTypeHtml = `<h3 style="text-align: center; font-size: 2.5em; font-weight: bolder; color: #000000; margin: 20px 0 0 0;">${supplyText}</h3>`;
+
     if (grandTotal > 0) {
-      headerBagCountHtml = `
-            <div class="meta-item bag-count-header" style="text-align: center; font-size: x-large">
-                <span>${totalBharela} (ભરેલા)</span> + 
-                <span>${totalKhali} (ખાલી)</span> = 
-                <span>${grandTotal} (કુલ)</span>
-            </div>
-        `;
+      supplyTypeHtml += `<div style="text-align: center; font-size: 2em; font-weight: 800; color: #003d6e; padding: 5px 0 10px;">${totalBharela} (ભરેલા) + ${totalKhali} (ખાલી) = ${grandTotal} (કુલ)</div>`;
     }
   }
 
-  let supplyTypeHtml = "";
-  let displayText = "";
-  const productLabel = data["ProductTemplate"] ? `${data["ProductTemplate"]}ના કટ્ટા` : "કટ્ટા";
-
-  if (data["Bill Type"] === "Loose") {
-    displayText = "લૂઝ";
-  } else if (data["Bill Type"] === "Bag" && data["Supply Type"] === "કંતાન પેક") {
-    const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
-    displayText = `${productLabel} - ${totalBharela} કંતાન પેક`;
-  } else if (data["Bill Type"] === "Bag" && data["Supply Type"] === "લૂઝ") {
-    const totalBharela = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
-    displayText = `${productLabel} - ${totalBharela} લૂઝ`;
+  // 4. Totals Grid (Lower Boxes)
+  let totalsHtml = '<div class="totals-grid">';
+  totalsHtml += `<div class="detail-item"><span class="detail-label">ટોટલ રૂપિયા</span><span class="detail-value">${inr(
+    data["Total Amount"]
+  )}</span></div>`;
+  if ((data["Utrāī"] || 0) > 0) {
+    totalsHtml += `<div class="detail-item"><span class="detail-label">ઉતરાઈ</span><span class="detail-value">-${inr(
+      data["Utrāī"]
+    )}</span></div>`;
   }
 
-  if (displayText) {
-    supplyTypeHtml = `<h3 style="text-align: center; font-size: 2.5em;font-weight: bolder; color: #000000; margin: auto;">${displayText}</h3>`;
+  const expenses = (function () {
+    try {
+      return JSON.parse(data["Expenses"] || "[]");
+    } catch (e) {
+      return [];
+    }
+  })();
+  expenses.forEach((exp) => {
+    totalsHtml += `<div class="detail-item"><span class="detail-label">${
+      exp.name
+    }</span><span class="detail-value">-${inr(exp.amount)}</span></div>`;
+  });
+
+  const amountDeds = appliedDeds.filter((d) => d.stage !== "weight");
+  amountDeds.forEach((d) => {
+    const sign = d.applyAs === "add" ? "+" : "-";
+    totalsHtml += `<div class="detail-item"><span class="detail-label">${
+      d.name
+    }</span><span class="detail-value">${sign}₹${inr(d.impact)}</span></div>`;
+  });
+
+  if ((data["Truck Freight"] || 0) > 0) {
+    totalsHtml += `<div class="detail-item"><span class="detail-label">ટ્રક ભાડું (Freight)</span><span class="detail-value" style="color: #28a745;">+${inr(
+      data["Truck Freight"]
+    )}</span></div>`;
   }
+
+  totalsHtml += `<div class="detail-item final-total-box" style="grid-column: 1 / -1;"><span class="detail-label">ફાઇનલ ટોટલ</span><span class="detail-value" style="font-weight:bolder; font-size: 3em;">${inr(
+    data["Final Total"]
+  )}</span></div>`;
+  totalsHtml += `</div>`;
 
   const customerDetailsHtml = `
-      <div class="print-only-details" style="font-size: 11pt">
-        <div class="detail-line">
-          <span class="detail-label-enter">નામ :- </span>
-          <span class="detail-value-line">${data["Customer Name"]}</span>
-        </div>
-        <div class="detail-line">
-        <span class="detail-label-enter">ગામ :- </span>
-        <span class="detail-value-line">${data["Village"]}</span>
-        </div>
-        <div class="detail-line">
-          <span class="detail-label-enter">ગાડી નં :- </span>
-          <span class="detail-value-line">${data["Vehicle No"]}</span>
-        </div>
-        <div class="detail-line" >
-          <span class="detail-label-enter">દલાલ :- </span>
-          <span class="detail-value-line">${data["Broker"]}</span>
-        </div>
-      </div>
-
-     ${headerBagCountHtml}`;
-
-  return `<div class="container" style="margin:0;box-shadow:none;border:none;">
-    <div class="header"><h1>Final Bill</h1></div>
-     <div class="bill-meta">
-      <div class="meta-item"> <span>${data["Serial No"]}</span></div>
-      <div class="meta-item"><span>${data["Date"]}</span></div>
-    </div>
-    <div class="print-only-details" style="display:block;">${customerDetailsHtml}</div>
-    <div class="details-grid" style="grid-template-columns: repeat(5, 1fr);">
-      <div class="detail-item"><span class="detail-label">વેબ્રીજ</span><span class="detail-value">${
-        data["Weighbridge Weight"]
+    <div class="print-only-details" style="font-size: 11pt; display:block;">
+      <div class="detail-line"><span class="detail-label-enter">નામ :- </span><span class="detail-value-line">${
+        data["Customer Name"] || ""
       }</span></div>
-      <div class="detail-item"><span class="detail-label">${kasarLabel}</span><span class="detail-value">-${
-    data["Kasar"]
-  }</span></div>
-      ${bardanHtml} 
-      <div class="detail-item summary-item"><span class="detail-label">નેટ વજન</span><span class="detail-value" style="font-weight:bolder;">${
-        data["Net Weight"]
+      <div class="detail-line"><span class="detail-label-enter">ગામ :- </span><span class="detail-value-line">${
+        data["Village"] || ""
+      }</span></div>
+      <div class="detail-line"><span class="detail-label-enter">ગાડી નં :- </span><span class="detail-value-line">${
+        data["Vehicle No"] || ""
+      }</span></div>
+      <div class="detail-line"><span class="detail-label-enter">દલાલ :- </span><span class="detail-value-line">${
+        data["Broker"] || ""
       }</span></div>
     </div>
-    <table class="final-bill-table"><thead><tr><th>વકલ</th><th>કટ્ટા</th><th>કિલો</th><th>ભાવ</th><th>રૂપિયા</th></tr></thead><tbody>${vakalRows}</tbody></table>
-     ${supplyTypeHtml}
-    <div class="totals-grid">
-      <div class="detail-item"><span class="detail-label">ટોટલ રૂપિયા</span><span class="detail-value">${Number(
-        data["Total Amount"]
-      ).toLocaleString("en-IN")}</span></div>
-      <div class="detail-item"><span class="detail-label">${utraiLabel}</span><span class="detail-value">-${Number(
-    data["Utrāī"]
-  ).toLocaleString("en-IN")}</span></div>
-      ${expensesHtml}
-      <div class="detail-item final-total-box"><span class="detail-label">ફાઇનલ ટોટલ</span><span class="detail-value" style="font-weight:bolder;">${Number(
-        data["Final Total"]
-      ).toLocaleString("en-IN")}</span></div>
+  `;
+
+  return `<div class="container">
+    <div class="header" style="display:none;"><h1>Final Bill</h1></div>
+    <div class="bill-meta">
+      <div class="meta-item"> <span>${data["Serial No"] || ""}</span></div>
+      <div class="meta-item"><span>${data["Date"] || ""}</span></div>
     </div>
+    ${customerDetailsHtml}
+    ${detailsHtml}
+    ${tableHtml}
+    ${remarksHtml}
+    ${supplyTypeHtml}
+    ${totalsHtml}
   </div>`;
 }
 
+function generateUniversalBillHTML(data) {
+  const bodyHtml = generateBillHtmlForView(data);
+
+  let vakalRowCount = data["Bill Type"] === "Loose" ? 1 : 0;
+  if (data["Bill Type"] !== "Loose") {
+    for (let i = 1; i <= 5; i++) {
+      if ((data[`Vakal ${i} Katta`] || 0) > 0 || (data[`Vakal ${i} Kilo`] || 0) > 0) vakalRowCount++;
+    }
+  }
+
+  let expenseRowCount = 0;
+  try {
+    expenseRowCount = (JSON.parse(data["Expenses"]) || []).length;
+  } catch (e) {}
+
+  const templateDeductionCount = (data["TemplateDeductionsApplied"] || []).length;
+  const hasWeighbridgeMoisture = (data["Weighbridge Moisture Kg"] || 0) > 0 ? 1 : 0;
+  const hasRemarks = data["Remarks"] && data["Remarks"].trim() !== "" ? 2 : 0;
+
+  const totalWeight =
+    vakalRowCount + expenseRowCount + templateDeductionCount * 1.5 + hasWeighbridgeMoisture + hasRemarks;
+  const pageSize = totalWeight > 6 ? "A4" : "A5";
+  const amountInWords = typeof numberToWords === "function" ? numberToWords(data["Final Total"]) : "";
+
+  // Insert amount in words right before the final closing div safely
+  const insertPos = bodyHtml.lastIndexOf("</div>");
+  const finalHtml =
+    bodyHtml.substring(0, insertPos) +
+    `<div class="amount-in-words" style="font-size:8pt;font-style:italic;color:#333;border-top:1px dashed #aaa;padding-top:3px;margin-top:4px;">Amount in words: ${amountInWords}</div>` +
+    bodyHtml.substring(insertPos);
+
+  return `
+    <style>
+      @page { size: ${pageSize} portrait; margin: ${pageSize === "A4" ? "10mm" : "0.5cm"}; }
+      tr { page-break-inside: avoid; break-inside: avoid; }
+    </style>
+    ${finalHtml}`;
+}
 // ═══════════════════════════════════════════════════════════════════════════
-// MULTI-BILL PRINT (was in utils.js)
+// MULTI-BILL PRINT (Updated with Universal Print Engine & Page Breaks)
 // ═══════════════════════════════════════════════════════════════════════════
 
 async function printSelectedBills() {
@@ -319,7 +406,10 @@ async function printSelectedBills() {
     let billsHtml = "";
     billDocs.forEach((doc) => {
       if (doc.exists) {
-        billsHtml += generateBillHtmlForView(doc.data());
+        // Yahan naya Universal Print Engine lagaya hai (Amount in words + A4/A5 sizing)
+        billsHtml += generateUniversalBillHTML(doc.data());
+        // Har bill ke baad ek strict Page Break taaki agla bill naye paper pe aaye
+        billsHtml += '<div style="page-break-after: always; break-after: page; clear: both;"></div>';
       }
     });
 
@@ -333,12 +423,8 @@ async function printSelectedBills() {
       <html>
         <head>
           <title>Print Bills</title>
+          <link rel="stylesheet" href="css/main.css">
           <link rel="stylesheet" href="css/print.css">
-          <style>
-            @media print {
-              .container { page-break-after: auto; }
-            }
-          </style>
         </head>
         <body>
           ${billsHtml}
@@ -407,6 +493,7 @@ const DEFAULT_TOTALS_GRID_ORDER = [
   "template_deductions_amount",
   "freight_item",
   "final_total_box_container",
+  "broker_box",
 ];
 
 // Human-readable labels, used by the Settings reorder UI
@@ -423,6 +510,7 @@ const PRINT_LAYOUT_LABELS = {
   expenses_container: "Expenses (Kholai, etc.)",
   template_deductions_amount: "Template Deductions — Amount (GST, etc.)",
   freight_item: "ટ્રક ભાડું (Truck Freight)",
+  broker_box: "🤝 દલાલ (Broker & Commission)",
   final_total_box_container: "ફાઇનલ ટોટલ (Final Total)",
 };
 

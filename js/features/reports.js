@@ -102,7 +102,11 @@ function daily(bills) {
     byDate[b.Date].count++;
     byDate[b.Date].weight += b["Net Weight"] || 0;
     byDate[b.Date].amount += b["Final Total"] || 0;
-    for (let i = 1; i <= 5; i++) byDate[b.Date].bags += b[`Vakal ${i} Katta`] || 0;
+    if (b["Bill Type"] === "Loose") {
+      byDate[b.Date].bags += Math.round((b["Net Weight"] || 0) / 50);
+    } else {
+      for (let i = 1; i <= 5; i++) byDate[b.Date].bags += Number(b[`Vakal ${i} Katta`]) || 0;
+    }
   });
   const rows = Object.entries(byDate)
     .sort()
@@ -159,7 +163,11 @@ function product(bills) {
     byProduct[p].count++;
     byProduct[p].weight += b["Net Weight"] || 0;
     byProduct[p].amount += b["Final Total"] || 0;
-    for (let i = 1; i <= 5; i++) byProduct[p].bags += b[`Vakal ${i} Katta`] || 0;
+    if (b["Bill Type"] === "Loose") {
+      byProduct[p].bags += Math.round((b["Net Weight"] || 0) / 50);
+    } else {
+      for (let i = 1; i <= 5; i++) byProduct[p].bags += Number(b[`Vakal ${i} Katta`]) || 0;
+    }
   });
   const rows = Object.entries(byProduct)
     .sort((a, b) => b[1].amount - a[1].amount)
@@ -180,7 +188,11 @@ function broker(bills) {
     byBroker[n].count++;
     byBroker[n].amount += b["Final Total"] || 0;
     byBroker[n].commission += b["BrokerCommission"] || 0;
-    for (let i = 1; i <= 5; i++) byBroker[n].bags += b[`Vakal ${i} Katta`] || 0;
+    if (b["Bill Type"] === "Loose") {
+      byBroker[n].bags += Math.round((b["Net Weight"] || 0) / 50);
+    } else {
+      for (let i = 1; i <= 5; i++) byBroker[n].bags += Number(b[`Vakal ${i} Katta`]) || 0;
+    }
   });
   const rows = Object.entries(byBroker)
     .sort((a, b) => b[1].commission - a[1].commission)
@@ -248,7 +260,11 @@ function monthly(bills) {
     byMonth[key].count++;
     byMonth[key].amount += b["Final Total"] || 0;
     byMonth[key].weight += b["Net Weight"] || 0;
-    for (let i = 1; i <= 5; i++) byMonth[key].bags += b[`Vakal ${i} Katta`] || 0;
+    if (b["Bill Type"] === "Loose") {
+      byMonth[key].bags += Math.round((b["Net Weight"] || 0) / 50);
+    } else {
+      for (let i = 1; i <= 5; i++) byMonth[key].bags += Number(b[`Vakal ${i} Katta`]) || 0;
+    }
   });
   const months = ["", "Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
   const rows = Object.entries(byMonth)

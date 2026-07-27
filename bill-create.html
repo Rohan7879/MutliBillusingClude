@@ -1364,9 +1364,26 @@
                 <input
                   type="text"
                   name="broker"
+                  id="broker_input_field"
                   oninput="this.value=this.value.toUpperCase()"
                   placeholder="Broker..."
+                  autocomplete="off"
                 />
+                <!-- Yeh raha autocomplete dropdown box -->
+                <div
+                  id="broker-suggestions"
+                  style="
+                    position: absolute;
+                    background: white;
+                    border: 1px solid #ced4da;
+                    border-radius: 6px;
+                    max-height: 150px;
+                    overflow-y: auto;
+                    width: 100%;
+                    z-index: 1000;
+                    display: none;
+                  "
+                ></div>
               </div>
             </div>
           </div>
@@ -1502,63 +1519,61 @@
                     </div>
                   </td>
                 </tr>
-                <!-- WEIGHBRIDGE MOISTURE -->
-                <tr>
-                  <td colspan="5" style="padding: 6px 0">
-                    <div class="trow" style="background: #fff8e7; border-color: #ffe08a">
-                      <div class="trow-label" style="color: #7a5700">💧 વેબ્રીજ મોઇશ્ચર (Weighbridge Moisture)</div>
-                      <div style="display: flex; align-items: center; gap: 10px">
-                        <label class="switch"
-                          ><input
-                            type="checkbox"
-                            name="deduct_weighbridge_moisture"
-                            id="deduct_wb_moisture_toggle" /><span class="slider"></span
-                        ></label>
-                      </div>
-                    </div>
-                    <div
-                      id="wb_moisture_input"
-                      style="
-                        display: none;
-                        margin-top: 8px;
-                        padding: 12px 14px;
-                        background: #fffbf0;
-                        border: 1.5px solid #ffe08a;
-                        border-radius: 9px;
-                      "
-                    >
-                      <label
-                        style="font-weight: 700; font-size: 13px; color: #7a5700; display: block; margin-bottom: 6px"
-                        >💧 Moisture % (વેબ્રીજ પછી)</label
-                      >
-                      <div style="display: flex; align-items: center; gap: 10px">
-                        <input
-                          type="number"
-                          name="weighbridge_moisture_pct"
-                          step="0.1"
-                          min="0"
-                          max="100"
-                          placeholder="e.g. 2"
-                          style="
-                            width: 140px;
-                            padding: 10px 12px;
-                            border: 1.5px solid #ffe08a;
-                            border-radius: 8px;
-                            font-size: 16px;
-                            font-weight: 700;
-                            font-family: inherit;
-                            text-align: center;
-                          "
-                        />
-                        <span style="font-weight: 700; color: #7a5700; font-size: 15px">%</span>
-                        <span style="color: #6c757d; font-size: 13px; font-weight: 600" id="wb_moisture_preview"></span>
-                      </div>
-                    </div>
-                  </td>
-                </tr>
               </tbody>
             </table>
           </div>
+          <!-- WEIGHBRIDGE MOISTURE -->
+          <tr>
+            <td colspan="5" style="padding: 6px 0">
+              <div class="trow" style="background: #fff8e7; border-color: #ffe08a">
+                <div class="trow-label" style="color: #7a5700">💧 વેબ્રીજ મોઇશ્ચર (Weighbridge Moisture)</div>
+                <div style="display: flex; align-items: center; gap: 10px">
+                  <label class="switch"
+                    ><input type="checkbox" name="deduct_weighbridge_moisture" id="deduct_wb_moisture_toggle" /><span
+                      class="slider"
+                    ></span
+                  ></label>
+                </div>
+              </div>
+              <div
+                id="wb_moisture_input"
+                style="
+                  display: none;
+                  margin-top: 8px;
+                  padding: 12px 14px;
+                  background: #fffbf0;
+                  border: 1.5px solid #ffe08a;
+                  border-radius: 9px;
+                "
+              >
+                <label style="font-weight: 700; font-size: 13px; color: #7a5700; display: block; margin-bottom: 6px"
+                  >💧 Moisture % (વેબ્રીજ પછી)</label
+                >
+                <div style="display: flex; align-items: center; gap: 10px">
+                  <input
+                    type="number"
+                    name="weighbridge_moisture_pct"
+                    step="0.1"
+                    min="0"
+                    max="100"
+                    placeholder="e.g. 2"
+                    style="
+                      width: 140px;
+                      padding: 10px 12px;
+                      border: 1.5px solid #ffe08a;
+                      border-radius: 8px;
+                      font-size: 16px;
+                      font-weight: 700;
+                      font-family: inherit;
+                      text-align: center;
+                    "
+                  />
+                  <span style="font-weight: 700; color: #7a5700; font-size: 15px">%</span>
+                  <span style="color: #6c757d; font-size: 13px; font-weight: 600" id="wb_moisture_preview"></span>
+                </div>
+              </div>
+            </td>
+          </tr>
 
           <!-- Vakal — MUST keep id="vakal_section" as tbody for JS -->
           <div class="sc">

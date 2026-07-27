@@ -574,9 +574,12 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
   data["Vehicle No"] = formData.get("vehicle_no");
   data["Village"] = formData.get("village");
   data["Broker"] = formData.get("broker");
+  const brokerName = formData.get("broker") ? formData.get("broker").trim() : "";
+  data["brokerId"] = brokerName ? brokerName.toUpperCase().replace(/\s+/g, "_") : "";
   data["Net Weight"] = net_vajan;
   data["Total Amount"] = total;
   data["Utrāī"] = finalutrai;
+
   // 3. Save the Truck Freight value to the data object
   data["Truck Freight"] = truckFreight;
   data["Final Total"] = finaltotal;
@@ -675,18 +678,27 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
   data["Remarks"] = formData.get("bill_remarks") || "";
 
   // ── Broker Commission ──
+  // --- Broker Commission (Safe against Loose/Bag & NaN) ---
   const applyBrokerCommission = formData.get("apply_broker_commission") !== null;
   const commissionPerBag = Number(formData.get("broker_commission_per_bag")) || 0;
+
   if (applyBrokerCommission && commissionPerBag > 0 && data["Broker"]) {
-    const totalBags = [1, 2, 3, 4, 5].reduce((s, i) => s + (data[`Vakal ${i} Katta`] || 0), 0);
+    let totalBags = 0;
+    if (data["Bill Type"] === "Loose") {
+      totalBags = Math.round((Number(data["Net Weight"]) || 0) / 50);
+    } else {
+      totalBags = [1, 2, 3, 4, 5].reduce((s, i) => s + (Number(data[`Vakal ${i} Katta`]) || 0), 0);
+    }
+
     const totalCommission = Math.round(totalBags * commissionPerBag);
     data["BrokerCommission"] = totalCommission;
     data["BrokerCommissionPerBag"] = commissionPerBag;
-    data["Final Total"] = data["Final Total"] - totalCommission;
+
+    const currentFinal = Number(data["Final Total"]) || 0;
+    data["Final Total"] = currentFinal - totalCommission;
   } else {
     data["BrokerCommission"] = 0;
   }
-
   // ═══════════════════════════════════════════════════════════════════════
   // PHASE 5 (items #21, #22) — New items[] schema + supplierName alias.
   // ADDITIVE ONLY: every flat "Vakal N ..." field above is left completely
@@ -871,6 +883,9 @@ async function collectData() {
       const closeOrderOverride = document.getElementById("close_order_checkbox")?.checked || false;
       await updateOrderDeliveredQty(data, closeOrderOverride);
     }
+    if (typeof updateBrokerCommission === "function") {
+      await updateBrokerCommission(data);
+    }
 
     window.location.href = `final.html?id=${docRef.id}`;
   } catch (error) {
@@ -978,4 +993,61 @@ async function updateData(docId) {
 document.addEventListener("DOMContentLoaded", async () => {
   await fetchSettings(); // 1. Wait for the settings to load
   initializeIndexPage(); // 2. Then, set up the rest of the page
+});
+document.addEventListener("DOMContentLoaded", () => {
+  const bInput = document.getElementById("broker_input_field");
+  const bBox = document.getElementById("broker-suggestions");
+
+  if (bInput && bBox) {
+    bInput.addEventListener("input", async function () {
+      const val = this.value.trim().toUpperCase();
+      if (!val) {
+        bBox.style.display = "none";
+        return;
+      }
+
+      try {
+        const snap = await db.collection("brokers").get();
+        const uniqueBrokers = new Map(); // ID-based mapping taaki duplicate kabhi na aaye
+
+        snap.docs.forEach((d) => {
+          const data = d.data();
+          const name = (data.name || "").trim();
+          if (!name) return;
+
+          // Unique normalized ID generate karo
+          const brokerId = (data.brokerId || name).toUpperCase().replace(/\s+/g, "_");
+
+          if (name.toUpperCase().includes(val)) {
+            uniqueBrokers.set(brokerId, name);
+          }
+        });
+
+        const matches = Array.from(uniqueBrokers.values());
+
+        if (matches.length > 0) {
+          bBox.innerHTML = matches
+            .map(
+              (m) => `
+            <div style="padding: 9px 14px; cursor: pointer; border-bottom: 1.5px solid #f0f0f0; background: white; font-weight: 600; color: #333;" 
+                 onmousedown="document.getElementById('broker_input_field').value='${m}'; document.getElementById('broker-suggestions').style.display='none';">
+              🤝 ${m}
+            </div>`
+            )
+            .join("");
+          bBox.style.display = "block";
+        } else {
+          bBox.style.display = "none";
+        }
+      } catch (e) {
+        console.error("Broker autocomplete error:", e);
+      }
+    });
+
+    bInput.addEventListener("blur", () => {
+      setTimeout(() => {
+        bBox.style.display = "none";
+      }, 200);
+    });
+  }
 });

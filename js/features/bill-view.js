@@ -349,6 +349,26 @@ function displayData(data) {
     existingFreightBox.remove();
   }
 
+  const existingBrokerBox = document.getElementById("broker_box");
+  if (data["Broker"] && data["Broker"].trim() !== "") {
+    const totalsGrid = document.querySelector(".totals-grid");
+    const finalTotalBox = document.querySelector(".final-total-box-container");
+    if (totalsGrid && finalTotalBox && !existingBrokerBox) {
+      const brokerItem = document.createElement("div");
+      brokerItem.id = "broker_box";
+      brokerItem.classList.add("detail-item");
+      brokerItem.innerHTML = `
+        <span class="detail-label">દલાલ</span>
+        <span class="detail-value" style="color: #005a9e;">-${Number(data["BrokerCommission"] || 0).toLocaleString(
+          "en-IN"
+        )}</span>
+      `;
+      totalsGrid.insertBefore(brokerItem, finalTotalBox);
+    }
+  } else if (existingBrokerBox) {
+    existingBrokerBox.remove();
+  }
+
   if (typeof applyPrintLayoutOrder === "function") applyPrintLayoutOrder();
   renderCompanyHeader(data);
 
@@ -985,6 +1005,18 @@ async function buildBillPDFNative(billData) {
     } else if (key === "final_total_box_container") {
       y += 2;
       totalsRow("final_total", "Rs " + inr(billData["Final Total"]), { big: true, bold: true });
+    } else if (key === "broker_box" && billData["Broker"]) {
+      y += 6;
+      doc.setFont("Helvetica", "bold");
+      doc.setFontSize(10);
+      doc.text(
+        `Broker: ${billData["Broker"]} - Commission: Rs ${Number(billData["BrokerCommission"] || 0).toLocaleString(
+          "en-IN"
+        )}`,
+        mx,
+        y
+      );
+      y += 6;
     }
   }
   y += 4;
