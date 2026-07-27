@@ -597,18 +597,190 @@
     <!-- end page-wrapper -->
 
     <!-- View Bill Modal -->
+    <!-- View Bill Modal (Dito-to-Dito Final.html Synchronized) -->
+    <!-- View Bill Modal -->
     <div id="view-bill-modal" class="modal-overlay" style="display: none">
-      <div class="modal-content">
-        <div id="modal-bill-content"></div>
-        <div class="modal-button-container">
-          <button id="modal-download-btn" class="button">⬇️ Download PDF</button>
-          <button onclick="closeBillView()" class="button close-modal-btn">✕ Close</button>
+      <div
+        class="modal-content"
+        style="
+          width: 800px;
+          max-width: 95vw;
+          background: #fff;
+          padding: 20px;
+          border-radius: 12px;
+          max-height: 90vh;
+          overflow-y: auto;
+        "
+      >
+        <!-- Yeh wahi exact structure hai jo final.html mein hota hai -->
+        <div id="modal-bill-content">
+          <div id="company-header-box" style="text-align: center; margin-bottom: 15px; display: none"></div>
+
+          <div
+            style="
+              display: flex;
+              justify-content: space-between;
+              font-weight: bold;
+              font-size: 16px;
+              margin-bottom: 10px;
+            "
+          >
+            <span id="display_serial_no"></span>
+            <span id="display_date"></span>
+          </div>
+
+          <div class="bill-meta" style="margin-bottom: 15px; font-size: 14px; line-height: 1.6">
+            <div><strong>નામ :-</strong> <span id="display_customer_name"></span></div>
+            <div><strong>ગામ :-</strong> <span id="display_village"></span></div>
+            <div><strong>ગાડી નં :-</strong> <span id="display_vehicle_no"></span></div>
+            <div><strong>દલાલ :-</strong> <span id="display_broker"></span></div>
+          </div>
+
+          <!-- Weights Grid -->
+          <div
+            class="details-grid"
+            style="display: grid; grid-template-columns: repeat(5, 1fr); gap: 10px; margin-bottom: 15px"
+          >
+            <div class="detail-item" id="weighbridge_box">
+              <span class="detail-label">વેબ્રીજ</span
+              ><span class="detail-value" id="display_weighbridge_weight">0</span>
+            </div>
+            <div class="detail-item" id="kasar_box">
+              <span class="detail-label">કાં.ક.</span><span class="detail-value" id="display_kasar">0</span>
+            </div>
+            <div class="detail-item" id="kantan_box">
+              <span class="detail-label">કંતાન</span><span class="detail-value" id="display_kantan_weight">0</span>
+            </div>
+            <div class="detail-item" id="plastic_box">
+              <span class="detail-label" id="plastic_label">પ્લાસ્ટિક</span
+              ><span class="detail-value" id="display_plastic_weight">0</span>
+            </div>
+            <div class="detail-item summary-item">
+              <span class="detail-label">નેટ વજન</span><span class="detail-value" id="display_net_weight">0</span>
+            </div>
+          </div>
+
+          <!-- Vakal Table -->
+          <table class="final-bill-table" style="width: 100%; border-collapse: collapse; margin-bottom: 15px">
+            <thead>
+              <tr style="background: #005a9e; color: white; text-align: center">
+                <th>વકલ (Item)</th>
+                <th>કટ્ટા (Bags)</th>
+                <th id="th_net_kilo" style="display: none">ચоખ્ખું કીલો</th>
+                <th id="th_moisture" style="display: none">મોઇ. કપાત</th>
+                <th>કિલો (Kg)</th>
+                <th>ભાવ (Price)</th>
+                <th>રૂપિયા (Amount)</th>
+              </tr>
+            </thead>
+            <tbody id="modal_vakal_tbody">
+              <tr id="vakal_row_1">
+                <td>વકલ ૧</td>
+                <td id="display_vakal_1_katta">0</td>
+                <td id="display_vakal_1_kilo">0</td>
+                <td id="display_vakal_1_bhav">0</td>
+                <td id="display_vakal_1_amount">0</td>
+              </tr>
+              <tr id="vakal_row_2">
+                <td>વકલ ૨</td>
+                <td id="display_vakal_2_katta">0</td>
+                <td id="display_vakal_2_kilo">0</td>
+                <td id="display_vakal_2_bhav">0</td>
+                <td id="display_vakal_2_amount">0</td>
+              </tr>
+              <tr id="vakal_row_3">
+                <td>વકલ ૩</td>
+                <td id="display_vakal_3_katta">0</td>
+                <td id="display_vakal_3_kilo">0</td>
+                <td id="display_vakal_3_bhav">0</td>
+                <td id="display_vakal_3_amount">0</td>
+              </tr>
+              <tr id="vakal_row_4">
+                <td>વકલ ૪</td>
+                <td id="display_vakal_4_katta">0</td>
+                <td id="display_vakal_4_kilo">0</td>
+                <td id="display_vakal_4_bhav">0</td>
+                <td id="display_vakal_4_amount">0</td>
+              </tr>
+              <tr id="vakal_row_5">
+                <td>વકલ ૫</td>
+                <td id="display_vakal_5_katta">0</td>
+                <td id="display_vakal_5_kilo">0</td>
+                <td id="display_vakal_5_bhav">0</td>
+                <td id="display_vakal_5_amount">0</td>
+              </tr>
+            </tbody>
+          </table>
+
+          <!-- Totals Grid -->
+          <div
+            class="totals-grid"
+            style="display: grid; grid-template-columns: repeat(3, 1fr); gap: 10px; margin-bottom: 15px"
+          >
+            <div class="detail-item">
+              <span class="detail-label">ટોટલ રૂપિયા</span><span class="detail-value" id="display_total_amount">0</span>
+            </div>
+            <div class="detail-item">
+              <span class="detail-label">ઉતરાઈ</span><span class="detail-value" id="display_utrai">0</span>
+            </div>
+            <div
+              class="detail-item final-total-box-container"
+              id="final_total_box_container"
+              style="background: #005a9e; color: white; padding: 10px; text-align: center"
+            >
+              <span class="detail-label">ફાઇનલ ટોટલ</span>
+              <span class="detail-value" id="display_final_total" style="font-size: 1.5em; font-weight: bold">0</span>
+            </div>
+          </div>
+        </div>
+
+        <!-- Modal Buttons: Sirf Download aur Close -->
+        <div
+          class="modal-button-container"
+          style="
+            display: flex;
+            justify-content: flex-end;
+            gap: 10px;
+            margin-top: 15px;
+            border-top: 1px solid #dee2e6;
+            padding-top: 10px;
+          "
+        >
+          <button
+            id="modal-download-btn"
+            class="button"
+            style="
+              background: #005a9e;
+              color: white;
+              padding: 8px 16px;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+            "
+          >
+            ⬇️ Download PDF
+          </button>
+          <button
+            onclick="closeBillView()"
+            class="button close-modal-btn"
+            style="
+              background: #6c757d;
+              color: white;
+              padding: 8px 16px;
+              border: none;
+              border-radius: 6px;
+              cursor: pointer;
+            "
+          >
+            ✕ Close
+          </button>
         </div>
       </div>
     </div>
     <div id="pdf-render-container" style="display: none"></div>
-
     <script src="js/features/backup.js" defer></script>
+    <script src="js/features/bill-view.js"></script>
+    <!-- Path apne project folder ke hisab se dekh lena -->
     <script src="js/features/themes.js" defer></script>
 
     <!-- Theme Panel -->

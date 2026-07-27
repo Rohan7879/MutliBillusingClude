@@ -1266,3 +1266,25 @@ function prepareAndPrint(copyType = "both") {
 
 // MOVED to core-engine.js — fetchSettings() is a shared utility, now loaded
 // on this page via core-engine.js.
+// Check karo ki page modal ke andar iframe mein khula hai ya nahi
+const urlParams = new URLSearchParams(window.location.search);
+if (urlParams.get("embed") === "true") {
+  window.addEventListener("DOMContentLoaded", () => {
+    const btnContainer = document.querySelector(".button-container");
+    if (btnContainer) {
+      Array.from(btnContainer.children).forEach((btn) => {
+        const text = btn.innerText.toLowerCase();
+
+        // Check karo ki button PDF, Print ya WhatsApp ka hai ya nahi
+        const isPdf = text.includes("pdf");
+        const isPrint = text.includes("print") || text.includes("પ્રિન્ટ");
+        const isWhatsapp = text.includes("whatsapp") || text.includes("whp");
+
+        // Agar in teeno mein se kuch bhi nahi hai, tabhi hide karo
+        if (!isPdf && !isPrint && !isWhatsapp) {
+          btn.style.display = "none";
+        }
+      });
+    }
+  });
+}

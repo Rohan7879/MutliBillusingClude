@@ -216,49 +216,25 @@ function goToPreviousPage() {
 
 async function viewBillInModal(docId) {
   try {
-    // Show a loading indicator in the modal
     const modalContent = document.getElementById("modal-bill-content");
-    modalContent.innerHTML = "<h3>Loading bill...</h3>";
     const modalOverlay = document.getElementById("view-bill-modal");
-    modalOverlay.style.display = "flex";
 
-    // --- NEW: Fetch the FULL document from Firestore ---
-    const doc = await billsCollection.doc(docId).get();
+    if (modalOverlay) modalOverlay.style.display = "flex";
 
-    if (doc.exists) {
-      currentBillIdInModal = doc.id;
-      const billData = doc.data();
-
-      // We need to manually add the truck freight box if it exists
-      // because the modal's HTML is generated dynamically
-      let finalHtml = generateBillHtmlForView(billData);
-      if (billData["Truck Freight"] && billData["Truck Freight"] > 0) {
-        // This part is a simplified version of the logic from bill-view.js
-        // to add the freight cost to the dynamically generated HTML
-        const freightHtml = `
-            <div class="detail-item">
-              <span class="detail-label">ટ્રક ભાડું (Freight)</span>
-              <span class="detail-value" style="color: #28a745;">
-                +${Number(billData["Truck Freight"]).toLocaleString("en-IN", {
-                  minimumFractionDigits: 0,
-                  maximumFractionDigits: 0,
-                })}
-              </span>
-            </div>`;
-        // Insert freightHtml before the final total box in the generated string
-        finalHtml = finalHtml.replace(
-          '<div class="detail-item final-total-box">',
-          freightHtml + '<div class="detail-item final-total-box">'
-        );
-      }
-
-      modalContent.innerHTML = finalHtml;
-    } else {
-      modalContent.innerHTML = "<h3>Error: Bill not found.</h3>";
-    }
+    // ?embed=true bhej rahe hain taaki final.html ko pata chale ki yeh modal ke andar hai
+    modalContent.innerHTML = `
+      <style>
+        .bill-iframe-container {
+          width: 100%;
+          height: 75vh;
+          border: none;
+        }
+      </style>
+      <iframe src="final.html?id=${docId}&embed=true" class="bill-iframe-container"></iframe>
+    `;
   } catch (error) {
-    console.error("Error fetching bill for view:", error);
-    modalContent.innerHTML = "<h3>Could not load bill details.</h3>";
+    console.error("Error opening modal view:", error);
+    alert("Could not load bill details.");
   }
 }
 function closeBillView() {
