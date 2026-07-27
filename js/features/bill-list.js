@@ -66,7 +66,10 @@ function showBillListView() {
         }
       }
 
-      allBillsForList = snapshot.docs;
+      // Exclude soft-deleted bills (backup.js sets deleted:true) — filtered
+      // client-side rather than via a Firestore where() clause so bills
+      // saved before this field existed (deleted === undefined) still show.
+      allBillsForList = snapshot.docs.filter((d) => d.data().deleted !== true);
       currentPageForList = 1;
 
       filterAndRenderList();
@@ -75,18 +78,11 @@ function showBillListView() {
 }
 
 function filterAndRenderList(searchTerm = null) {
-  // ✅ NAYA LOGIC: Saare bills mein se 'Cancelled' bills ko pehle hi hata do
-  let activeBills = allBillsForList.filter((doc) => {
-    const bill = doc.data();
-    return bill.isCancelled !== true; // Sirf wahi bills rakho jo cancel NAHI hue hain
-  });
+  let billsToDisplay = allBillsForList;
 
-  let billsToDisplay = activeBills;
-
-  // Search wala purana logic
   if (searchTerm) {
     const lowerCaseSearch = searchTerm.toLowerCase();
-    billsToDisplay = activeBills.filter((doc) => {
+    billsToDisplay = allBillsForList.filter((doc) => {
       const bill = doc.data();
       const searchString = [bill["Serial No"], bill["Customer Name"], bill["Village"], bill["Vehicle No"]]
         .join(" ")
@@ -102,6 +98,7 @@ function filterAndRenderList(searchTerm = null) {
   renderBillList(billsForCurrentPage);
   renderListPaginationControls(billsToDisplay.length);
 }
+
 async function markSelectedBillsAsPaid() {
   const selectedCheckboxes = document.querySelectorAll("#bill_list_view .bill-checkbox:checked");
 
@@ -239,34 +236,35 @@ function editBill(docId) {
 async function deleteBill(docId, serialNo) {
   const result = await Swal.fire({
     title: "Are you sure?",
-    text: `You are about to cancel Bill No. ${serialNo}. This cannot be undone.`,
+    text: `You are about to delete Bill No. ${serialNo}. This cannot be undone.`,
     icon: "warning",
     showCancelButton: true,
     confirmButtonColor: "#dc3545", // Red color for the confirm button
     cancelButtonColor: "#6c757d", // Gray for cancel
-    confirmButtonText: "Yes, cancel it!",
+    confirmButtonText: "Yes, delete it!",
   });
 
-  // If the user clicked the "Yes, cancel it!" button
+  // If the user clicked the "Yes, delete it!" button
   if (result.isConfirmed) {
-    showLoading("Canceling bill...");
+    showLoading("Deleting bill...");
     try {
-      // ✅ YAHAN CHANGE HUA HAI: Hard delete ki jagah Update (Soft Delete) lagaya hai
-      await billsCollection.doc(docId).update({
-        isCancelled: true,
-        cancelledAt: firebase.firestore.FieldValue.serverTimestamp(), // Cancel hone ka time bhi save hoga
-      });
-
+      // Soft delete - keeps data for 30 days
+      if (typeof softDeleteBill === "function") {
+        const done = await softDeleteBill(docId);
+        if (!done) return;
+      } else {
+        await billsCollection.doc(docId).delete();
+      }
       Swal.fire({
-        title: "Cancelled!",
-        text: `Bill No. ${serialNo} has been cancelled.`,
+        title: "Deleted!",
+        text: `Bill No. ${serialNo} has been deleted.`,
         icon: "success",
         timer: 2000, // Automatically close after 2 seconds
         showConfirmButton: false,
       });
     } catch (error) {
-      console.error("Error cancelling document: ", error);
-      Swal.fire("Error!", "Could not cancel the bill. Please try again when online.", "error");
+      console.error("Error removing document: ", error);
+      Swal.fire("Error!", "Could not delete the bill. Please try again when online.", "error");
     } finally {
       hideLoading();
     }
@@ -402,6 +400,18 @@ async function processUploadedBills(bills, statusElement) {
   let successCount = 0;
   let errorCount = 0;
   let missingSerialCount = 0;
+  let duplicateCount = 0;
+  const duplicateNumbers = [];
+
+  // Build a set of every Serial No already in the database — including
+  // soft-deleted bills, since a deleted bill's number should never be
+  // reused either — so we can catch collisions before importing.
+  const existingSerialsSnap = await billsCollection.get();
+  const existingSerials = new Set();
+  existingSerialsSnap.docs.forEach((d) => {
+    const sn = d.data()["Serial No"];
+    if (sn) existingSerials.add(String(sn));
+  });
 
   for (let i = 0; i < bills.length; i++) {
     const bill = bills[i];
@@ -416,6 +426,15 @@ async function processUploadedBills(bills, statusElement) {
     const originalSerial = bill["Serial No"] || bill["Bill No"];
     const serialNo = originalSerial || `IMPORT-NEEDS-REVIEW-${i + 1}`;
     if (!originalSerial) missingSerialCount++;
+
+    // Duplicate check — a number already used by ANY bill (active or
+    // soft-deleted) is skipped rather than silently creating a second bill
+    // with the same Serial No.
+    if (originalSerial && existingSerials.has(String(serialNo))) {
+      duplicateCount++;
+      duplicateNumbers.push(String(serialNo));
+      continue;
+    }
 
     // Remap data from the Excel file columns to the database schema
     const billData = {
@@ -444,6 +463,7 @@ async function processUploadedBills(bills, statusElement) {
 
     try {
       await billsCollection.add(billData);
+      existingSerials.add(String(serialNo)); // catches duplicates within the same file too
       successCount++;
     } catch (error) {
       console.error("Error adding uploaded bill:", bill, error);
@@ -455,8 +475,13 @@ async function processUploadedBills(bills, statusElement) {
   if (missingSerialCount > 0) {
     statusMsg += ` ⚠️ ${missingSerialCount} bill(s) had no Serial No in the file — marked "IMPORT-NEEDS-REVIEW-#", please fix manually.`;
   }
+  if (duplicateCount > 0) {
+    statusMsg += ` ⚠️ ${duplicateCount} bill(s) skipped — Serial No already used (${duplicateNumbers
+      .slice(0, 10)
+      .join(", ")}${duplicateNumbers.length > 10 ? ", ..." : ""}).`;
+  }
   statusElement.textContent = statusMsg;
-  statusElement.style.color = errorCount === 0 && missingSerialCount === 0 ? "green" : "orange";
+  statusElement.style.color = errorCount === 0 && missingSerialCount === 0 && duplicateCount === 0 ? "green" : "orange";
 
   hideLoading();
   // Reload the bill list to show new data

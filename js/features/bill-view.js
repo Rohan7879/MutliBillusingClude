@@ -587,22 +587,475 @@ async function sendBillViaWhatsApp() {
   window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
 }
 
+// ═══════════════════════════════════════════════════════════════════════════
+// NATIVE PDF GENERATOR — replaces the old html2canvas "screenshot" PDF.
+// All bill data (customer name, numbers, dates, amounts) is drawn as REAL
+// vector text: crisp at any zoom, selectable/copyable, and a much smaller
+// file. jsPDF cannot correctly shape Indic scripts on its own (conjuncts
+// and vowel signs come out wrong), so the ~30 FIXED Gujarati captions
+// (વેબ્રીજ, કટ્ટા, etc.) use small pre-rendered images from
+// js/core/bill-pdf-labels.js instead (rendered once, correctly shaped).
+// Any USER-TYPED field that happens to contain Gujarati (customer name,
+// remarks, expense names, template-deduction names, product template
+// name) is auto-detected and rendered as a small isolated snippet image
+// instead — only that one field, never the whole bill.
+// ═══════════════════════════════════════════════════════════════════════════
+
+function pdfHasGujarati(str) {
+  return /[\u0A80-\u0AFF]/.test(str || "");
+}
+
+// Fallback for free-typed fields that contain Gujarati: renders just that
+// short string via a hidden DOM node + html2canvas (NOT the whole bill).
+async function renderGujaratiSnippet(str) {
+  const tmp = document.createElement("div");
+  tmp.style.cssText =
+    "position:fixed; left:-9999px; top:0; white-space:nowrap; font-family:Arial,'Noto Sans Gujarati',sans-serif; background:#fff; color:#111; padding:3px 5px; font-size:44pt;";
+  tmp.textContent = str;
+  document.body.appendChild(tmp);
+  const canvas = await html2canvas(tmp, { scale: 2, backgroundColor: "#ffffff" });
+  document.body.removeChild(tmp);
+  return { dataUrl: canvas.toDataURL("image/png"), ratio: canvas.width / canvas.height };
+}
+
+async function buildBillPDFNative(billData) {
+  const { jsPDF } = window.jspdf;
+  const L = window.BILL_PDF_LABELS || {};
+  const doc = new jsPDF({ unit: "mm", format: "a4" });
+  const pageW = doc.internal.pageSize.getWidth();
+  const pageH = doc.internal.pageSize.getHeight();
+  const mx = 14;
+  const bottomLimit = pageH - 16;
+  let y = 18;
+
+  doc.setTextColor(20, 20, 20);
+
+  function ensureSpace(needed) {
+    if (y + needed > bottomLimit) {
+      doc.addPage();
+      y = 18;
+    }
+  }
+
+  // Draws a pre-shaped Gujarati label image at a given target height (mm),
+  // top-left positioned at (x, yTop). Returns the width it used.
+  function img(key, x, yTop, hMM) {
+    const l = L[key];
+    if (!l) return 0;
+    const w = hMM * l.ratio;
+    doc.addImage(l.img, "PNG", x, yTop, w, hMM);
+    return w;
+  }
+  // Same, but positioned so it visually sits on a text baseline at yBaseline.
+  function imgOnBaseline(key, x, yBaseline, hMM) {
+    return img(key, x, yBaseline - hMM * 0.8, hMM);
+  }
+
+  // Draws any data value as real text — UNLESS it contains Gujarati
+  // characters (e.g. a customer name typed in Gujarati), in which case it
+  // falls back to a small rendered snippet so it still displays correctly.
+  async function valueText(str, x, yBaseline, fontSize, opts) {
+    opts = opts || {};
+    str = str === undefined || str === null ? "" : String(str);
+    if (str && pdfHasGujarati(str)) {
+      try {
+        const snip = await renderGujaratiSnippet(str);
+        const hMM = fontSize * 0.42;
+        const w = hMM * snip.ratio;
+        let drawX = x;
+        if (opts.align === "right") drawX = x - w;
+        else if (opts.align === "center") drawX = x - w / 2;
+        doc.addImage(snip.dataUrl, "PNG", drawX, yBaseline - hMM * 0.78, w, hMM);
+        return;
+      } catch (e) {
+        console.warn("Gujarati snippet render failed, falling back to plain text:", e);
+      }
+    }
+    doc.setFontSize(fontSize);
+    doc.text(str, x, yBaseline, opts);
+  }
+
+  const inr = (n) => Number(n || 0).toLocaleString("en-IN");
+
+  // ---------- Load print layout order (same source the on-screen bill uses,
+  // so the PDF always matches whatever order was set in Settings) ----------
+  let detailsOrder = typeof DEFAULT_DETAILS_GRID_ORDER !== "undefined" ? DEFAULT_DETAILS_GRID_ORDER.slice() : [];
+  let totalsOrder = typeof DEFAULT_TOTALS_GRID_ORDER !== "undefined" ? DEFAULT_TOTALS_GRID_ORDER.slice() : [];
+  try {
+    const layoutDoc = await db.collection("settings").doc("printLayout").get();
+    if (layoutDoc.exists) {
+      const ld = layoutDoc.data();
+      if (ld.detailsGridOrder) detailsOrder = ld.detailsGridOrder;
+      if (ld.totalsGridOrder) totalsOrder = ld.totalsGridOrder;
+    }
+  } catch (e) {
+    console.warn("PDF: could not load print layout order, using default", e);
+  }
+
+  // ---------- Header ----------
+  const profile = window.companyProfile || {};
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(17);
+  await valueText(profile.name || "MandiBook", mx, y, 17);
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(9);
+  const headerRight = [];
+  if (profile.address) headerRight.push(profile.address);
+  if (profile.phone) headerRight.push("Ph: " + profile.phone);
+  if (profile.gst) headerRight.push("GST: " + profile.gst);
+  headerRight.forEach((line, i) => doc.text(line, pageW - mx, y - 5 + i * 4, { align: "right" }));
+  y += 5;
+  doc.setDrawColor(160, 160, 160);
+  doc.setLineWidth(0.4);
+  doc.line(mx, y, pageW - mx, y);
+  y += 8;
+
+  // ---------- Serial No / Date ----------
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(13);
+  doc.text(String(billData["Serial No"] || ""), mx, y);
+  doc.text(String(billData["Date"] || ""), pageW - mx, y, { align: "right" });
+  y += 9;
+
+  // ---------- Customer detail lines ----------
+  doc.setFont("helvetica", "normal");
+  const detailRows = [
+    ["naam", billData["Customer Name"]],
+    ["gaam", billData["Village"]],
+    ["gaadi_no", billData["Vehicle No"]],
+    ["dalaal", billData["Broker"]],
+  ];
+  for (const [key, val] of detailRows) {
+    if (!val) continue;
+    ensureSpace(7);
+    const lw = imgOnBaseline(key, mx, y, 4.3);
+    await valueText(val, mx + lw + 2.5, y, 11);
+    y += 6.5;
+  }
+  y += 3;
+
+  // ---------- Weight / deductions section (a clean label-left, value-right
+  // list, in the order saved under Settings → Print Layout Order) ----------
+  function weightRow(labelKey, valueStr, opts) {
+    opts = opts || {};
+    ensureSpace(opts.big ? 10 : 7.5);
+    doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+    doc.setFontSize(opts.big ? 15 : 11);
+    imgOnBaseline(labelKey, mx, y, opts.big ? 5.2 : 4.2);
+    doc.text(valueStr, pageW - mx, y, { align: "right" });
+    y += opts.big ? 9.5 : 7;
+  }
+
+  const wbMoistureKg = billData["Weighbridge Moisture Kg"] || 0;
+  const hasWbMoisture = wbMoistureKg > 0;
+  const weightDeds = (billData["TemplateDeductionsApplied"] || []).filter((d) => d.stage === "weight");
+
+  ensureSpace(10);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(11.5);
+  doc.setDrawColor(210, 210, 210);
+  doc.text("Weight / Deductions", mx, y);
+  y += 6;
+
+  for (const key of detailsOrder) {
+    if (key === "weighbridge_box") {
+      weightRow("weighbridge", inr(billData["Weighbridge Weight"]));
+    } else if (key === "kasar_box" && (billData["Kasar"] || 0) > 0) {
+      weightRow("kasar", "-" + inr(billData["Kasar"]));
+    } else if (key === "wb_moisture_box" && hasWbMoisture) {
+      weightRow("moisture", `-${inr(wbMoistureKg)} (${billData["Weighbridge Moisture %"] || 0}%)`);
+    } else if (key === "kantan_box" && (billData["Kantan Weight"] || 0) > 0) {
+      weightRow("kantan", "-" + inr(billData["Kantan Weight"]));
+    } else if (key === "plastic_box" && (billData["Plastic Weight"] || 0) > 0) {
+      const isOldBardan = !(billData["Kantan Weight"] > 0) && (billData["Bardan Weight"] || 0) > 0;
+      weightRow(isOldBardan ? "bardan" : "plastic", "-" + inr(billData["Plastic Weight"] || billData["Bardan Weight"]));
+    } else if (key === "template_deductions_weight") {
+      for (const d of weightDeds) {
+        ensureSpace(7.5);
+        const sign = d.applyAs === "add" ? "+" : "-";
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11);
+        await valueText(d.name, mx, y, 11);
+        doc.text(`${sign}${inr(d.impact)}`, pageW - mx, y, { align: "right" });
+        y += 7;
+      }
+    } else if (key === "netweight_box") {
+      y += 1.5;
+      ensureSpace(11);
+      doc.setDrawColor(120, 120, 120);
+      doc.setLineWidth(0.3);
+      doc.line(mx, y - 4.5, pageW - mx, y - 4.5);
+      weightRow("netweight", inr(billData["Net Weight"]) + " kg", { big: true, bold: true });
+    }
+  }
+
+  // Total moisture cut summary (Loose-supply vakal moisture)
+  const anyVakalMoisture = [1, 2, 3, 4, 5].some((i) => (billData[`Vakal ${i} Moisture %`] || 0) > 0);
+  if (anyVakalMoisture) {
+    const totalMoistureKg = [1, 2, 3, 4, 5].reduce((s, i) => s + (billData[`Vakal ${i} Moisture Kg`] || 0), 0);
+    ensureSpace(8);
+    doc.setTextColor(180, 100, 0);
+    weightRow("total_moisture_cut", "-" + inr(totalMoistureKg) + " kg");
+    doc.setTextColor(20, 20, 20);
+  }
+  y += 4;
+
+  // ---------- Vakal items table ----------
+  const activeVakals = [];
+  for (let i = 1; i <= 5; i++) {
+    const katta = billData[`Vakal ${i} Katta`];
+    const kilo = billData[`Vakal ${i} Kilo`];
+    if (billData["Bill Type"] === "Loose") {
+      if (i === 1) activeVakals.push(i);
+    } else if ((katta && katta !== 0) || (kilo && kilo !== 0) || i === 1) {
+      activeVakals.push(i);
+    }
+  }
+
+  const headerKeys = anyVakalMoisture
+    ? ["vakal_header", "katta_header", "kilo_header", "moisture", "net_kilo_header", "bhav_header", "rupiya_header"]
+    : ["vakal_header", "katta_header", "kilo_header", "bhav_header", "rupiya_header"];
+  const vakalLabelKeys = { 1: "vakal_1", 2: "vakal_2", 3: "vakal_3", 4: "vakal_4", 5: "vakal_5" };
+
+  const head = [headerKeys.map(() => "")];
+  const body = activeVakals.map((i) => {
+    const moisturePct = billData[`Vakal ${i} Moisture %`] || 0;
+    const moistureKg = billData[`Vakal ${i} Moisture Kg`] || 0;
+    const kiloAfter = billData[`Vakal ${i} Kilo`] || 0;
+    const rawKilo = kiloAfter + moistureKg;
+    const row = [
+      "",
+      billData[`Vakal ${i} Katta`] === "-" ? "-" : inr(billData[`Vakal ${i} Katta`]),
+      anyVakalMoisture ? inr(rawKilo) : inr(kiloAfter),
+    ];
+    if (anyVakalMoisture) {
+      row.push(moistureKg > 0 ? `-${inr(moistureKg)} (${moisturePct}%)` : "-");
+      row.push(inr(kiloAfter));
+    }
+    row.push(inr(billData[`Vakal ${i} Bhav`]));
+    row.push(inr(billData[`Vakal ${i} Amount`]));
+    return row;
+  });
+
+  ensureSpace(20);
+  doc.autoTable({
+    startY: y,
+    head,
+    body,
+    margin: { left: mx, right: mx },
+    theme: "grid",
+    styles: { font: "helvetica", fontSize: 10, cellPadding: 2.2, valign: "middle", lineColor: [180, 180, 180] },
+    headStyles: { fillColor: [235, 240, 245], minCellHeight: 9 },
+    columnStyles: { 0: { cellWidth: 22 } },
+    didParseCell: (data) => {
+      if (data.section === "head") data.cell.text = [""];
+      if (data.section === "body" && data.column.index === 0) data.cell.text = [""];
+    },
+    didDrawCell: (data) => {
+      const cx = data.cell.x + data.cell.width / 2;
+      const cy = data.cell.y + data.cell.height / 2;
+      const hMM = Math.min(data.cell.height - 3, 4.2);
+      if (data.section === "head") {
+        const key = headerKeys[data.column.index];
+        const l = L[key];
+        if (l) {
+          const w = hMM * l.ratio;
+          doc.addImage(l.img, "PNG", cx - w / 2, cy - hMM / 2, w, hMM);
+        }
+      } else if (data.section === "body" && data.column.index === 0) {
+        const rowIdx = activeVakals[data.row.index];
+        const key = vakalLabelKeys[rowIdx];
+        const l = L[key];
+        if (l) {
+          const w = hMM * l.ratio;
+          doc.addImage(l.img, "PNG", cx - w / 2, cy - hMM / 2, w, hMM);
+        }
+      }
+    },
+  });
+  y = doc.lastAutoTable.finalY + 8;
+
+  // ---------- Supply type banner ----------
+  ensureSpace(12);
+  doc.setFont("helvetica", "bold");
+  doc.setFontSize(15);
+  if (billData["Bill Type"] === "Loose") {
+    const w = 6 * (L.loose ? L.loose.ratio : 1);
+    img("loose", pageW / 2 - w / 2, y - 5, 6);
+  } else {
+    const productName = billData["ProductTemplate"] || "";
+    const suffixKey = productName ? "na_katta_suffix" : "katta_header";
+    if (productName) {
+      doc.setFontSize(15);
+      const nameWidth = doc.getTextWidth(productName);
+      const suffixW = 5 * (L[suffixKey] ? L[suffixKey].ratio : 1);
+      const totalW = nameWidth + 2 + suffixW;
+      let sx = pageW / 2 - totalW / 2;
+      await valueText(productName, sx, y, 15);
+      sx += nameWidth + 2;
+      img(suffixKey, sx, y - 4, 5);
+    } else {
+      const w = 5 * (L.katta_header ? L.katta_header.ratio : 1);
+      img("katta_header", pageW / 2 - w / 2, y - 4, 5);
+    }
+  }
+  y += 10;
+
+  // ---------- Bag count summary (Bag-type bills only) ----------
+  if (billData["Bill Type"] === "Bag") {
+    const totalBharela = (billData["Bharela 600"] || 0) + (billData["Bharela 200"] || 0);
+    const totalKhali = (billData["Khali 600"] || 0) + (billData["Khali 200"] || 0);
+    const grandTotal = totalBharela + totalKhali;
+    if (grandTotal > 0) {
+      ensureSpace(8);
+      doc.setFont("helvetica", "normal");
+      doc.setFontSize(10.5);
+      let x = mx;
+      doc.text(String(totalBharela) + " (", x, y);
+      x += doc.getTextWidth(String(totalBharela) + " (");
+      x += img("bharela_word", x, y - 3.5, 4);
+      doc.text(") + " + String(totalKhali) + " (", x, y);
+      x += doc.getTextWidth(") + " + String(totalKhali) + " (");
+      x += img("khali_word", x, y - 3.5, 4);
+      doc.text(") = " + String(grandTotal) + " (", x, y);
+      x += doc.getTextWidth(") = " + String(grandTotal) + " (");
+      x += img("kul_word", x, y - 3.5, 4);
+      doc.text(")", x, y);
+      y += 8;
+    }
+  }
+  y += 2;
+
+  // ---------- Totals / deductions section ----------
+  function totalsRow(labelKey, valueStr, opts) {
+    opts = opts || {};
+    ensureSpace(opts.big ? 12 : 8);
+    doc.setFont("helvetica", opts.bold ? "bold" : "normal");
+    doc.setFontSize(opts.big ? 16 : 11.5);
+    if (opts.big) {
+      doc.setFillColor(240, 244, 248);
+      doc.rect(mx, y - 6.5, pageW - mx * 2, 10, "F");
+    }
+    imgOnBaseline(labelKey, mx + (opts.big ? 3 : 0), y, opts.big ? 5.6 : 4.4);
+    doc.text(valueStr, pageW - mx - (opts.big ? 3 : 0), y, { align: "right" });
+    y += opts.big ? 10 : 7.5;
+  }
+
+  ensureSpace(10);
+  doc.setDrawColor(150, 150, 150);
+  doc.setLineWidth(0.4);
+  doc.line(mx, y, pageW - mx, y);
+  y += 8;
+
+  const amountDeds = (billData["TemplateDeductionsApplied"] || []).filter((d) => d.stage !== "weight");
+  const expenses = (() => {
+    try {
+      return JSON.parse(billData["Expenses"] || "[]");
+    } catch (e) {
+      return [];
+    }
+  })();
+
+  for (const key of totalsOrder) {
+    if (key === "total_amount_box") {
+      totalsRow("total_rupiya", "Rs " + inr(billData["Total Amount"]));
+    } else if (key === "utrai_box" && (billData["Utrāī"] || 0) > 0) {
+      totalsRow("utrai", "-Rs " + inr(billData["Utrāī"]));
+    } else if (key === "expenses_container") {
+      for (const exp of expenses) {
+        ensureSpace(8);
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11.5);
+        await valueText(exp.name, mx, y, 11.5);
+        doc.text("-Rs " + inr(exp.amount), pageW - mx, y, { align: "right" });
+        y += 7.5;
+      }
+    } else if (key === "template_deductions_amount") {
+      for (const d of amountDeds) {
+        ensureSpace(8);
+        const sign = d.applyAs === "add" ? "+" : "-";
+        doc.setFont("helvetica", "normal");
+        doc.setFontSize(11.5);
+        await valueText(d.name, mx, y, 11.5);
+        doc.text(`${sign}Rs ${inr(d.impact)}`, pageW - mx, y, { align: "right" });
+        y += 7.5;
+      }
+    } else if (key === "freight_item" && (billData["Truck Freight"] || 0) > 0) {
+      totalsRow("freight", "+Rs " + inr(billData["Truck Freight"]));
+    } else if (key === "final_total_box_container") {
+      y += 2;
+      totalsRow("final_total", "Rs " + inr(billData["Final Total"]), { big: true, bold: true });
+    }
+  }
+  y += 4;
+
+  // ---------- Amount in words ----------
+  if (typeof numberToWords === "function") {
+    ensureSpace(9);
+    doc.setFont("helvetica", "italic");
+    doc.setFontSize(10);
+    doc.text("Amount in words: " + numberToWords(billData["Final Total"]), mx, y);
+    y += 8;
+  }
+
+  // ---------- Remarks ----------
+  if (billData["Remarks"] && billData["Remarks"].trim() !== "") {
+    ensureSpace(14);
+    doc.setDrawColor(200, 180, 100);
+    doc.setLineWidth(0.3);
+    doc.rect(mx, y - 5, pageW - mx * 2, 12);
+    doc.setFont("helvetica", "bold");
+    doc.setFontSize(10);
+    doc.text("Remarks:", mx + 3, y);
+    doc.setFont("helvetica", "normal");
+    await valueText(billData["Remarks"], mx + 22, y, 10);
+    y += 12;
+  }
+
+  // ---------- Footer ----------
+  doc.setFont("helvetica", "normal");
+  doc.setFontSize(8);
+  doc.setTextColor(140, 140, 140);
+  doc.text("Computer generated bill — MandiBook", mx, pageH - 8);
+
+  return doc;
+}
+
 function downloadBillAsPDF() {
-  const billContainer = document.getElementById("finalcontainer");
   const billData = JSON.parse(localStorage.getItem("currentBill"));
-  if (!billData || !billContainer) {
-    alert("No bill data or container found to download.");
+  if (!billData) {
+    alert("No bill data found to download.");
+    return;
+  }
+  const billNo = billData["Serial No"];
+  const billName = billData["Customer Name"];
+  showLoading("Preparing PDF...");
+
+  buildBillPDFNative(billData)
+    .then((doc) => {
+      doc.save(`Bill No ${billNo}_${billName}.pdf`);
+      hideLoading();
+    })
+    .catch((err) => {
+      console.error("Native PDF generation failed, falling back to screenshot PDF:", err);
+      downloadBillAsPDF_screenshotFallback(billData);
+    });
+}
+
+// Kept as a safety-net fallback only — used automatically if the native
+// generator above throws for any reason, so downloads never fully break.
+function downloadBillAsPDF_screenshotFallback(billData) {
+  const billContainer = document.getElementById("finalcontainer");
+  if (!billContainer) {
+    alert("Could not generate PDF.");
+    hideLoading();
     return;
   }
   const billNo = billData["Serial No"];
   const billName = billData["Customer Name"];
 
   document.body.classList.add("print-mode");
-
-  if (window.getSelection) {
-    window.getSelection().removeAllRanges();
-  }
-
+  if (window.getSelection) window.getSelection().removeAllRanges();
   const buttonContainer = billContainer.querySelector(".button-container");
   if (buttonContainer) buttonContainer.style.display = "none";
 

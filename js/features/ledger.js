@@ -84,6 +84,7 @@ async function fetchUniqueCustomers() {
     const [billsSnapshot, paymentsSnapshot] = await Promise.all([billsCollection.get(), paymentsCollection.get()]);
     const customerMap = new Map();
     const processDoc = (doc) => {
+      if (doc.data().deleted === true) return; // skip soft-deleted bills
       const data = doc.data();
       const customerName = data["Customer Name"] || data.customerName;
       if (customerName) {
@@ -152,11 +153,17 @@ async function showCustomerLedger(customer) {
     const paymentsSnapshot = results[1];
     const extraBillsSnapshot = results[2]; // undefined if no customerId
 
-    // Merge bill docs from both queries, de-duplicated by doc id
+    // Merge bill docs from both queries, de-duplicated by doc id — soft-
+    // deleted bills are excluded so a deleted bill's amount no longer
+    // counts toward the customer's outstanding balance.
     const billDocsById = new Map();
-    billsSnapshot.docs.forEach((doc) => billDocsById.set(doc.id, doc));
+    billsSnapshot.docs.forEach((doc) => {
+      if (doc.data().deleted !== true) billDocsById.set(doc.id, doc);
+    });
     if (extraBillsSnapshot) {
-      extraBillsSnapshot.docs.forEach((doc) => billDocsById.set(doc.id, doc));
+      extraBillsSnapshot.docs.forEach((doc) => {
+        if (doc.data().deleted !== true) billDocsById.set(doc.id, doc);
+      });
     }
     const mergedBillDocs = Array.from(billDocsById.values());
 

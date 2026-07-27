@@ -34,10 +34,16 @@ async function fetchAllBills() {
     // This part stays the same: fetch all bill summaries
     const snapshot = await billsCollection.orderBy("Serial No", "desc").get();
 
-    allBillsData = snapshot.docs.map((doc) => {
-      const data = doc.data();
-      return { id: doc.id, ...data };
-    });
+    // Exclude soft-deleted bills (backup.js sets deleted:true) so dashboard
+    // totals/counts drop a bill the moment it's deleted, not just when it's
+    // permanently purged. Filtered client-side (not a where() clause) so
+    // bills saved before this field existed still count normally.
+    allBillsData = snapshot.docs
+      .filter((doc) => doc.data().deleted !== true)
+      .map((doc) => {
+        const data = doc.data();
+        return { id: doc.id, ...data };
+      });
 
     // --- NEW: Filter for the current month immediately after fetching ---
     const now = new Date();

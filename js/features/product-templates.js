@@ -35,7 +35,7 @@ document.addEventListener("DOMContentLoaded", async () => {
 async function loadProductTemplatesForBillForm() {
   try {
     const doc = await db.collection("settings").doc("productTemplates").get();
-    allProductTemplates = doc.exists ? (doc.data().templates || {}) : {};
+    allProductTemplates = doc.exists ? doc.data().templates || {} : {};
   } catch (error) {
     console.error("Could not load product templates:", error);
     allProductTemplates = {};
@@ -65,9 +65,7 @@ function renderProductDropdown() {
     return;
   }
 
-  const options = ids.map((id) =>
-    `<option value="${id}">${allProductTemplates[id].name}</option>`
-  ).join("");
+  const options = ids.map((id) => `<option value="${id}">${allProductTemplates[id].name}</option>`).join("");
 
   container.innerHTML = `
     <div class="product-select-row">
@@ -156,14 +154,19 @@ function renderTemplateDeductionsInForm() {
  * @returns {string} HTML
  */
 function renderDeductionField(d, idx) {
-  const fieldName  = `tpl_ded_${d.name.replace(/\s+/g, "_")}`;
-  const valueLabel = d.type === "pct_weight" || d.type === "pct_amount" ? "%"
-    : d.type === "fixed_bag" ? "₹/bag"
-    : d.type === "fixed_kg"  ? "₹/kg"
-    : d.type === "custom"    ? (d.customFormula || "custom")
-    : "₹";
+  const fieldName = `tpl_ded_${d.name.replace(/\s+/g, "_")}`;
+  const valueLabel =
+    d.type === "pct_weight" || d.type === "pct_amount"
+      ? "%"
+      : d.type === "fixed_bag"
+      ? "₹/bag"
+      : d.type === "fixed_kg"
+      ? "₹/kg"
+      : d.type === "custom"
+      ? d.customFormula || "custom"
+      : "₹";
 
-  const applyIcon  = d.applyAs === "add" ? "➕" : "➖";
+  const applyIcon = d.applyAs === "add" ? "➕" : "➖";
   const applyColor = d.applyAs === "add" ? "#28a745" : "#dc3545";
 
   if (d.optional) {
@@ -174,7 +177,7 @@ function renderDeductionField(d, idx) {
           <span style="color:${applyColor};">${applyIcon} ${d.name}</span>
         </label>
         <input type="number" name="${fieldName}" step="any" min="0"
-          placeholder="${d.value || 'Enter value'}" value="${d.type === 'custom' ? '' : d.value}"
+          placeholder="${d.value || "Enter value"}" value="${d.type === "custom" ? "" : d.value}"
           class="tpl-ded-value-input"/>
         <span class="tpl-ded-unit">${valueLabel}</span>
       </div>`;
@@ -185,31 +188,9 @@ function renderDeductionField(d, idx) {
     <div class="tpl-ded-field fixed" data-ded-name="${d.name}">
       <span style="color:${applyColor};">${applyIcon} ${d.name}</span>
       <input type="number" name="${fieldName}" step="any" min="0"
-        value="${d.type === 'custom' ? '' : d.value}" class="tpl-ded-value-input"/>
+        value="${d.type === "custom" ? "" : d.value}" class="tpl-ded-value-input"/>
       <span class="tpl-ded-unit">${valueLabel}</span>
     </div>`;
-}
-
-// ═══════════════════════════════════════════════════════════════════════════════
-// SERIES PREVIEW
-// ═══════════════════════════════════════════════════════════════════════════════
-
-/**
- * Shows a preview of what the bill series number will look like
- * based on the selected template's series prefix.
- */
-function updateSeriesPreview() {
-  const el = document.getElementById("series-preview");
-  if (!el) return;
-
-  const prefix = window.activeTemplate?.seriesPrefix || "";
-  const now    = new Date();
-  const fy     = now.getMonth() < 3 ? now.getFullYear() - 1 : now.getFullYear();
-  const fyShort = `${String(fy).slice(-2)}${String(fy + 1).slice(-2)}`;
-
-  el.textContent = prefix
-    ? `Preview: ${prefix}-${fyShort}-00001`
-    : `Preview: ${String(now.getFullYear()).slice(-2)}/${String(now.getMonth()+1).padStart(2,"0")}-00001`;
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -227,20 +208,20 @@ function getActiveTemplateDeductionValues() {
 
   return window.activeTemplate.deductions
     .map((d) => {
-      const fieldName   = `tpl_ded_${d.name.replace(/\s+/g, "_")}`;
-      const toggle      = document.querySelector(`.tpl-ded-toggle[data-field="${fieldName}"]`);
-      const isActive    = d.optional ? (toggle ? toggle.checked : false) : true;
+      const fieldName = `tpl_ded_${d.name.replace(/\s+/g, "_")}`;
+      const toggle = document.querySelector(`.tpl-ded-toggle[data-field="${fieldName}"]`);
+      const isActive = d.optional ? (toggle ? toggle.checked : false) : true;
       if (!isActive) return null;
 
-      const valueInput  = document.querySelector(`input[name="${fieldName}"]`);
-      const value       = Number(valueInput?.value) || d.value || 0;
+      const valueInput = document.querySelector(`input[name="${fieldName}"]`);
+      const value = Number(valueInput?.value) || d.value || 0;
 
       return {
-        name:          d.name,
-        type:          d.type,
-        value:         value,
-        applyAs:       d.applyAs,
-        stage:         d.stage || "weight",
+        name: d.name,
+        type: d.type,
+        value: value,
+        applyAs: d.applyAs,
+        stage: d.stage || "weight",
         customFormula: d.customFormula || "",
       };
     })

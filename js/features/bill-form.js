@@ -1,3 +1,81 @@
+// --- Live "Series Preview" — shows which bill number will be created next,
+// based on the currently selected product template's series prefix. Updates
+// the moment window.activeTemplate changes (set by product-templates.js when
+// the user picks a template), without needing to edit that file.
+async function updateSeriesPreview() {
+  const previewEl = document.getElementById("series-preview");
+  if (!previewEl) return;
+
+  // In edit mode the Serial No is fixed to the original bill and won't
+  // change on save, so a "next bill" preview would be misleading — skip it.
+  const form = document.getElementById("estimateForm");
+  if (form && form.dataset.editId) {
+    previewEl.textContent = "";
+    return;
+  }
+
+  const now = new Date();
+  let year = now.getFullYear();
+  const month = now.getMonth();
+  if (month < 3) year = year - 1;
+  const shortYear = year.toString().slice(-2);
+  const nextShortYear = (year + 1).toString().slice(-2);
+  const financialYearId = `FY${shortYear}${nextShortYear}`;
+
+  const seriesPrefix =
+    window.activeTemplate && window.activeTemplate.seriesPrefix ? window.activeTemplate.seriesPrefix : null;
+  const counterDocId = seriesPrefix
+    ? `billCounter_${seriesPrefix}_${financialYearId}`
+    : `billCounter_${financialYearId}`;
+
+  previewEl.textContent = "⏳ Agla bill number check ho raha hai...";
+
+  try {
+    const counterDoc = await db.collection("counters").doc(counterDocId).get();
+    const lastNumber = counterDoc.exists ? counterDoc.data().currentNumber : 0;
+    const nextNumber = lastNumber + 1;
+    const paddedNext = String(nextNumber).padStart(5, "0");
+    const currentMonth = String(now.getMonth() + 1).padStart(2, "0");
+    const nextBillNo = seriesPrefix
+      ? `${seriesPrefix}-${shortYear}${nextShortYear}-${paddedNext}`
+      : `${shortYear}/${currentMonth}-${paddedNext}`;
+    const lastBillText =
+      lastNumber > 0
+        ? `${seriesPrefix ? seriesPrefix + "-" + shortYear + nextShortYear + "-" : ""}${String(lastNumber).padStart(
+            5,
+            "0"
+          )}`
+        : "koi nahi (pehla bill)";
+
+    previewEl.textContent = `📄 Yeh bill banega: ${nextBillNo}   |   Last bill: ${lastBillText}`;
+  } catch (e) {
+    console.warn("Could not fetch series preview:", e);
+    previewEl.textContent = "";
+  }
+}
+
+// Watch for any assignment to window.activeTemplate (product-templates.js
+// sets this directly) and refresh the preview immediately when it changes.
+(function watchActiveTemplateForSeriesPreview() {
+  let _activeTemplateValue = window.activeTemplate;
+  Object.defineProperty(window, "activeTemplate", {
+    configurable: true,
+    get() {
+      return _activeTemplateValue;
+    },
+    set(val) {
+      _activeTemplateValue = val;
+      updateSeriesPreview();
+    },
+  });
+})();
+
+// Also show a preview immediately on load for the "Direct Bill" (no
+// template selected yet) case, and again once editId data has loaded.
+document.addEventListener("DOMContentLoaded", () => {
+  setTimeout(updateSeriesPreview, 300);
+});
+
 let uniqueCustomers = []; // To hold our customer list
 async function setupAutocomplete() {
   // 1. Get the customer list directly from the Firestore 'customers' collection
@@ -162,6 +240,7 @@ function populateFormForEdit(data) {
   const form = document.getElementById("estimateForm");
   form.dataset.editId = data.id;
   editModeLastUpdatedAt = data.lastUpdatedAt || null;
+  updateSeriesPreview(); // now that editId is set, this will correctly clear itself
 
   // Safer way to set values, provides a fallback for missing data
   document.querySelector('input[name="customer_name"]').value = (data["Customer Name"] || "").toUpperCase();
@@ -384,7 +463,6 @@ function calculateBillData(formData) {
     data["Vakal 1 Kilo"] = net_vajan_after_vakal_moisture;
     data["Vakal 1 Bhav"] = price;
     data["Vakal 1 Amount"] = total;
-    data["Vakal 1 Variety"] = (formData.get("vakal_1_variety") || "").trim();
     for (let i = 2; i <= 5; i++) {
       data[`Vakal ${i} Katta`] = 0;
       data[`Vakal ${i} Kilo`] = 0;
@@ -420,31 +498,11 @@ function calculateBillData(formData) {
     data["Bardan Weight"] = Bardan;
 
     const vakals = [
-      {
-        katta: Number(formData.get("vakal_1_katta")) || 0,
-        bhav: Number(formData.get("vakal_1_bhav")) || 0,
-        variety: (formData.get("vakal_1_variety") || "").trim(),
-      },
-      {
-        katta: Number(formData.get("vakal_2_katta")) || 0,
-        bhav: Number(formData.get("vakal_2_bhav")) || 0,
-        variety: (formData.get("vakal_2_variety") || "").trim(),
-      },
-      {
-        katta: Number(formData.get("vakal_3_katta")) || 0,
-        bhav: Number(formData.get("vakal_3_bhav")) || 0,
-        variety: (formData.get("vakal_3_variety") || "").trim(),
-      },
-      {
-        katta: Number(formData.get("vakal_4_katta")) || 0,
-        bhav: Number(formData.get("vakal_4_bhav")) || 0,
-        variety: (formData.get("vakal_4_variety") || "").trim(),
-      },
-      {
-        katta: Number(formData.get("vakal_5_katta")) || 0,
-        bhav: Number(formData.get("vakal_5_bhav")) || 0,
-        variety: (formData.get("vakal_5_variety") || "").trim(),
-      },
+      { katta: Number(formData.get("vakal_1_katta")) || 0, bhav: Number(formData.get("vakal_1_bhav")) || 0 },
+      { katta: Number(formData.get("vakal_2_katta")) || 0, bhav: Number(formData.get("vakal_2_bhav")) || 0 },
+      { katta: Number(formData.get("vakal_3_katta")) || 0, bhav: Number(formData.get("vakal_3_bhav")) || 0 },
+      { katta: Number(formData.get("vakal_4_katta")) || 0, bhav: Number(formData.get("vakal_4_bhav")) || 0 },
+      { katta: Number(formData.get("vakal_5_katta")) || 0, bhav: Number(formData.get("vakal_5_bhav")) || 0 },
     ];
 
     // ── VALIDATION: Vakal bags cannot exceed total bharela bags ──
@@ -480,7 +538,6 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
       data[`Vakal ${i + 1} Moisture Kg`] = vakalMoistureKg;
       data[`Vakal ${i + 1} Kilo`] = kiloAfterMoisture;
       data[`Vakal ${i + 1} Bhav`] = vakals[i].bhav;
-      data[`Vakal ${i + 1} Variety`] = vakals[i].variety;
       const amount = customRound((kiloAfterMoisture / 20) * vakals[i].bhav);
       data[`Vakal ${i + 1} Amount`] = amount;
       total += amount;

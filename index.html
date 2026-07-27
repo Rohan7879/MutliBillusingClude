@@ -1378,6 +1378,7 @@
 
           snap.forEach((doc) => {
             const d = doc.data();
+            if (d.deleted === true) return;
             if (d.Date === today) {
               billsToday++;
               amountToday += d["Final Total"] || 0;

@@ -61,13 +61,28 @@ async function loadPrintLayoutSettings() {
     const doc = await db.collection("settings").doc("printLayout").get();
     if (doc.exists) {
       const data = doc.data();
-      if (data.detailsGridOrder) printLayoutState.detailsGridOrder = data.detailsGridOrder;
-      if (data.totalsGridOrder) printLayoutState.totalsGridOrder = data.totalsGridOrder;
+      if (data.detailsGridOrder) {
+        printLayoutState.detailsGridOrder = mergeInNewDefaultKeys(data.detailsGridOrder, DEFAULT_DETAILS_GRID_ORDER);
+      }
+      if (data.totalsGridOrder) {
+        printLayoutState.totalsGridOrder = mergeInNewDefaultKeys(data.totalsGridOrder, DEFAULT_TOTALS_GRID_ORDER);
+      }
     }
   } catch (e) {
     console.warn("Could not load print layout order:", e);
   }
   renderPrintLayoutLists();
+}
+
+/**
+ * If new box types (like "freight_item") get added to the DEFAULT order
+ * later, a previously-SAVED order won't have them — appendChild-style merge:
+ * keep the user's saved order as-is, then append any default key that's
+ * missing from it, so new boxes don't silently disappear.
+ */
+function mergeInNewDefaultKeys(savedOrder, defaultOrder) {
+  const missing = defaultOrder.filter((key) => !savedOrder.includes(key));
+  return [...savedOrder, ...missing];
 }
 
 function renderPrintLayoutLists() {
