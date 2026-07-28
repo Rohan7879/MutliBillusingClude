@@ -748,3 +748,115 @@ if (document.readyState === "loading") {
   // run immediately instead of waiting for an event that already fired.
   initNavbarOnLoad();
 }
+// Safe check taaki error na aaye
+const currentBillData = typeof data !== "undefined" ? data : window.currentBill || {};
+
+// Har possible spelling/capitalization check karlo
+const activeLinkedOrderId =
+  currentBillData.LinkedOrderId ||
+  currentBillData.linkedOrderId ||
+  currentBillData.orderId ||
+  new URLSearchParams(window.location.search).get("linkedOrderId");
+
+console.log("🔍 Debugging Linked Order:", { activeLinkedOrderId, currentBillData });
+
+if (activeLinkedOrderId) {
+  db.collection("orders")
+    .doc(activeLinkedOrderId)
+    .get()
+    .then((doc) => {
+      if (doc.exists) {
+        const orderNo = doc.data().orderNo || doc.data().orderNumber;
+        const container = document.getElementById("print_ref_order_container");
+        const span = document.getElementById("print_ref_order_no");
+        if (container && span) {
+          span.textContent = orderNo;
+          container.style.display = "inline-block";
+        }
+      } else {
+        console.log("❌ Order ID database mein mili hi nahi:", activeLinkedOrderId);
+      }
+    })
+    .catch((err) => console.log("❌ Error fetching linked order:", err));
+} else {
+  console.log("⚠️ Is bill ke sath koi Linked Order ID attach nahi hai!");
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// LINKED ORDER REFERENCE DISPLAY LOGIC
+// ═══════════════════════════════════════════════════════════════════════════
+
+function checkAndDisplayRefOrder(billData) {
+  const currentBillData = billData || {};
+
+  // Har possible spelling/capitalization check karlo
+  const activeLinkedOrderId =
+    currentBillData.LinkedOrderId ||
+    currentBillData.linkedOrderId ||
+    currentBillData.orderId ||
+    new URLSearchParams(window.location.search).get("linkedOrderId");
+
+  console.log("🔍 Debugging Linked Order:", { activeLinkedOrderId, currentBillData });
+
+  if (activeLinkedOrderId) {
+    db.collection("orders")
+      .doc(activeLinkedOrderId)
+      .get()
+      .then((doc) => {
+        if (doc.exists) {
+          const orderNo = doc.data().orderNo || doc.data().orderNumber;
+          const container = document.getElementById("print_ref_order_container");
+          const span = document.getElementById("print_ref_order_no");
+          if (container && span) {
+            span.textContent = orderNo;
+            container.style.display = "inline-block";
+          }
+        } else {
+          console.log("❌ Order ID database mein mili hi nahi:", activeLinkedOrderId);
+        }
+      })
+      .catch((err) => console.log("❌ Error fetching linked order:", err));
+  } else {
+    console.log("⚠️ Is bill ke sath koi Linked Order ID attach nahi hai!");
+  }
+}
+
+// Automatically run if global data or window.currentBill is already present
+if (typeof data !== "undefined" && data) {
+  checkAndDisplayRefOrder(data);
+} else if (window.currentBill) {
+  checkAndDisplayRefOrder(window.currentBill);
+}
+// ═══════════════════════════════════════════════════════════════════════════
+// AUTO-FETCH & DISPLAY LINKED ORDER REFERENCE ON BILL VIEW
+// ═══════════════════════════════════════════════════════════════════════════
+document.addEventListener("DOMContentLoaded", async () => {
+  const urlParams = new URLSearchParams(window.location.search);
+  const billId = urlParams.get("id");
+  if (!billId) return;
+
+  try {
+    const billDoc = await db.collection("bills").doc(billId).get();
+    if (!billDoc.exists) return;
+    const billData = billDoc.data();
+
+    const linkedId = billData.LinkedOrderId || billData.linkedOrderId || billData.orderId;
+    if (!linkedId) {
+      console.log("⚠️ Is bill ke sath koi Linked Order ID nahi hai.");
+      return;
+    }
+
+    const orderDoc = await db.collection("orders").doc(linkedId).get();
+    if (!orderDoc.exists) return;
+
+    const orderNo = orderDoc.data().orderNo || orderDoc.data().orderNumber;
+    const container = document.getElementById("print_ref_order_container");
+    const span = document.getElementById("print_ref_order_no");
+    if (container && span) {
+      span.textContent = orderNo;
+      container.style.display = "inline-block";
+      console.log("✅ Ref Order No successfully displayed:", orderNo);
+    }
+  } catch (err) {
+    console.error("❌ Error loading linked order reference:", err);
+  }
+});

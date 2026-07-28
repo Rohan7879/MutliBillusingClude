@@ -22,7 +22,7 @@ async function loadPendingOrdersIntoDropdown() {
       const o = doc.data();
       const opt = document.createElement("option");
       opt.value = doc.id;
-      opt.textContent = `#${o.orderNo} — ${o.date}${o.broker ? " | " + o.broker : ""} (${o.status})`;
+      opt.textContent = `#${o.orderNo} — ${o.date}${o.supplierName ? " | " + o.supplierName : ""} (${o.status})`;
       select.appendChild(opt);
     });
   } catch (e) {
@@ -32,6 +32,14 @@ async function loadPendingOrdersIntoDropdown() {
 
 // ── AUTO-FILL FORM FROM ORDER ─────────────────────────────────────────────────
 async function loadOrderIntoForm() {
+  // Print layout mein Order Number set karna
+  const refContainer = document.getElementById("print_ref_order_container");
+  const refText = document.getElementById("print_ref_order_no");
+
+  if (refContainer && refText) {
+    refText.innerText = order.orderNo;
+    refContainer.style.display = "block"; // Hide se hata kar show kar do
+  }
   const select = document.getElementById("order-select");
   const orderId = select?.value;
   if (!orderId) return;
@@ -47,7 +55,9 @@ async function loadOrderIntoForm() {
       const options = order.suppliers
         .map(
           (s, i) =>
-            `<option value="${i}">${s.supplierName} — ${s.product} (${s.quantity} ${s.unit} @ ₹${s.price}/${s.priceUnit})</option>`
+            `<option value="${i}">${s.supplierName || s.variety || "Item"} — ${s.product} (${s.quantity} ${s.unit} @ ₹${
+              s.price
+            }/${s.priceUnit})</option>`
         )
         .join("");
 
@@ -64,16 +74,45 @@ async function loadOrderIntoForm() {
       selectedSupplierId = 0;
     }
 
-    const supplier = order.suppliers[selectedSupplierId];
+    const supplier = order.suppliers[selectedSupplierId] || {};
+    const rawCustomerText = order.supplierName || supplier.supplierName || order.broker || "";
 
-    // Fill customer name
-    const nameInput = document.querySelector('input[name="customer_name"]');
-    if (nameInput) {
-      nameInput.value = supplier.supplierName.toUpperCase();
-      nameInput.dispatchEvent(new Event("input"));
+    let customerName = rawCustomerText;
+    let villageName = "";
+
+    // 1. Agar order ke naam mein hi bracket (Village) hai toh tod do
+    if (rawCustomerText.includes("(") && rawCustomerText.includes(")")) {
+      const parts = rawCustomerText.split("(");
+      customerName = parts[0].trim();
+      villageName = parts[1].replace(")", "").trim();
+    } else {
+      // 2. Agar order mein sirf naam hai (jaise MANSUKH), toh Firestore ki 'customers' collection se village dhoond lo!
+      try {
+        const custSnap = await db.collection("customers").where("name", "==", customerName.toUpperCase()).get();
+        if (!custSnap.empty) {
+          const custData = custSnap.docs[0].data();
+          if (custData.village) {
+            villageName = custData.village;
+          }
+        }
+      } catch (err) {
+        console.warn("Village fetch error:", err);
+      }
     }
 
-    // Fill broker
+    // Fill Customer Name box
+    const nameInput = document.querySelector('input[name="customer_name"]');
+    if (nameInput) {
+      nameInput.value = customerName.toUpperCase();
+    }
+
+    // Fill Village box
+    const villageInput =
+      document.querySelector('input[name="village"]') || document.querySelector('input[placeholder*="Village"]');
+    if (villageInput) {
+      villageInput.value = villageName ? villageName.toUpperCase() : "";
+      villageInput.dispatchEvent(new Event("input"));
+    } // Fill broker
     if (order.broker) {
       const brokerInput = document.querySelector('input[name="broker"]');
       if (brokerInput) brokerInput.value = order.broker.toUpperCase();
@@ -204,11 +243,26 @@ async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
         newStatus = order.status;
       }
 
-      transaction.update(orderRef, {
+      // 👇 YAHAN NAYA LINKING LOGIC ADD HUA HAI 👇
+      // Bill data me se bill number nikalna (jo bhi key tum save karte ho)
+      const currentBillNo = billData["Bill No"] || billData["billNo"] || billData["display_serial_no"] || "";
+
+      let updatePayload = {
         suppliers,
         status: newStatus,
         updatedAt: Date.now(),
-      });
+      };
+
+      if (currentBillNo) {
+        // Agar pehle se koi bill linked hai, toh comma lagakar naya add kar do (Partial case ke liye)
+        let existingBills = order.linkedBillNo ? order.linkedBillNo : "";
+        if (!existingBills.includes(currentBillNo)) {
+          updatePayload.linkedBillNo = existingBills ? `${existingBills}, ${currentBillNo}` : currentBillNo;
+        }
+      }
+      // 👆 LINKING LOGIC END 👆
+
+      transaction.update(orderRef, updatePayload);
     });
 
     console.log(`Order ${orderId} updated (supplier ${supplierIdx})${closeOrderOverride ? " — manually closed" : ""}`);
@@ -216,7 +270,6 @@ async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
     console.warn("Could not update order delivered qty:", e);
   }
 }
-
 window.loadOrderIntoForm = loadOrderIntoForm;
 window.clearOrderLink = clearOrderLink;
 window.updateOrderDeliveredQty = updateOrderDeliveredQty;

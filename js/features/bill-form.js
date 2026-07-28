@@ -792,6 +792,7 @@ async function collectData() {
         {
           name: customerName,
           village: customerVillage,
+          createdAt: Date.now(),
         },
         { merge: true }
       );
@@ -839,6 +840,18 @@ async function collectData() {
     data["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
 
     const docRef = await billsCollection.add(data);
+
+    // --- 🔗 Order Link Update ---
+    if (data["LinkedOrderId"]) {
+      await db
+        .collection("orders")
+        .doc(data["LinkedOrderId"])
+        .update({
+          status: "Completed",
+          linkedBillNos: firebase.firestore.FieldValue.arrayUnion(data["Serial No"]), // Array mein save hoga
+          updatedAt: Date.now(),
+        });
+    }
 
     // ═══════════════════════════════════════════════════════════════════
     // PHASE 2 (item #10) — Master Ledger Balance
