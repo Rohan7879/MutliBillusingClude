@@ -93,20 +93,177 @@ function filterOrders(status) {
   currentFilter = status;
   renderOrders();
 }
+function togglePaymentStatus(orderId) {
+  const order = allOrders.find((o) => o.id === orderId);
+  if (!order) return;
 
-// ── RENDER ORDERS ─────────────────────────────────────────────────────────────
-function renderOrders() {
-  const container = document.getElementById("order-list");
-  if (!container) return;
+  // Cycle: Unpaid -> Partial -> Paid -> Unpaid
+  if (!order.paymentStatus || order.paymentStatus === "Unpaid") {
+    order.paymentStatus = "Partial";
+  } else if (order.paymentStatus === "Partial") {
+    order.paymentStatus = "Paid";
+  } else {
+    order.paymentStatus = "Unpaid";
+  }
 
-  const filtered =
+  // Firebase ya Local Database mein save karne ka function yahan call karein
+  updateOrderInDatabase(order);
+  renderOrders();
+}
+
+// 1. DD/MM/YYYY Date ko JS Date object me convert karne ka safe function
+function parseCustomDate(dateStr) {
+  if (!dateStr) return null;
+  const parts = dateStr.toString().trim().split(/[/|-]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 2 && parts[2].length === 4) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1;
+      const year = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+  }
+  return new Date(dateStr);
+}
+
+// 2. Combined Filter Function (Status + Date + Smart Search)
+function getFilteredOrders() {
+  let list =
     currentFilter === "All"
       ? allOrders.filter((o) => o.status !== "Deleted")
       : allOrders.filter((o) => o.status === currentFilter);
 
+  // Date Filter
+  if (typeof currentDateFilter !== "undefined" && currentDateFilter !== "all") {
+    list = list.filter((order) => {
+      if (!order.date) return false;
+      const orderDate = parseCustomDate(order.date);
+      if (!orderDate || isNaN(orderDate.getTime())) return true;
+
+      const today = new Date();
+
+      if (currentDateFilter === "today") {
+        return orderDate.toDateString() === today.toDateString();
+      } else if (currentDateFilter === "this_week") {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        return orderDate >= startOfWeek && orderDate <= endOfWeek;
+      } else if (currentDateFilter === "this_month") {
+        return orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
+      } else if (currentDateFilter === "last_month") {
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        return orderDate.getMonth() === lastMonth.getMonth() && orderDate.getFullYear() === lastMonth.getFullYear();
+      }
+      return true;
+    });
+  }
+
+  // Smart Search Filter
+  if (typeof currentSearchQuery !== "undefined" && currentSearchQuery !== "") {
+    const query = currentSearchQuery.toLowerCase().trim();
+    list = list.filter((order) => {
+      const orderNo = (order.orderNo || "").toLowerCase();
+      const broker = (order.broker || "").toLowerCase();
+      const notes = (order.notes || "").toLowerCase();
+
+      const supplierMatch = (order.suppliers || []).some(
+        (s) =>
+          (s.variety || "").toLowerCase().includes(query) ||
+          (s.supplierName || "").toLowerCase().includes(query) ||
+          (s.supplier || "").toLowerCase().includes(query) ||
+          (s.product || "").toLowerCase().includes(query)
+      );
+
+      const mainSupMatch = (order.supplier || order.supplierName || "").toLowerCase().includes(query);
+
+      const billsMatch =
+        (order.linkedBillNos || []).some((b) => (b.billNo || b).toString().toLowerCase().includes(query)) ||
+        (order.linkedBillNo || "").toString().toLowerCase().includes(query);
+
+      return (
+        orderNo.includes(query) ||
+        broker.includes(query) ||
+        notes.includes(query) ||
+        supplierMatch ||
+        mainSupMatch ||
+        billsMatch
+      );
+    });
+  }
+
+  return list;
+}
+
+// 3. Summary Bar with Variety-wise breakdown
+function updateOrderSummary(filteredList) {
+  const summaryBar = document.getElementById("orderSummaryBar");
+  if (!summaryBar) return;
+
+  let totalOrders = filteredList.length;
+  let totalOrderedQty = 0;
+  let totalDeliveredQty = 0;
+  let varietyMap = {};
+
+  filteredList.forEach((order) => {
+    if (order.suppliers && Array.isArray(order.suppliers)) {
+      order.suppliers.forEach((s) => {
+        const qty = Number(s.quantity) || 0;
+        const del = Number(s.delivered) || 0;
+        totalOrderedQty += qty;
+        totalDeliveredQty += del;
+
+        const vName = (s.variety || "OTHER").trim().toUpperCase();
+        const unitName = s.unit || "Man";
+
+        if (!varietyMap[vName]) {
+          varietyMap[vName] = { ordered: 0, delivered: 0, unit: unitName };
+        }
+        varietyMap[vName].ordered += qty;
+        varietyMap[vName].delivered += del;
+      });
+    }
+  });
+
+  let varietyHtml = Object.keys(varietyMap)
+    .map((v) => {
+      const data = varietyMap[v];
+      return `<span style="background:#fff; padding:3px 8px; border-radius:4px; border:1px solid #cbd5e1; font-size:11px; display:inline-block; margin:2px 0;">
+      🌾 <b>${v}</b>: <span style="color:#d35400;">${data.ordered} ${data.unit}</span> (Done: <span style="color:#27ae60;">${data.delivered}</span>)
+    </span>`;
+    })
+    .join(" ");
+
+  summaryBar.innerHTML = `
+    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; flex-wrap: wrap; gap: 10px;">
+      <div>
+        📦 Orders: <strong style="color:#005a9e;">${totalOrders}</strong> &nbsp;|&nbsp; 
+        Total: <strong style="color:#d35400;">${totalOrderedQty}</strong> &nbsp;|&nbsp; 
+        Done: <strong style="color:#27ae60;">${totalDeliveredQty}</strong>
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        ${varietyHtml || '<span style="color:#777;">No items</span>'}
+      </div>
+    </div>
+  `;
+}
+
+// 4. Main Render Orders Function
+function renderOrders() {
+  const container = document.getElementById("order-list");
+  if (!container) return;
+
+  const filtered = getFilteredOrders();
+  updateOrderSummary(filtered);
+
   if (filtered.length === 0) {
     container.innerHTML = `<div style="text-align:center;color:#6c757d;padding:30px;font-size:15px;">
-      📭 No ${currentFilter === "All" ? "" : currentFilter} orders found.</div>`;
+      📭 No orders found.</div>`;
     return;
   }
 
@@ -130,21 +287,64 @@ function renderOrders() {
           Deleted: "🗑️",
         }[order.status] || "⏳";
 
-      // Item rows (Supplier ki jagah Variety dikhayega)
+      // Payment Status Badge
+      const payStatus = order.paymentStatus || "Unpaid";
+      let payBgColor = "#dc3545"; // Red for Unpaid
+      if (payStatus === "Paid") payBgColor = "#28a745"; // Green
+      if (payStatus === "Partial") payBgColor = "#ffc107"; // Yellow/Orange
+
+      const paymentBadgeHtml = `
+        <span onclick="togglePaymentStatus('${order.id}')" 
+              style="background: ${payBgColor}; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-left: 5px;" 
+              title="Click to change payment status">
+          💳 ${payStatus}
+        </span>
+      `;
+
+      // Item rows
       const suppliers = (order.suppliers || [])
-        .map(
-          (s) => `
-      <div class="supplier-row">
-        <span><strong>${s.variety || s.supplierName || "-"}</strong></span>
-        <span>${s.product}</span>
-        <span>${s.quantity} ${s.unit}</span>
-        <span>₹${s.price}/${s.priceUnit}</span>
-        <span style="color:#6c757d;">${s.delivered || 0} ${s.unit} delivered</span>
-      </div>`
-        )
+        .map((s) => {
+          const qty = Number(s.quantity) || 0;
+          const del = Number(s.delivered) || 0;
+
+          let percent = 0;
+          let barWidth = 0;
+
+          if (qty > 0) {
+            percent = Math.round((del / qty) * 100);
+            barWidth = percent > 100 ? 100 : percent;
+          }
+
+          let barColor = "#005a9e"; // Partial (Blue)
+          let statusText = `${del} / ${qty} <span style="font-size:11px;">(${percent}%)</span>`;
+
+          if (percent === 100) {
+            barColor = "#28a745"; // Complete (Green)
+          } else if (percent > 100) {
+            barColor = "#dc3545"; // Over delivered (Red Alert)
+            statusText = `<span style="color:#dc3545;">${del} / ${qty} <span style="font-size:11px;">(${percent}% - Over)</span></span>`;
+          }
+
+          return `
+<div style="margin-bottom: 8px; border-bottom: 1px dashed #eee; padding-bottom: 8px;">
+ <div class="supplier-row" style="border: none; margin-bottom: 2px; padding-bottom: 0; align-items: flex-start;">
+   <div><strong>${s.variety || "-"}</strong></div>
+   <div>${s.product || "-"}</div>
+   <div>${qty} ${s.unit || "Man"}</div>
+   <div>₹${s.price || 0}/${s.priceUnit || "20kg"}</div>
+   <span style="color:#6c757d; font-weight:600; text-align:right;">
+     ${statusText}
+   </span>
+ </div>
+ 
+ <div style="width: 100%; background: #e9ecef; border-radius: 4px; height: 6px; overflow: hidden; margin-top: 4px;">
+   <div style="width: ${barWidth}%; background: ${barColor}; height: 100%; transition: width 0.3s ease;"></div>
+ </div>
+</div>`;
+        })
         .join("");
 
-      // Har bill ke liye alag clickable badge banane ka loop
+      // Linked Bills Badges
       let billBadgesHtml = "";
       if (order.linkedBillNos && order.linkedBillNos.length > 0) {
         billBadgesHtml = order.linkedBillNos
@@ -164,70 +364,186 @@ function renderOrders() {
         `;
       }
 
-      // Check karo ki kya status Completed ya Partial hai
+      // Supplier Name in Header
+      let mainSupplierName = order.supplier || order.supplierName || order.partyName || order.party || "";
+      if (!mainSupplierName && order.suppliers && Array.isArray(order.suppliers)) {
+        let orderSuppliersList = [];
+        order.suppliers.forEach((s) => {
+          const sName = s.supplierName || s.supplier || s.partyName || s.party || s.name || "";
+          if (sName && !orderSuppliersList.includes(sName)) {
+            orderSuppliersList.push(sName);
+          }
+        });
+        if (orderSuppliersList.length > 0) {
+          mainSupplierName = orderSuppliersList.join(", ");
+        }
+      }
+
+      const headerSupplierHtml = mainSupplierName
+        ? ` &nbsp;|&nbsp; 🏭 <span style="color:#d35400; font-weight:700;">${mainSupplierName}</span>`
+        : "";
+
       const isLocked = order.status === "Completed" || order.status === "Partial";
 
       return `
-  <div class="order-card">
-    <div class="order-card-header">
-      <div>
-        <div class="order-no">#${order.orderNo}</div>
-        <div class="order-date">📅 ${order.date}${order.broker ? ` &nbsp;|&nbsp; 🤝 ${order.broker}` : ""}</div>
-      </div>
-      
-      <div style="text-align: right;">
-        <span class="status-badge ${statusClass}">${statusEmoji} ${order.status}</span>
-        ${billBadgesHtml ? `<br>${billBadgesHtml}` : ""}
-      </div>
-    </div>
-
-    <!-- SUPPLIER ki jagah VARIETY -->
-    <div class="supplier-row supplier-row-header" style="margin-bottom:4px;">
-      <span>Variety</span><span>Product</span><span>Qty (Ordered)</span>
-      <span>Rate</span><span>Delivered</span>
-    </div>
+      <div class="order-card">
+        <div class="order-card-header" style="display: flex; justify-content: space-between; align-items: center;">
+          
+          <!-- Left Side: Order No & Date -->
+          <div>
+            <div class="order-no">#${order.orderNo}</div>
+            <div class="order-date">📅 ${order.date}</div>
+          </div>
     
-    ${suppliers}
-
-    ${order.notes ? `<div style="margin-top:8px;font-size:12px;color:#6c757d;">📝 ${order.notes}</div>` : ""}
-    ${
-      order.cancelReason
-        ? `<div style="margin-top:8px;font-size:12px;color:#dc3545;background:#ffe5e5;padding:6px;border-radius:4px;border:1px solid #ffcccc;">⚠️ <strong>Reason:</strong> ${order.cancelReason}</div>`
-        : ""
-    }
-
-    <!-- 👇 Yahan check lagaya hai ki agar Cancelled ya Deleted hai, toh buttons DONT SHOW 👇 -->
-    ${
-      order.status === "Cancelled" || order.status === "Deleted"
-        ? ""
-        : `
-      <div class="order-actions">
-        <button class="btn-primary" style="padding:7px 14px;font-size:12px;" onclick="editOrder('${
-          order.id
-        }')">✏️ Edit</button>
-        <button style="padding:7px 14px;font-size:12px;background:#28a745;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
-          order.id
-        }','Completed')">✅ Complete</button>
-        <button style="padding:7px 14px;font-size:12px;background:#17a2b8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
-          order.id
-        }','Partial')">🔄 Partial</button>
-        
+        <!-- Center: Supplier (Top) & Broker (Bottom) - Bada Size -->
+      <div style="text-align: center; flex: 1; padding: 0 15px;">
         ${
-          !isLocked
-            ? `
-          <button style="padding:7px 14px;font-size:12px;background:#6c757d;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${order.id}','Cancelled')">❌ Cancel</button>
-          <button style="padding:7px 14px;font-size:12px;background:#dc3545;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="deleteOrder('${order.id}')">🗑️</button>
-        `
+          mainSupplierName
+            ? `<div style="font-size: 15px; font-weight: 800; color: #d35400;">🏭 ${mainSupplierName}</div>`
+            : ""
+        }
+        ${
+          order.broker
+            ? `<div style="font-size: 13px; font-weight: 700; color: #343a40; margin-top: 3px;">🤝 ${order.broker}</div>`
             : ""
         }
       </div>
-      `
-    }
-  </div>`;
+          
+          <!-- Right Side: Status Badges & Bills -->
+          <div style="text-align: right;">
+            <span class="status-badge ${statusClass}">${statusEmoji} ${order.status}</span>
+            ${paymentBadgeHtml}
+            ${billBadgesHtml ? `<br>${billBadgesHtml}` : ""}
+          </div>
+        </div>
+    
+        <div class="supplier-row supplier-row-header" style="margin-bottom:4px;">
+          <span>Variety</span><span>Product</span><span>Qty (Ordered)</span>
+          <span>Rate</span><span>Delivered</span>
+        </div>
+        
+        ${suppliers}
+    
+        ${order.notes ? `<div style="margin-top:8px;font-size:12px;color:#6c757d;">📝 ${order.notes}</div>` : ""}
+        ${
+          order.cancelReason
+            ? `<div style="margin-top:8px;font-size:12px;color:#dc3545;background:#ffe5e5;padding:6px;border-radius:4px;border:1px solid #ffcccc;">⚠️ <strong>Reason:</strong> ${order.cancelReason}</div>`
+            : ""
+        }
+    
+        ${
+          order.status === "Cancelled" || order.status === "Deleted"
+            ? ""
+            : `
+          <div class="order-actions">
+            <button class="btn-primary" style="padding:7px 14px;font-size:12px;" onclick="editOrder('${
+              order.id
+            }')">✏️ Edit</button>
+            <button style="padding:7px 14px;font-size:12px;background:#28a745;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
+              order.id
+            }','Completed')">✅ Complete</button>
+            <button style="padding:7px 14px;font-size:12px;background:#17a2b8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
+              order.id
+            }','Partial')">🔄 Partial</button>
+            <button style="padding:7px 14px;font-size:12px;background:#25D366;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="shareOrderOnWhatsApp('${
+              order.id
+            }')">📱 WhatsApp</button>
+            
+            ${
+              !isLocked
+                ? `
+              <button style="padding:7px 14px;font-size:12px;background:#6c757d;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${order.id}','Cancelled')">❌ Cancel</button>
+              <button style="padding:7px 14px;font-size:12px;background:#dc3545;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="deleteOrder('${order.id}')">🗑️</button>
+            `
+                : ""
+            }
+          </div>
+          `
+        }
+      </div>`;
     })
     .join("");
 }
 
+// 5. Payment status toggle function
+function togglePaymentStatus(orderId) {
+  const order = allOrders.find((o) => o.id === orderId);
+  if (!order) return;
+
+  if (!order.paymentStatus || order.paymentStatus === "Unpaid") {
+    order.paymentStatus = "Partial";
+  } else if (order.paymentStatus === "Partial") {
+    order.paymentStatus = "Paid";
+  } else {
+    order.paymentStatus = "Unpaid";
+  }
+
+  if (typeof saveOrderToFirebase === "function") {
+    saveOrderToFirebase(order);
+  }
+  renderOrders();
+}
+
+// 6. Search trigger input function
+function applySearchFilter() {
+  const input = document.getElementById("orderSearchInput");
+  currentSearchQuery = input ? input.value : "";
+  renderOrders();
+}
+
+// 7. Date filter trigger dropdown function
+function applyDateFilter() {
+  const select = document.getElementById("dateFilter");
+  currentDateFilter = select ? select.value : "this_week";
+  renderOrders();
+}
+// Helper function jo status aur date dono se filter karega
+function filteredByDateAndStatus() {
+  let list =
+    currentFilter === "All"
+      ? allOrders.filter((o) => o.status !== "Deleted")
+      : allOrders.filter((o) => o.status === currentFilter);
+
+  // Agar aapne date filter select kiya hai
+  if (typeof currentDateFilter !== "undefined" && currentDateFilter !== "all") {
+    list = list.filter((order) => {
+      if (!order.date) return false;
+      const orderDate = new Date(order.date);
+      const today = new Date();
+
+      if (currentDateFilter === "today") {
+        return orderDate.toDateString() === today.toDateString();
+      } else if (currentDateFilter === "this_month") {
+        return orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
+      } else if (currentDateFilter === "last_month") {
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        return orderDate.getMonth() === lastMonth.getMonth() && orderDate.getFullYear() === lastMonth.getFullYear();
+      }
+      return true;
+    });
+  }
+  return list;
+}
+
+// Payment status change karne ka click function
+function togglePaymentStatus(orderId) {
+  const order = allOrders.find((o) => o.id === orderId);
+  if (!order) return;
+
+  if (!order.paymentStatus || order.paymentStatus === "Unpaid") {
+    order.paymentStatus = "Partial";
+  } else if (order.paymentStatus === "Partial") {
+    order.paymentStatus = "Paid";
+  } else {
+    order.paymentStatus = "Unpaid";
+  }
+
+  // Agar database update function hai toh yahan call hoga, warna seedha render
+  if (typeof saveOrderToFirebase === "function") {
+    saveOrderToFirebase(order);
+  }
+  renderOrders();
+}
 function closeOrderModal() {
   document.getElementById("order-modal").classList.remove("open");
   editingOrderId = null;
@@ -533,15 +849,48 @@ function editOrder(id) {
 }
 
 // ── UPDATE STATUS ─────────────────────────────────────────────────────────────
-async function updateOrderStatus(id, status) {
+// ── UPDATE ORDER STATUS (With Safeguard Checkpoint) ─────────────────────
+async function updateOrderStatus(id, newStatus) {
+  // 1. Ek check point (SweetAlert) lagayenge
+  const result = await Swal.fire({
+    title: "Change Status?",
+    text: `Kya aap sach mein is order ko '${newStatus}' status par set karna chahte hain?`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#3085d6",
+    cancelButtonColor: "#6c757d",
+    confirmButtonText: `Yes, Make it ${newStatus}`,
+    cancelButtonText: "No, Cancel",
+  });
+
+  // Agar user ne galti se click kiya tha aur 'No' daba diya, toh order safe rahega
+  if (!result.isConfirmed) {
+    return;
+  }
+
+  // 2. Agar 'Yes' dabaya, tabhi aage database mein change hoga
   try {
-    await ordersCollection.doc(id).update({ status, updatedAt: Date.now() });
-    await loadOrders();
+    await ordersCollection.doc(id).update({
+      status: newStatus,
+      updatedAt: Date.now(),
+    });
+
+    await loadOrders(); // List ko refresh karega
+
+    // Chhota sa success notification
+    Swal.fire({
+      icon: "success",
+      title: `Order marked as ${newStatus}`,
+      toast: true,
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 2000,
+    });
   } catch (e) {
-    console.error(e);
+    console.error("Error updating status:", e);
+    Swal.fire("Error", "Status update fail ho gaya.", "error");
   }
 }
-
 // ── DELETE ORDER ──────────────────────────────────────────────────────────────
 // ── CANCEL / SOFT DELETE ORDER (Naya Safe Tarika) ────────────────────────────
 async function deleteOrder(id) {
@@ -1053,3 +1402,325 @@ async function loadCustomersForOrder() {
 document.addEventListener("DOMContentLoaded", () => {
   loadCustomersForOrder();
 });
+// ── SHARE ORDER ON WHATSAPP (CLEAN & WORKING VERSION) ──────────────────────
+function shareOrderOnWhatsApp(orderId) {
+  const order = allOrders.find((o) => o.id === orderId);
+  if (!order) return;
+
+  const orderNo = order.orderNo || order.orderNumber || "N/A";
+  const orderDate = order.date || "N/A";
+  const brokerName = order.broker || "-";
+
+  let msg = `*GANESH AGRI INDUSTRY*\n`;
+  msg += `_Order Status Report_\n`;
+  msg += `=======================\n`;
+  msg += `*Order No :* ${orderNo}\n`;
+  msg += `*Date     :* ${orderDate}\n`;
+  msg += `*Broker   :* ${brokerName}\n`;
+
+  // Linked Bills as clean text
+  if (order.linkedBillNos && order.linkedBillNos.length > 0) {
+    const billsList = order.linkedBillNos.map((b) => (b.billNo || b).toString().trim()).join(", ");
+    msg += `*Bills    :* ${billsList}\n`;
+  } else if (order.linkedBillNo) {
+    msg += `*Bill     :* ${order.linkedBillNo.toString().trim()}\n`;
+  }
+
+  msg += `=======================\n\n`;
+
+  if (order.suppliers && order.suppliers.length > 0) {
+    order.suppliers.forEach((s) => {
+      const qty = Number(s.quantity) || 0;
+      const del = Number(s.delivered) || 0;
+      let pending = qty - del;
+
+      msg += `*Item:* ${s.variety || s.supplierName || "-"} (${s.product || "-"})\n`;
+      msg += `*Rate:* ₹${s.price || 0} / ${s.priceUnit || "20kg"}\n\n`;
+
+      msg += `_Delivery Status:_\n`;
+      msg += `- Ordered   : ${qty} ${s.unit || "Man"}\n`;
+      msg += `- Delivered : ${del} ${s.unit || "Man"}\n`;
+
+      if (del > qty) {
+        msg += `- Over      : +${Math.abs(del - qty).toFixed(2)} ${s.unit || "Man"}\n`;
+      } else {
+        msg += `- Pending   : ${pending.toFixed(2)} ${s.unit || "Man"}\n`;
+      }
+
+      msg += `-----------------------\n\n`;
+    });
+  }
+
+  msg += `_Thank You_`;
+
+  const encodedMsg = encodeURIComponent(msg);
+  const whatsappUrl = `https://wa.me/?text=${encodedMsg}`;
+  window.open(whatsappUrl, "_blank");
+}
+let currentDateFilter = "this_week"; // Yeh ab by default this_week rahega
+
+function applyDateFilter() {
+  currentDateFilter = document.getElementById("dateFilter").value;
+  renderOrders(); // Yeh function saare filters ke sath orders ko dobara draw karega
+}
+
+// 1. DD/MM/YYYY Date ko JS Date object me convert karne ka safe function
+function parseCustomDate(dateStr) {
+  if (!dateStr) return null;
+
+  // Agar date string DD/MM/YYYY format me hai (jaise 29/07/2026)
+  const parts = dateStr.toString().trim().split(/[/|-]/);
+  if (parts.length === 3) {
+    if (parts[0].length === 2 && parts[2].length === 4) {
+      const day = parseInt(parts[0], 10);
+      const month = parseInt(parts[1], 10) - 1; // JS me months 0 se start hote hain (0 = Jan)
+      const year = parseInt(parts[2], 10);
+      return new Date(year, month, day);
+    }
+  }
+  return new Date(dateStr);
+}
+
+// 2. Updated Filter Function
+function filteredByDateAndStatus() {
+  let list =
+    currentFilter === "All"
+      ? allOrders.filter((o) => o.status !== "Deleted")
+      : allOrders.filter((o) => o.status === currentFilter);
+
+  if (typeof currentDateFilter !== "undefined" && currentDateFilter !== "all") {
+    list = list.filter((order) => {
+      if (!order.date) return false;
+
+      const orderDate = parseCustomDate(order.date);
+      // Agar Date Invalid hai toh skip mat karo, dikha do
+      if (!orderDate || isNaN(orderDate.getTime())) return true;
+
+      const today = new Date();
+
+      if (currentDateFilter === "today") {
+        return orderDate.toDateString() === today.toDateString();
+      } else if (currentDateFilter === "this_week") {
+        // Iss hafte ki shuruwat (Sunday) se lekar hafte ke aakhri din (Saturday) tak
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        return orderDate >= startOfWeek && orderDate <= endOfWeek;
+      } else if (currentDateFilter === "this_month") {
+        return orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
+      } else if (currentDateFilter === "last_month") {
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        return orderDate.getMonth() === lastMonth.getMonth() && orderDate.getFullYear() === lastMonth.getFullYear();
+      }
+      return true;
+    });
+  }
+  return list;
+}
+let currentSearchQuery = "";
+
+// Jab user search box me kuch type karega
+function applySearchFilter() {
+  const input = document.getElementById("orderSearchInput");
+  currentSearchQuery = input ? input.value.toLowerCase().trim() : "";
+  renderOrders();
+}
+
+// 2. Ultra Smart Search Filter (Fixed & Complete)
+function getFilteredOrders() {
+  let list =
+    currentFilter === "All"
+      ? allOrders.filter((o) => o.status !== "Deleted")
+      : allOrders.filter((o) => o.status === currentFilter);
+
+  // Date Filter Dropdown check
+  if (typeof currentDateFilter !== "undefined" && currentDateFilter !== "all") {
+    list = list.filter((order) => {
+      if (!order.date) return false;
+      const orderDate = parseCustomDate(order.date);
+      if (!orderDate || isNaN(orderDate.getTime())) return true;
+
+      const today = new Date();
+
+      if (currentDateFilter === "today") {
+        return orderDate.toDateString() === today.toDateString();
+      } else if (currentDateFilter === "this_week") {
+        const startOfWeek = new Date(today);
+        startOfWeek.setDate(today.getDate() - today.getDay());
+        startOfWeek.setHours(0, 0, 0, 0);
+
+        const endOfWeek = new Date(startOfWeek);
+        endOfWeek.setDate(startOfWeek.getDate() + 6);
+        endOfWeek.setHours(23, 59, 59, 999);
+
+        return orderDate >= startOfWeek && orderDate <= endOfWeek;
+      } else if (currentDateFilter === "this_month") {
+        return orderDate.getMonth() === today.getMonth() && orderDate.getFullYear() === today.getFullYear();
+      } else if (currentDateFilter === "last_month") {
+        const lastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+        return orderDate.getMonth() === lastMonth.getMonth() && orderDate.getFullYear() === lastMonth.getFullYear();
+      }
+      return true;
+    });
+  }
+
+  // 🔍 All-in-One Super Search Filter
+  if (typeof currentSearchQuery !== "undefined" && currentSearchQuery !== "") {
+    const query = currentSearchQuery.toLowerCase().trim();
+    list = list.filter((order) => {
+      const orderNo = (order.orderNo || "").toLowerCase();
+      const broker = (order.broker || "").toLowerCase();
+      const notes = (order.notes || "").toLowerCase();
+      const dateStr = (order.date || "").toLowerCase();
+      const status = (order.status || "").toLowerCase();
+      const payStatus = (order.paymentStatus || "").toLowerCase();
+      const mainSupplier = (order.supplier || order.supplierName || order.partyName || "").toLowerCase();
+      const mainVillage = (order.village || order.supplierVillage || "").toLowerCase();
+      const vehicleOrder = (order.vehicleNo || order.vehicle || "").toLowerCase();
+      const phoneOrder = (order.phone || order.mobile || "").toLowerCase();
+      const transportOrder = (order.transport || "").toLowerCase();
+
+      // Check inside each item/supplier row of the order
+      const supplierMatch = (order.suppliers || []).some((s) => {
+        const variety = (s.variety || "").toLowerCase();
+        const product = (s.product || "").toLowerCase();
+        const suppName = (s.supplierName || s.supplier || s.partyName || "").toLowerCase();
+        const village = (s.village || s.supplierVillage || "").toLowerCase();
+        const price = (s.price || "").toString().toLowerCase();
+        const qty = (s.quantity || "").toString().toLowerCase();
+        const vehicle = (s.vehicleNo || s.vehicle || "").toLowerCase();
+        const transport = (s.transport || "").toLowerCase();
+
+        return (
+          variety.includes(query) ||
+          product.includes(query) ||
+          suppName.includes(query) ||
+          village.includes(query) ||
+          price.includes(query) ||
+          qty.includes(query) ||
+          vehicle.includes(query) ||
+          transport.includes(query)
+        );
+      });
+
+      // Linked Bills check (Yahi define hona zaroori tha)
+      const billsMatch =
+        (order.linkedBillNos || []).some((b) => (b.billNo || b).toString().toLowerCase().includes(query)) ||
+        (order.linkedBillNo || "").toString().toLowerCase().includes(query);
+
+      return (
+        orderNo.includes(query) ||
+        broker.includes(query) ||
+        notes.includes(query) ||
+        dateStr.includes(query) ||
+        status.includes(query) ||
+        payStatus.includes(query) ||
+        mainSupplier.includes(query) ||
+        mainVillage.includes(query) ||
+        vehicleOrder.includes(query) ||
+        phoneOrder.includes(query) ||
+        transportOrder.includes(query) ||
+        supplierMatch ||
+        billsMatch
+      );
+    });
+  }
+
+  return list;
+}
+// 3. Summary Bar with Unit Conversion (Sabhi units ko Tons mein convert karke total dikhayega)
+function updateOrderSummary(filteredList) {
+  const summaryBar = document.getElementById("orderSummaryBar");
+  if (!summaryBar) return;
+
+  let totalOrders = filteredList.length;
+  let totalKgAll = 0;
+  let totalDeliveredKgAll = 0;
+  let groupMap = {};
+
+  filteredList.forEach((order) => {
+    if (order.suppliers && Array.isArray(order.suppliers)) {
+      order.suppliers.forEach((s) => {
+        const qty = Number(s.quantity) || 0;
+        const del = Number(s.delivered) || 0;
+        const unit = (s.unit || "Man").trim().toLowerCase();
+
+        // Standard Weight Multiplier (KG mein convert karne ke liye)
+        let kgMultiplier = 20; // Default Man = 20kg
+        if (unit.includes("quintal") || unit.includes("q")) {
+          kgMultiplier = 100; // 1 Quintal = 100kg
+        } else if (unit.includes("bag") || unit.includes("bora")) {
+          kgMultiplier = 50; // Standard grain bag = 50kg
+        } else if (unit.includes("kg")) {
+          kgMultiplier = 1; // 1 KG = 1kg
+        } else if (unit.includes("man") || unit.includes("m")) {
+          kgMultiplier = 20; // 1 Man = 20kg
+        }
+
+        const itemKg = qty * kgMultiplier;
+        const itemDelKg = del * kgMultiplier;
+
+        totalKgAll += itemKg;
+        totalDeliveredKgAll += itemDelKg;
+
+        const vName = (s.variety || "OTHER").trim().toUpperCase();
+        const pName = (s.product || "").trim();
+        const groupKey = pName ? `${vName} (${pName})` : vName;
+
+        if (!groupMap[groupKey]) {
+          groupMap[groupKey] = { orderedKg: 0, deliveredKg: 0 };
+        }
+        groupMap[groupKey].orderedKg += itemKg;
+        groupMap[groupKey].deliveredKg += itemDelKg;
+      });
+    }
+  });
+
+  // Total Tons mein convert karna (1 Ton = 1000 kg)
+  let totalTonsAll = (totalKgAll / 1000).toFixed(2);
+  let totalDelTonsAll = (totalDeliveredKgAll / 1000).toFixed(2);
+
+  // Variety & Product wise badges (Tons mein)
+  let groupHtml = Object.keys(groupMap)
+    .map((key) => {
+      const data = groupMap[key];
+      const ordTons = (data.orderedKg / 1000).toFixed(2);
+      const delTons = (data.deliveredKg / 1000).toFixed(2);
+      const safeKey = key.replace(/'/g, "\\'");
+
+      return `<span onclick="filterBySummaryGroup('${safeKey}')" style="background:#fff; padding:4px 10px; border-radius:6px; border:1px solid #cbd5e1; font-size:11px; display:inline-block; margin:2px 0; cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s;" title="Click to filter orders for ${key}" onmouseover="this.style.borderColor='#005a9e'" onmouseout="this.style.borderColor='#cbd5e1'">
+      🌾 <b>${key}</b>: <span style="color:#d35400;">${ordTons} Ton</span> (Done: <span style="color:#27ae60;">${delTons} Ton</span>)
+    </span>`;
+    })
+    .join(" ");
+
+  summaryBar.innerHTML = `
+    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; flex-wrap: wrap; gap: 10px;">
+      <div>
+        📦 Orders: <strong style="color:#005a9e;">${totalOrders}</strong> &nbsp;|&nbsp; 
+        Total: <strong style="color:#d35400;">${totalTonsAll} Ton</strong> &nbsp;|&nbsp; 
+        Done: <strong style="color:#27ae60;">${totalDelTonsAll} Ton</strong>
+      </div>
+      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
+        ${groupHtml || '<span style="color:#777;">No items</span>'}
+      </div>
+    </div>
+  `;
+}
+// Badge click karne par auto search/filter karne ka function
+function filterBySummaryGroup(groupKey) {
+  // Agar bracket hai (jaise LOKVAN (गेहूं)), toh sirf variety name nikal lete hain ya poora key daal dete hain
+  const searchTerm = groupKey.split("(")[0].trim();
+
+  const searchInput = document.getElementById("orderSearchInput");
+  if (searchInput) {
+    searchInput.value = searchTerm;
+    currentSearchQuery = searchTerm.toLowerCase();
+    renderOrders();
+  }
+}

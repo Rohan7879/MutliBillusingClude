@@ -317,7 +317,67 @@
     <div id="navbar-root"></div>
 
     <div id="loading-bar" class="loading-bar hidden"></div>
+    <!-- Filter & Search Bar Container -->
+    <div style="margin: 15px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+      <!-- Date Filter Dropdown -->
+      <select
+        id="dateFilter"
+        class="form-control"
+        onchange="applyDateFilter()"
+        style="
+          padding: 6px;
+          border-radius: 6px;
+          font-size: 13px;
+          font-weight: bold;
+          background: #f8f9fa;
+          cursor: pointer;
+        "
+      >
+        <option value="all">📅 All Dates (Sabhi)</option>
+        <option value="today">⚡ Today (Aaj)</option>
+        <option value="this_week" selected>📆 This Week (Iss Hafte)</option>
+        <option value="this_month">🗓️ This Month (Iss Mahine)</option>
+        <option value="last_month">📜 Last Month (Pichla Mahina)</option>
+      </select>
 
+      <!-- 🔍 Smart Search Box (Kuch bhi type karo, turant dhundh lega) -->
+      <input
+        type="text"
+        id="orderSearchInput"
+        placeholder="🔍 Search Order No, Broker, Variety..."
+        oninput="applySearchFilter()"
+        style="
+          flex: 1;
+          min-width: 240px;
+          padding: 7px 12px;
+          border-radius: 6px;
+          border: 1px solid #ced4da;
+          font-size: 13px;
+        "
+      />
+    </div>
+
+    <!-- 📊 Live Summary Bar (Total Orders & Qty) -->
+    <div
+      id="orderSummaryBar"
+      style="
+        background: #eef2f7;
+        border: 1px solid #d1d8e0;
+        padding: 10px 15px;
+        border-radius: 8px;
+        margin-bottom: 15px;
+        font-size: 13px;
+        font-weight: bold;
+        color: #2c3e50;
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        flex-wrap: wrap;
+        gap: 10px;
+      "
+    >
+      <!-- Yahan JavaScript se total live dikhega -->
+    </div>
     <div class="pg">
       <div class="sc">
         <div class="sc-title">
