@@ -32,14 +32,6 @@ async function loadPendingOrdersIntoDropdown() {
 
 // ── AUTO-FILL FORM FROM ORDER ─────────────────────────────────────────────────
 async function loadOrderIntoForm() {
-  // Print layout mein Order Number set karna
-  const refContainer = document.getElementById("print_ref_order_container");
-  const refText = document.getElementById("print_ref_order_no");
-
-  if (refContainer && refText) {
-    refText.innerText = order.orderNo;
-    refContainer.style.display = "block"; // Hide se hata kar show kar do
-  }
   const select = document.getElementById("order-select");
   const orderId = select?.value;
   if (!orderId) return;
@@ -47,8 +39,20 @@ async function loadOrderIntoForm() {
   try {
     const doc = await db.collection("orders").doc(orderId).get();
     if (!doc.exists) return;
+
+    // Yahan order pehli baar define ho raha hai
     const order = doc.data();
     selectedOrderId = orderId;
+
+    // ✅ FIX: Print layout mein Order Number set karna (Ab order variable define ho chuka hai)
+    const refContainer = document.getElementById("print_ref_order_container");
+    const refText = document.getElementById("print_ref_order_no");
+
+    if (refContainer && refText) {
+      refText.innerText = order.orderNo || "";
+      refContainer.style.display = "block";
+    }
+    // -------------------------------------------------------------
 
     // If multiple suppliers — let user pick which one
     if (order.suppliers && order.suppliers.length > 1) {
@@ -245,7 +249,7 @@ async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
 
       // 👇 YAHAN NAYA LINKING LOGIC ADD HUA HAI 👇
       // Bill data me se bill number nikalna (jo bhi key tum save karte ho)
-      const currentBillNo = billData["Bill No"] || billData["billNo"] || billData["display_serial_no"] || "";
+      const currentBillNo = billData["Serial No"] || billData["billNo"] || billData["display_serial_no"] || "";
 
       let updatePayload = {
         suppliers,

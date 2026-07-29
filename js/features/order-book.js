@@ -99,7 +99,10 @@ function renderOrders() {
   const container = document.getElementById("order-list");
   if (!container) return;
 
-  const filtered = currentFilter === "All" ? allOrders : allOrders.filter((o) => o.status === currentFilter);
+  const filtered =
+    currentFilter === "All"
+      ? allOrders.filter((o) => o.status !== "Deleted")
+      : allOrders.filter((o) => o.status === currentFilter);
 
   if (filtered.length === 0) {
     container.innerHTML = `<div style="text-align:center;color:#6c757d;padding:30px;font-size:15px;">
@@ -115,6 +118,7 @@ function renderOrders() {
           Partial: "status-partial",
           Completed: "status-completed",
           Cancelled: "status-cancelled",
+          Deleted: "status-cancelled",
         }[order.status] || "status-pending";
 
       const statusEmoji =
@@ -123,6 +127,7 @@ function renderOrders() {
           Partial: "🔄",
           Completed: "✅",
           Cancelled: "❌",
+          Deleted: "🗑️",
         }[order.status] || "⏳";
 
       // Item rows (Supplier ki jagah Variety dikhayega)
@@ -185,45 +190,42 @@ function renderOrders() {
     ${suppliers}
 
     ${order.notes ? `<div style="margin-top:8px;font-size:12px;color:#6c757d;">📝 ${order.notes}</div>` : ""}
+    ${
+      order.cancelReason
+        ? `<div style="margin-top:8px;font-size:12px;color:#dc3545;background:#ffe5e5;padding:6px;border-radius:4px;border:1px solid #ffcccc;">⚠️ <strong>Reason:</strong> ${order.cancelReason}</div>`
+        : ""
+    }
 
-    <div class="order-actions">
-      <button class="btn-primary" style="padding:7px 14px;font-size:12px;" onclick="editOrder('${
-        order.id
-      }')">✏️ Edit</button>
-      <button style="padding:7px 14px;font-size:12px;background:#28a745;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
-        order.id
-      }','Completed')">✅ Complete</button>
-      <button style="padding:7px 14px;font-size:12px;background:#17a2b8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
-        order.id
-      }','Partial')">🔄 Partial</button>
-      
-      <!-- Sirf tabhi dikhega jab order Pending hoga -->
-      ${
-        !isLocked
-          ? `
-        <button style="padding:7px 14px;font-size:12px;background:#6c757d;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${order.id}','Cancelled')">❌ Cancel</button>
-        <button style="padding:7px 14px;font-size:12px;background:#dc3545;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="deleteOrder('${order.id}')">🗑️</button>
+    <!-- 👇 Yahan check lagaya hai ki agar Cancelled ya Deleted hai, toh buttons DONT SHOW 👇 -->
+    ${
+      order.status === "Cancelled" || order.status === "Deleted"
+        ? ""
+        : `
+      <div class="order-actions">
+        <button class="btn-primary" style="padding:7px 14px;font-size:12px;" onclick="editOrder('${
+          order.id
+        }')">✏️ Edit</button>
+        <button style="padding:7px 14px;font-size:12px;background:#28a745;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
+          order.id
+        }','Completed')">✅ Complete</button>
+        <button style="padding:7px 14px;font-size:12px;background:#17a2b8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
+          order.id
+        }','Partial')">🔄 Partial</button>
+        
+        ${
+          !isLocked
+            ? `
+          <button style="padding:7px 14px;font-size:12px;background:#6c757d;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${order.id}','Cancelled')">❌ Cancel</button>
+          <button style="padding:7px 14px;font-size:12px;background:#dc3545;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="deleteOrder('${order.id}')">🗑️</button>
+        `
+            : ""
+        }
+      </div>
       `
-          : ""
-      }
-    </div>
+    }
   </div>`;
     })
     .join("");
-}
-
-// ── MODAL ─────────────────────────────────────────────────────────────────────
-function openNewOrderModal() {
-  editingOrderId = null;
-  document.getElementById("order-modal-title").textContent = "➕ New Order";
-  document.getElementById("order-broker").value = "";
-  document.getElementById("order-notes").value = "";
-  document.getElementById("order-supplier").value = "";
-  setDefaultDate();
-  document.getElementById("supplier-entries").innerHTML = "";
-  supplierCount = 0;
-  addSupplierEntry();
-  document.getElementById("order-modal").classList.add("open");
 }
 
 function closeOrderModal() {
@@ -292,15 +294,65 @@ function addSupplierEntry(data = {}) {
     </div>`;
   document.getElementById("supplier-entries").appendChild(div);
 }
-// ── SAVE ORDER ────────────────────────────────────────────────────────────────
+
+// =====================================================================
+// Naya Sequential Order Number Generator
+// =====================================================================
+// =====================================================================
+// Order Number Generator (Matched with your 'counters' DB collection)
+// =====================================================================
+async function getNextOrderNumber() {
+  // 1. Financial Year nikalne ka logic
+  const now = new Date();
+  const currentYear = now.getFullYear();
+  const currentMonth = now.getMonth();
+
+  let fy = "";
+  if (currentMonth < 3) {
+    fy = String(currentYear - 1).slice(-2) + String(currentYear).slice(-2);
+  } else {
+    fy = String(currentYear).slice(-2) + String(currentYear + 1).slice(-2);
+  }
+
+  // 2. Naya Path: "counters" collection aur document ka naam "orderCounter_FY2627"
+  const counterRef = db.collection("counters").doc("orderCounter_FY" + fy);
+
+  try {
+    return await db.runTransaction(async (transaction) => {
+      const doc = await transaction.get(counterRef);
+      let nextNum = 1;
+
+      // Aapke DB ke hisaab se 'currentNumber' check kar rahe hain
+      if (doc.exists && doc.data().currentNumber) {
+        nextNum = doc.data().currentNumber + 1;
+      }
+
+      // Naya number 'currentNumber' field mein hi save karenge
+      transaction.set(counterRef, { currentNumber: nextNum }, { merge: true });
+
+      // Zero lagakar format karo (0001, 0002)
+      const formattedNum = String(nextNum).padStart(4, "0");
+
+      // Output: ORD-2627-0001
+      return "ORD-" + fy + "-" + formattedNum;
+    });
+  } catch (error) {
+    console.error("Order Number generate karne mein error:", error);
+    return "ORD-" + fy + "-" + Date.now().toString().slice(-4);
+  }
+}
+
+// =====================================================================
+// Aapka Updated saveOrder Function
+// =====================================================================
 async function saveOrder() {
   // 1. Correct IDs se values fetch karna
   const rawDate = document.getElementById("order-date")?.value || "";
   let formattedDate = rawDate;
   if (rawDate.includes("-")) {
-    const parts = rawDate.split("-"); // [yyyy, mm, dd]
+    const parts = rawDate.split("-");
     if (parts.length === 3) {
-      formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`; // Convert to dd/mm/yyyy format
+      formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
     }
   }
 
@@ -317,10 +369,10 @@ async function saveOrder() {
     return;
   }
 
-  // Combine karke final supplierName banana (jaise: MOHIL (VADAL))
+  // Combine karke final supplierName banana
   const supplierName = villageVal ? `${baseName} (${villageVal})` : baseName;
 
-  // 🔗 2. Automatic Customer Master Sync (Exact Bill-Create Format Match)
+  // 🔗 2. Automatic Customer Master Sync
   try {
     const custId = baseName.toLowerCase().replace(/\s+/g, "_");
     const custRef = db.collection("customers").doc(custId);
@@ -386,7 +438,6 @@ async function saveOrder() {
       delivered: Number(document.querySelector(`[name="s-delivered-${idx}"]`)?.value) || 0,
     });
 
-    // Variety ko database mein save karna taaki auto-suggestion mil sake
     if (varietyVal) {
       const varietyId = varietyVal.toLowerCase().replace(/\s+/g, "_");
       db.collection("varieties")
@@ -414,13 +465,12 @@ async function saveOrder() {
     const orderData = {
       date: formattedDate,
       broker: brokerName,
-      supplierName: supplierName, // Save as "NAME (VILLAGE)"
+      supplierName: supplierName,
       notes: notes,
       suppliers: suppliers,
       updatedAt: Date.now(),
     };
 
-    // Global editingOrderId ka use
     if (typeof editingOrderId !== "undefined" && editingOrderId) {
       await db.collection("orders").doc(editingOrderId).update(orderData);
       Swal.fire({
@@ -434,7 +484,14 @@ async function saveOrder() {
     } else {
       orderData.status = "Pending";
       orderData.createdAt = Date.now();
-      orderData.orderNo = document.getElementById("orderNo")?.value || `ORD-${Date.now().toString().slice(-6)}`;
+
+      // 👇 Naya Number Generator Yahan Set Hai 👇
+      let manualOrderNo = document.getElementById("orderNo")?.value;
+      if (!manualOrderNo || manualOrderNo.trim() === "") {
+        orderData.orderNo = await getNextOrderNumber();
+      } else {
+        orderData.orderNo = manualOrderNo;
+      }
 
       await db.collection("orders").add(orderData);
       Swal.fire({
@@ -486,19 +543,52 @@ async function updateOrderStatus(id, status) {
 }
 
 // ── DELETE ORDER ──────────────────────────────────────────────────────────────
+// ── CANCEL / SOFT DELETE ORDER (Naya Safe Tarika) ────────────────────────────
 async function deleteOrder(id) {
   const result = await Swal.fire({
     icon: "warning",
-    title: "Delete Order?",
-    text: "This cannot be undone.",
+    title: "Cancel Order?",
+    text: "Yeh order delete hone ke bajaye Cancelled list mein chala jayega, taaki sequence na toote.",
+    input: "text",
+    inputPlaceholder: "Cancel karne ka karan (reason) likhein...",
     showCancelButton: true,
     confirmButtonColor: "#dc3545",
     cancelButtonColor: "#6c757d",
-    confirmButtonText: "Yes, Delete",
+    confirmButtonText: "Yes, Cancel it",
+    preConfirm: (reason) => {
+      // Reason likhna zaroori kiya hai, bina reason ke cancel nahi hoga
+      if (!reason || reason.trim() === "") {
+        Swal.showValidationMessage("Karan (reason) likhna zaroori hai!");
+      }
+      return reason;
+    },
   });
+
   if (!result.isConfirmed) return;
-  await ordersCollection.doc(id).delete();
-  await loadOrders();
+
+  const cancelReason = result.value;
+
+  try {
+    // Database se udane ke bajaye, status 'Cancelled' kar rahe hain
+    await ordersCollection.doc(id).update({
+      status: "Deleted", // <--- Yahan change kiya hai
+      cancelReason: cancelReason,
+      updatedAt: Date.now(),
+    });
+    await loadOrders(); // List ko refresh karega
+
+    Swal.fire({
+      icon: "success",
+      title: "Order Cancelled",
+      toast: true,
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 2000,
+    });
+  } catch (e) {
+    console.error("Error cancelling order:", e);
+    Swal.fire("Error", "Order cancel nahi ho paya.", "error");
+  }
 }
 
 // Close modal on outside click
@@ -513,6 +603,7 @@ async function addNewProduct() {
     html:
       '<div style="text-align:left; font-size:12px; color:#0b5b99; margin-bottom:5px; font-weight:bold;">1. Type in English & press Space (e.g. ghau -> ઘઉં)</div>' +
       '<input id="swal-prod-guj" class="swal2-input" placeholder="Gujarati Name...">' +
+      '<div id="guj-typing-status" style="text-align:left; font-size:11px; color:#c0392b; min-height:14px; margin-top:2px;"></div>' +
       '<div style="text-align:left; font-size:12px; color:#0b5b99; margin-top:15px; margin-bottom:5px; font-weight:bold;">2. Type English Meaning</div>' +
       '<input id="swal-prod-eng" class="swal2-input" placeholder="English Name (e.g. Wheat)">',
     focusConfirm: false,
@@ -588,9 +679,14 @@ function refreshAllProductDropdowns() {
   });
 }
 // Google API se English to Gujarati convert karne ka jadoo
+// Fallback: agar ye unofficial Google endpoint kabhi fail/block ho jaye,
+// user ko silently kuch na hone ke bajaye ek chhota sa message dikhta hai
+// taaki wo samajh jaaye ki seedha Gujarati type/paste karna hai.
 async function setupGujaratiTyping(inputId) {
   const input = document.getElementById(inputId);
   if (!input) return;
+  const statusEl = document.getElementById("guj-typing-status");
+  let hasWarned = false;
 
   // Jab bhi user type karke 'Space' dabayega
   input.addEventListener("keyup", async (e) => {
@@ -612,9 +708,17 @@ async function setupGujaratiTyping(inputId) {
             // English word ko Gujarati word se replace kar do
             words[lastWordIndex] = data[1][0][1][0];
             input.value = words.join(" ");
+            if (statusEl) statusEl.textContent = ""; // pehle ka warning hata do, ye kaam kar raha hai
+          } else if (statusEl && !hasWarned) {
+            hasWarned = true;
+            statusEl.textContent = "⚠️ Auto-convert abhi kaam nahi kar raha — seedha Gujarati type ya paste karo.";
           }
         } catch (err) {
           console.error("Transliteration error:", err);
+          if (statusEl && !hasWarned) {
+            hasWarned = true;
+            statusEl.textContent = "⚠️ Auto-convert abhi available nahi hai — seedha Gujarati type ya paste karo.";
+          }
         }
       }
     }
@@ -718,22 +822,7 @@ async function removeProduct(productId) {
     }
   }
 }
-// Click karne par Linked Bill open karne ka function
-function openLinkedBill(billNo) {
-  // Agar ek se zyada bills hain (jaise GN-001, GN-002), toh pehla wala uthao
-  const firstBill = billNo.split(",")[0].trim();
 
-  // Yahan aap apne bill view page ka link daal sakte ho.
-  // Example: window.location.href = `view-bill.html?billNo=${firstBill}`;
-
-  Swal.fire({
-    title: "Opening Bill",
-    text: `Redirecting to Bill: ${firstBill}`,
-    icon: "info",
-    timer: 1500,
-    showConfirmButton: false,
-  });
-}
 // Yeh lo openLinkedBill function ko seedha order-book.js mein daal do
 async function openLinkedBill(billNo) {
   try {
@@ -780,32 +869,6 @@ function generateVarietyDatalistOptions() {
   return allVarietiesList.map((v) => `<option value="${v}">`).join("");
 }
 
-// Helper function for variety datalist options
-function generateVarietyDatalistOptions() {
-  return allVarietiesList.map((v) => `<option value="${v}">`).join("");
-}
-
-// Helper function for variety datalist options
-function generateVarietyDatalistOptions() {
-  return allVarietiesList.map((v) => `<option value="${v}">`).join("");
-}
-
-function openNewOrderModal() {
-  editingOrderId = null;
-  document.getElementById("order-modal-title").textContent = "➕ New Order";
-  document.getElementById("order-broker").value = "";
-  document.getElementById("order-notes").value = "";
-  document.getElementById("order-supplier").value = "";
-  setDefaultDate();
-
-  // 👇 Yeh line add kar do yahan
-  updateBrokerAndSupplierDatalists();
-
-  document.getElementById("supplier-entries").innerHTML = "";
-  supplierCount = 0;
-  addSupplierEntry();
-  document.getElementById("order-modal").classList.add("open");
-}
 let allCustomersList = [];
 let allBrokersList = [];
 

@@ -758,8 +758,6 @@ const activeLinkedOrderId =
   currentBillData.orderId ||
   new URLSearchParams(window.location.search).get("linkedOrderId");
 
-console.log("🔍 Debugging Linked Order:", { activeLinkedOrderId, currentBillData });
-
 if (activeLinkedOrderId) {
   db.collection("orders")
     .doc(activeLinkedOrderId)
@@ -779,53 +777,8 @@ if (activeLinkedOrderId) {
     })
     .catch((err) => console.log("❌ Error fetching linked order:", err));
 } else {
-  console.log("⚠️ Is bill ke sath koi Linked Order ID attach nahi hai!");
-}
-// ═══════════════════════════════════════════════════════════════════════════
-// LINKED ORDER REFERENCE DISPLAY LOGIC
-// ═══════════════════════════════════════════════════════════════════════════
-
-function checkAndDisplayRefOrder(billData) {
-  const currentBillData = billData || {};
-
-  // Har possible spelling/capitalization check karlo
-  const activeLinkedOrderId =
-    currentBillData.LinkedOrderId ||
-    currentBillData.linkedOrderId ||
-    currentBillData.orderId ||
-    new URLSearchParams(window.location.search).get("linkedOrderId");
-
-  console.log("🔍 Debugging Linked Order:", { activeLinkedOrderId, currentBillData });
-
-  if (activeLinkedOrderId) {
-    db.collection("orders")
-      .doc(activeLinkedOrderId)
-      .get()
-      .then((doc) => {
-        if (doc.exists) {
-          const orderNo = doc.data().orderNo || doc.data().orderNumber;
-          const container = document.getElementById("print_ref_order_container");
-          const span = document.getElementById("print_ref_order_no");
-          if (container && span) {
-            span.textContent = orderNo;
-            container.style.display = "inline-block";
-          }
-        } else {
-          console.log("❌ Order ID database mein mili hi nahi:", activeLinkedOrderId);
-        }
-      })
-      .catch((err) => console.log("❌ Error fetching linked order:", err));
-  } else {
-    console.log("⚠️ Is bill ke sath koi Linked Order ID attach nahi hai!");
-  }
 }
 
-// Automatically run if global data or window.currentBill is already present
-if (typeof data !== "undefined" && data) {
-  checkAndDisplayRefOrder(data);
-} else if (window.currentBill) {
-  checkAndDisplayRefOrder(window.currentBill);
-}
 // ═══════════════════════════════════════════════════════════════════════════
 // AUTO-FETCH & DISPLAY LINKED ORDER REFERENCE ON BILL VIEW
 // ═══════════════════════════════════════════════════════════════════════════
