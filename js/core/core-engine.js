@@ -30,30 +30,6 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
-// LOADING INDICATOR
-// ═══════════════════════════════════════════════════════════════════════════
-
-function showLoading() {
-  const loadingBar = document.getElementById("loading-bar");
-  if (loadingBar) {
-    loadingBar.classList.remove("hidden");
-    setTimeout(() => {
-      loadingBar.classList.add("active");
-    }, 10);
-  }
-}
-
-function hideLoading() {
-  const loadingBar = document.getElementById("loading-bar");
-  if (loadingBar) {
-    loadingBar.classList.remove("active");
-    setTimeout(() => {
-      loadingBar.classList.add("hidden");
-    }, 1500);
-  }
-}
-
-// ═══════════════════════════════════════════════════════════════════════════
 // NUMBER FORMATTING & ROUNDING
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -813,3 +789,248 @@ document.addEventListener("DOMContentLoaded", async () => {
     console.error("❌ Error loading linked order reference:", err);
   }
 });
+// ==================== 10-IN-1 SMART GLOBAL LOADERS (ALL-IN-ONE) ====================
+(function () {
+  // 1. Get user preference from settings, default to 10 (Wheat Agri Theme)
+  const savedTheme = parseInt(localStorage.getItem("mandi_loader_theme")) || 10;
+
+  // 2. Smart Text Engine (Decides text based on which URL user is going to)
+  window.getSmartText = function (url) {
+    if (!url) return "Processing Data...";
+    let path = url.toLowerCase();
+
+    if (path.includes("bill-create") || path.includes("new-bill")) return "Creating Bill...";
+    if (path.includes("bill")) return "Fetching Bills...";
+    if (path.includes("ledger")) return "Opening Ledger...";
+    if (path.includes("report")) return "Generating Report...";
+    if (path.includes("order")) return "Loading Orders...";
+    if (path.includes("settings")) return "Opening Settings...";
+    if (path.includes("dashboard") || path.includes("index")) return "Loading Dashboard...";
+    if (path.includes("broker")) return "Fetching Brokers...";
+
+    return "Processing Data...";
+  };
+
+  // 3. Inject CSS and HTML dynamically based on selected Theme
+  window.applyLoaderTheme = function (themeId) {
+    let cssCode = "";
+    let htmlCode = "";
+
+    const baseCSS = `
+      #global-loader-ui {
+        position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+        display: flex; flex-direction: column; justify-content: center; align-items: center;
+        z-index: 999999; visibility: hidden; opacity: 0;
+        transition: opacity 0.3s ease, visibility 0.3s ease;
+      }
+      #global-loader-ui.active { visibility: visible; opacity: 1; }
+      #globalLoaderText {
+        margin-top: 20px; font-family: 'Poppins', sans-serif; font-size: 14px; 
+        font-weight: 600; text-transform: uppercase; letter-spacing: 1px;
+        animation: pulseText 1.5s infinite;
+      }
+      @keyframes pulseText { 0%, 100% { opacity: 0.7; } 50% { opacity: 1; } }
+    `;
+
+    if (themeId === 1) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.3); backdrop-filter: blur(8px); } .glass-spinner { width: 50px; height: 50px; border: 4px solid rgba(0, 90, 158, 0.1); border-top: 4px solid #005a9e; border-radius: 50%; animation: spin 0.8s linear infinite; } @keyframes spin { to { transform: rotate(360deg); } }`;
+      htmlCode = `<div class="glass-spinner"></div>`;
+    } else if (themeId === 2) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); } .dot-container { display: flex; gap: 12px; } .dot { width: 18px; height: 18px; border-radius: 50%; background: #005a9e; animation: bounce 0.5s alternate infinite cubic-bezier(.5,0.05,1,.5); } .dot:nth-child(2) { animation-delay: 0.15s; background: #e67e22; } .dot:nth-child(3) { animation-delay: 0.3s; background: #27ae60; } @keyframes bounce { to { transform: translateY(-20px); } }`;
+      htmlCode = `<div class="dot-container"><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>`;
+    } else if (themeId === 3) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.9); } .brand-text { font-size: 36px; font-weight: 900; font-family: 'Poppins', sans-serif; background: linear-gradient(90deg, #005a9e, #e67e22); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: breathe 1s infinite ease-in-out alternate; letter-spacing: 2px; } @keyframes breathe { 0% { transform: scale(0.95); opacity: 0.8; } 100% { transform: scale(1.05); opacity: 1; filter: drop-shadow(0px 5px 10px rgba(230,126,34,0.4)); } }`;
+      htmlCode = `<div class="brand-text">Ganesh Agri</div>`;
+    } else if (themeId === 4) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(3px); } .morph-loader { width: 50px; height: 50px; background: #005a9e; animation: morph 1.5s infinite ease-in-out alternate; } @keyframes morph { 0% { border-radius: 10%; transform: rotate(0deg) scale(1); background: #005a9e; } 50% { border-radius: 50%; transform: rotate(180deg) scale(1.2); background: #e67e22; } 100% { border-radius: 10%; transform: rotate(360deg) scale(1); background: #27ae60; } }`;
+      htmlCode = `<div class="morph-loader"></div>`;
+    } else if (themeId === 5) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.7); backdrop-filter: blur(5px); } .cube-flip { width: 45px; height: 45px; background: transparent; border: 4px solid #005a9e; border-top-color: #e67e22; border-radius: 8px; animation: spin3D 1.2s infinite cubic-bezier(0.68, -0.55, 0.265, 1.55); box-shadow: 0 10px 20px rgba(0,0,0,0.1); } @keyframes spin3D { 0% { transform: perspective(120px) rotateX(0deg) rotateY(0deg); } 50% { transform: perspective(120px) rotateX(-180.1deg) rotateY(0deg); } 100% { transform: perspective(120px) rotateX(-180deg) rotateY(-179.9deg); } }`;
+      htmlCode = `<div class="cube-flip"></div>`;
+    } else if (themeId === 6) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); } .arc-spinner { position: relative; width: 60px; height: 60px; } .arc-spinner .arc { position: absolute; inset: 0; border-radius: 50%; border: 3px solid transparent; } .arc-spinner .arc:nth-child(1) { border-top-color: #005a9e; animation: spinArc 1s linear infinite; } .arc-spinner .arc:nth-child(2) { border-right-color: #e67e22; inset: 8px; animation: spinArc 1.5s linear infinite reverse; } .arc-spinner .arc:nth-child(3) { border-bottom-color: #27ae60; inset: 16px; animation: spinArc 2s linear infinite; } @keyframes spinArc { to { transform: rotate(360deg); } }`;
+      htmlCode = `<div class="arc-spinner"><div class="arc"></div><div class="arc"></div><div class="arc"></div></div>`;
+    } else if (themeId === 7) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.75); backdrop-filter: blur(6px); } .radar-spinner { width: 65px; height: 65px; border-radius: 50%; background: conic-gradient(from 0deg, transparent 60%, #005a9e 100%); animation: radar 1s linear infinite; position: relative; box-shadow: 0 0 20px rgba(0, 90, 158, 0.2); } .radar-spinner::before { content: ''; position: absolute; inset: 5px; background: #ffffff; border-radius: 50%; box-shadow: inset 0 0 10px rgba(0,0,0,0.05); } @keyframes radar { to { transform: rotate(360deg); } }`;
+      htmlCode = `<div class="radar-spinner"></div>`;
+    } else if (themeId === 8) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.9); } .ripple-loader { position: relative; width: 64px; height: 64px; } .ripple-loader div { position: absolute; border: 4px solid #005a9e; opacity: 1; border-radius: 50%; animation: rippleAnim 1.5s cubic-bezier(0, 0.2, 0.8, 1) infinite; } .ripple-loader div:nth-child(2) { animation-delay: -0.5s; border-color: #e67e22; } @keyframes rippleAnim { 0% { top: 32px; left: 32px; width: 0; height: 0; opacity: 0; } 5% { top: 32px; left: 32px; width: 0; height: 0; opacity: 1; } 100% { top: 0px; left: 0px; width: 64px; height: 64px; opacity: 0; } }`;
+      htmlCode = `<div class="ripple-loader"><div></div><div></div></div>`;
+    } else if (themeId === 9) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.8); backdrop-filter: blur(5px); } .hex-loader { display: flex; gap: 8px; } .hex { width: 24px; height: 28px; background: #005a9e; clip-path: polygon(50% 0%, 100% 25%, 100% 75%, 50% 100%, 0% 75%, 0% 25%); animation: hexPulse 1s infinite alternate; } .hex:nth-child(2) { background: #e67e22; animation-delay: 0.2s; } .hex:nth-child(3) { background: #27ae60; animation-delay: 0.4s; } @keyframes hexPulse { 0% { transform: scale(0.7); opacity: 0.4; } 100% { transform: scale(1.15); opacity: 1; } }`;
+      htmlCode = `<div class="hex-loader"><div class="hex"></div><div class="hex"></div><div class="hex"></div></div>`;
+    } else if (themeId === 10) {
+      cssCode =
+        baseCSS +
+        `#global-loader-ui { background: rgba(255, 255, 255, 0.85); backdrop-filter: blur(4px); } .agri-loader-container { position: relative; width: 60px; height: 90px; } .stalk { position: absolute; left: 28px; bottom: 0; width: 4px; height: 100%; background: #e67e22; border-radius: 2px; transform-origin: bottom center; animation: stalkPulse 2s ease-in-out infinite; } .grain { position: absolute; width: 12px; height: 22px; background: #f1c40f; border-radius: 50% 50% 20% 20%; transform: scale(0); animation: grainGrow 2s ease-in-out infinite; } .gl1 { left: 16px; top: 15px; transform-origin: center right; } .gl2 { left: 16px; top: 45px; transform-origin: center right; } .gr1 { left: 32px; top: 0px; transform-origin: center left; } .gr2 { left: 32px; top: 30px; transform-origin: center left; } .gr3 { left: 32px; top: 60px; transform-origin: center left; } @keyframes stalkPulse { 0%, 100% { transform: scaleY(0.95); } 50% { transform: scaleY(1); } } @keyframes grainGrow { 0%, 100% { transform: scale(0); opacity: 0; } 10%, 90% { opacity: 1; } 50% { transform: scale(1.1); } } .gr1 { animation-delay: 0.1s; } .gl1 { animation-delay: 0.3s; } .gr2 { animation-delay: 0.5s; } .gl2 { animation-delay: 0.7s; } .gr3 { animation-delay: 0.9s; }`;
+      htmlCode = `<div class="agri-loader-container"><div class="stalk"></div><div class="grain gr1"></div><div class="grain gl1"></div><div class="grain gr2"></div><div class="grain gl2"></div><div class="grain gr3"></div></div>`;
+    }
+
+    // Dynamic Text Element Injection
+    let textColor = themeId === 10 || themeId === 3 ? "#d35400" : "#005a9e";
+    htmlCode += `<div id="globalLoaderText" style="color: ${textColor};">Processing Data...</div>`;
+
+    let styleTag = document.getElementById("dynamic-loader-style");
+    if (!styleTag) {
+      styleTag = document.createElement("style");
+      styleTag.id = "dynamic-loader-style";
+      document.head.appendChild(styleTag);
+    }
+    styleTag.innerHTML = cssCode;
+
+    let loaderDiv = document.getElementById("global-loader-ui");
+    if (!loaderDiv) {
+      loaderDiv = document.createElement("div");
+      loaderDiv.id = "global-loader-ui";
+      document.body.appendChild(loaderDiv);
+    }
+    loaderDiv.innerHTML = htmlCode;
+  };
+
+  // 4. Initialize on Page Load
+  document.addEventListener("DOMContentLoaded", () => {
+    window.applyLoaderTheme(savedTheme);
+
+    // Auto-catch all navigation links for Smart Text
+    document.addEventListener("click", (e) => {
+      const link = e.target.closest("a");
+      const targetUrl = link ? link.getAttribute("href") : null;
+
+      if (link && targetUrl && targetUrl !== "#" && !targetUrl.startsWith("javascript")) {
+        e.preventDefault();
+        const customMsg = window.getSmartText(targetUrl);
+        window.showLoader(customMsg);
+        setTimeout(() => {
+          window.location.href = targetUrl;
+        }, 400);
+      }
+    });
+  });
+})();
+
+// ==================== GLOBAL FUNCTIONS & OLD SYSTEM BRIDGE ====================
+
+// Base functions to show/hide loader with text update
+window.showLoader = function (textMsg) {
+  const l = document.getElementById("global-loader-ui");
+  const textEl = document.getElementById("globalLoaderText");
+
+  if (textEl) {
+    textEl.innerText = textMsg ? textMsg : "Processing Data...";
+  }
+
+  if (l) l.classList.add("active");
+};
+
+window.hideLoader = function () {
+  const l = document.getElementById("global-loader-ui");
+  if (l) l.classList.remove("active");
+};
+
+// 🔥 BRIDGE FOR OLD FILES (ledger.js, bill-list.js, reports.js) 🔥
+window.showLoading = function (customText) {
+  if (typeof window.showLoader === "function") {
+    window.showLoader(customText || "Processing Data...");
+  }
+};
+
+window.hideLoading = function () {
+  if (typeof window.hideLoader === "function") {
+    window.hideLoader();
+  }
+};
+
+// Function for Settings Page Live Demo
+window.demoAndSaveLoader = function (themeId) {
+  themeId = parseInt(themeId);
+  localStorage.setItem("mandi_loader_theme", themeId);
+  window.applyLoaderTheme(themeId);
+  window.showLoader("Saving Preference...");
+
+  setTimeout(() => {
+    window.hideLoader();
+  }, 3000);
+};
+// ==================== GLOBAL FUNCTIONS & OLD SYSTEM BRIDGE ====================
+
+window.loaderTimeout = null; // Failsafe Timer Variable
+
+// Base functions to show/hide loader with text update
+window.showLoader = function (textMsg) {
+  const l = document.getElementById("global-loader-ui");
+  const textEl = document.getElementById("globalLoaderText");
+
+  if (textEl) {
+    textEl.style.color = ""; // Reset color in case it was red earlier
+    textEl.innerText = textMsg ? textMsg : "Processing Data...";
+  }
+
+  if (l) l.classList.add("active");
+
+  // 🔥 15-SECOND FAILSAFE (ANTI-HANG SYSTEM) 🔥
+  clearTimeout(window.loaderTimeout);
+  window.loaderTimeout = setTimeout(() => {
+    // Agar 15 second baad bhi loader chal raha hai
+    if (l && l.classList.contains("active")) {
+      if (textEl) {
+        textEl.style.color = "#e74c3c"; // Alert ke liye Red color
+        textEl.innerText = "Network slow. Please try again.";
+      }
+      // 2.5 seconds message dikhane ke baad loader hata do
+      setTimeout(() => {
+        window.hideLoader();
+      }, 2500);
+    }
+  }, 15000); // 15000 ms = 15 Seconds
+};
+
+window.hideLoader = function () {
+  const l = document.getElementById("global-loader-ui");
+  if (l) l.classList.remove("active");
+
+  // Agar 15 second se pehle data aa gaya, toh failsafe timer cancel kar do
+  clearTimeout(window.loaderTimeout);
+};
+
+// 🔥 BRIDGE FOR OLD FILES (ledger.js, bill-list.js, reports.js) 🔥
+window.showLoading = function (customText) {
+  if (typeof window.showLoader === "function") {
+    window.showLoader(customText || "Processing Data...");
+  }
+};
+
+window.hideLoading = function () {
+  if (typeof window.hideLoader === "function") {
+    window.hideLoader();
+  }
+};
+
+// Function for Settings Page Live Demo
+window.demoAndSaveLoader = function (themeId) {
+  themeId = parseInt(themeId);
+  localStorage.setItem("mandi_loader_theme", themeId);
+  window.applyLoaderTheme(themeId);
+  window.showLoader("Saving Preference...");
+
+  setTimeout(() => {
+    window.hideLoader();
+  }, 3000);
+};

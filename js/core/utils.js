@@ -1,21 +1,3 @@
-function showLoading() {
-  const loadingBar = document.getElementById("loading-bar");
-  if (loadingBar) {
-    loadingBar.classList.remove("hidden");
-    setTimeout(() => {
-      loadingBar.classList.add("active");
-    }, 10);
-  }
-}
-function hideLoading() {
-  const loadingBar = document.getElementById("loading-bar");
-  if (loadingBar) {
-    loadingBar.classList.remove("active");
-    setTimeout(() => {
-      loadingBar.classList.add("hidden");
-    }, 1500);
-  }
-}
 function formatNumber(num) {
   if (isNaN(num) || num === "") {
     return num;

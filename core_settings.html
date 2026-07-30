@@ -780,6 +780,60 @@
         }
       </style>
 
+      <!-- Loader Theme Selection UI -->
+      <div
+        class="settings-card"
+        style="
+          padding: 20px;
+          background: #fff;
+          border-radius: 8px;
+          box-shadow: 0 2px 10px rgba(0, 0, 0, 0.05);
+          max-width: auto;
+          margin-bottom: 20px;
+        "
+      >
+        <h3 style="margin-top: 0; color: #005a9e; font-family: 'Poppins', sans-serif">Loading Screen Theme</h3>
+        <p style="font-size: 13px; color: #666; margin-bottom: 15px">
+          Select your preferred loading animation. A 3-second live demo will play automatically.
+        </p>
+
+        <!-- Select Dropdown with onchange trigger -->
+        <select
+          id="userLoaderSelect"
+          onchange="window.demoAndSaveLoader(this.value)"
+          style="
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ccc;
+            border-radius: 5px;
+            font-size: 15px;
+            cursor: pointer;
+          "
+        >
+          <option value="1">1. Apple-Style Glass Ring</option>
+          <option value="2">2. Bouncing Wave Dots</option>
+          <option value="3">3. Breathing Brand Text</option>
+          <option value="4">4. Modern Liquid Morph</option>
+          <option value="5">5. Enterprise 3D Flip</option>
+          <option value="6">6. Tech Arcs (Jarvis Style)</option>
+          <option value="7">7. Neumorphic Radar Sweep</option>
+          <option value="8">8. Zen Ripple</option>
+          <option value="9">9. Hexagon Data Pulse</option>
+          <option value="10">10. Custom Wheat Pulse (Agri Default)</option>
+        </select>
+      </div>
+
+      <!-- Yeh script ensure karegi ki page refresh hone par wahi naam select ho jo save tha -->
+      <script>
+        document.addEventListener("DOMContentLoaded", () => {
+          const savedTheme = localStorage.getItem("mandi_loader_theme") || 10;
+          const selectBox = document.getElementById("userLoaderSelect");
+          if (selectBox) {
+            selectBox.value = savedTheme;
+          }
+        });
+      </script>
+
       <!-- Product Templates -->
       <div class="section-card">
         <div class="section-card-title">

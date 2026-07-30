@@ -890,20 +890,6 @@
         margin-top: 8px;
       }
 
-      /* Loading */
-      #loading-bar {
-        position: fixed;
-        top: 0;
-        left: 0;
-        height: 3px;
-        background: linear-gradient(90deg, #005a9e, #00c6ff);
-        z-index: 9999;
-        width: 0;
-        transition: width 1.5s linear;
-      }
-      #loading-bar.active {
-        width: 100%;
-      }
       .hidden {
         display: none;
       }
@@ -1244,8 +1230,6 @@
   <body>
     <!-- NAVBAR -->
     <div id="navbar-root"></div>
-
-    <div id="loading-bar" class="loading-bar hidden"></div>
 
     <div class="pg">
       <div id="sync_status" style="text-align: center; font-weight: 700; margin-bottom: 12px; font-size: 13px"></div>
