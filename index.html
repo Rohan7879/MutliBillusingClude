@@ -28,96 +28,6 @@
       *::after {
         box-sizing: border-box;
       }
-      .top-navbar {
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-        background: linear-gradient(135deg, #003d6e, #005a9e);
-        box-shadow: 0 4px 20px rgba(0, 62, 110, 0.35);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        height: 62px;
-        padding: 0 24px;
-        margin: -20px -16px 24px;
-      }
-      .navbar-brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-      }
-      .navbar-brand img {
-        height: 38px;
-        border-radius: 8px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-      }
-      .navbar-brand span {
-        color: #fff;
-        font-size: 1.1em;
-        font-weight: 800;
-        letter-spacing: 0.2px;
-      }
-      .navbar-links {
-        display: flex;
-        gap: 4px;
-        align-items: center;
-        flex-wrap: nowrap;
-      }
-      .nav-link {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 7px 13px;
-        border-radius: 8px;
-        color: rgba(255, 255, 255, 0.85);
-        font-size: 13px;
-        font-weight: 600;
-        text-decoration: none;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-family: inherit;
-        white-space: nowrap;
-      }
-      .nav-link:hover,
-      .nav-link.active {
-        background: rgba(255, 255, 255, 0.18);
-        color: #fff;
-      }
-      .nav-conn {
-        display: flex;
-        align-items: center;
-        gap: 7px;
-        padding: 6px 13px;
-        border-radius: 20px;
-        border: 1px solid rgba(255, 255, 255, 0.25);
-        background: rgba(255, 255, 255, 0.1);
-        color: #fff;
-        font-size: 12px;
-        font-weight: 700;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-family: inherit;
-      }
-      .nav-conn:hover {
-        background: rgba(255, 255, 255, 0.2);
-      }
-      .cdot {
-        width: 8px;
-        height: 8px;
-        border-radius: 50%;
-        background: #ffc107;
-        transition: background 0.3s;
-      }
-      .cdot.ok {
-        background: #28a745;
-      }
-      .cdot.err {
-        background: #dc3545;
-      }
-
       /* =========================================
      PAGE & CARDS
   ========================================= */
@@ -127,6 +37,26 @@
       }
 
       /* Quick nav */
+      /* Baaki dashboard cards jaisa premium card design */
+      .dashboard-card {
+        background: linear-gradient(135deg, #0ea5e9, #2563eb);
+        color: white;
+        border-radius: 16px;
+        padding: 24px;
+        text-align: center;
+        box-shadow: 0 4px 15px rgba(37, 99, 235, 0.2);
+        transition: transform 0.2s ease, box-shadow 0.2s ease;
+        text-decoration: none;
+        display: flex;
+        flex-direction: column;
+        align-items: center;
+        justify-content: center;
+        gap: 10px;
+      }
+      .dashboard-card:hover {
+        transform: translateY(-3px);
+        box-shadow: 0 6px 20px rgba(37, 99, 235, 0.3);
+      }
       .qnav {
         display: grid;
         grid-template-columns: repeat(3, 1fr);
@@ -1082,19 +1012,6 @@
       }
 
       @media (max-width: 640px) {
-        .top-navbar {
-          padding: 0 12px;
-          height: 56px;
-        }
-        .navbar-brand span {
-          font-size: 0.95em;
-        }
-        .navbar-links .nav-link span:not(:first-child) {
-          display: none;
-        }
-        .nav-link {
-          padding: 7px 9px;
-        }
         .qnav {
           grid-template-columns: repeat(3, 1fr);
           gap: 9px;
@@ -1260,6 +1177,10 @@
         <a class="qcard c-bills" href="bills.html"><span class="ci">📋</span><span>Saved Bills</span></a>
         <a class="qcard c-dash" href="dashboard.html"> <span class="ci">📊</span><span>Dashboard</span> </a>
         <a class="qcard c-ledg" href="ledger.html"> <span class="ci">📒</span><span>Ledger</span> </a>
+        <a href="party-master.html" class="dashboard-card">
+          <span style="font-size: 28px">📖</span>
+          <span style="font-size: 18px; font-weight: 600">Party Master</span>
+        </a>
         <a class="qcard c-set" href="core_settings.html"> <span class="ci">⚙️</span><span>Settings</span> </a>
       </div>
     </div>

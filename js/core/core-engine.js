@@ -320,44 +320,6 @@ function generateBillHtmlForView(data) {
   </div>`;
 }
 
-function generateUniversalBillHTML(data) {
-  const bodyHtml = generateBillHtmlForView(data);
-
-  let vakalRowCount = data["Bill Type"] === "Loose" ? 1 : 0;
-  if (data["Bill Type"] !== "Loose") {
-    for (let i = 1; i <= 5; i++) {
-      if ((data[`Vakal ${i} Katta`] || 0) > 0 || (data[`Vakal ${i} Kilo`] || 0) > 0) vakalRowCount++;
-    }
-  }
-
-  let expenseRowCount = 0;
-  try {
-    expenseRowCount = (JSON.parse(data["Expenses"]) || []).length;
-  } catch (e) {}
-
-  const templateDeductionCount = (data["TemplateDeductionsApplied"] || []).length;
-  const hasWeighbridgeMoisture = (data["Weighbridge Moisture Kg"] || 0) > 0 ? 1 : 0;
-  const hasRemarks = data["Remarks"] && data["Remarks"].trim() !== "" ? 2 : 0;
-
-  const totalWeight =
-    vakalRowCount + expenseRowCount + templateDeductionCount * 1.5 + hasWeighbridgeMoisture + hasRemarks;
-  const pageSize = totalWeight > 6 ? "A4" : "A5";
-  const amountInWords = typeof numberToWords === "function" ? numberToWords(data["Final Total"]) : "";
-
-  // Insert amount in words right before the final closing div safely
-  const insertPos = bodyHtml.lastIndexOf("</div>");
-  const finalHtml =
-    bodyHtml.substring(0, insertPos) +
-    `<div class="amount-in-words" style="font-size:8pt;font-style:italic;color:#333;border-top:1px dashed #aaa;padding-top:3px;margin-top:4px;">Amount in words: ${amountInWords}</div>` +
-    bodyHtml.substring(insertPos);
-
-  return `
-    <style>
-      @page { size: ${pageSize} portrait; margin: ${pageSize === "A4" ? "10mm" : "0.5cm"}; }
-      tr { page-break-inside: avoid; break-inside: avoid; }
-    </style>
-    ${finalHtml}`;
-}
 // ═══════════════════════════════════════════════════════════════════════════
 // MULTI-BILL PRINT (Updated with Universal Print Engine & Page Breaks)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -544,6 +506,8 @@ const NAV_ITEMS = [
   { href: "broker-ledger.html", icon: "🤝", label: "Brokers" },
   { href: "ledger.html", icon: "📒", label: "Ledger" },
   { href: "order-book.html", icon: "📦", label: "Orders" },
+  // 👉 Yahan Party Master jod dijiye:
+  { href: "party-master.html", icon: "📖", label: "Party Master" },
   { href: "core_settings.html", icon: "⚙️", label: "Settings" },
 ];
 
@@ -571,8 +535,6 @@ function renderNavbar() {
     }</span></a>`;
   }).join("");
 
-  // Only include the connection-check button on pages that actually define
-  // checkFirebaseConnection() (e.g. bill-list.js pages) — avoids a dead button.
   const connHtml =
     typeof checkFirebaseConnection === "function"
       ? `<button class="nav-conn" onclick="checkFirebaseConnection()">
@@ -581,7 +543,22 @@ function renderNavbar() {
        </button>`
       : "";
 
+  // 🔥 UNIVERSAL CSS + HTML (Ek hi jagah se har page par jayega)
   root.innerHTML = `
+    <style>
+      .top-navbar { position: sticky; top: 0; z-index: 1000; background: linear-gradient(135deg, #003d6e, #005a9e); box-shadow: 0 4px 20px rgba(0, 62, 110, 0.35); display: flex; align-items: center; justify-content: space-between; height: 62px; padding: 0 24px; margin: -20px -16px 24px; }
+      .navbar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+      .navbar-brand img { height: 38px; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.3); }
+      .navbar-brand span { color: #fff; font-size: 1.1em; font-weight: 800; letter-spacing: 0.2px; }
+      .navbar-links { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
+      .nav-link { display: flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 8px; color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 600; text-decoration: none; border: none; background: transparent; cursor: pointer; transition: all 0.2s; font-family: inherit; white-space: nowrap; }
+      .nav-link:hover, .nav-link.active { background: rgba(255, 255, 255, 0.18); color: #fff; }
+      .nav-conn { display: flex; align-items: center; gap: 7px; padding: 6px 13px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.1); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; font-family: inherit; }
+      .nav-conn:hover { background: rgba(255, 255, 255, 0.2); }
+      .cdot { width: 8px; height: 8px; border-radius: 50%; background: #ffc107; transition: background 0.3s; }
+      .cdot.ok { background: #28a745; }
+      .cdot.err { background: #dc3545; }
+    </style>
     <nav class="top-navbar">
       <a class="navbar-brand" href="index.html">
         <img src="assets/logo.jpg" alt="Logo"/>

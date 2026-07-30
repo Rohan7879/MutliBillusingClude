@@ -901,6 +901,64 @@ async function collectData() {
     }
 
     window.location.href = `final.html?id=${docRef.id}`;
+    // ==================== SMART WHATSAPP AUTOMATION (WITH ON-THE-FLY NUMBER PROMPT) ====================
+
+    window.checkAndSendWhatsApp = function (billData) {
+      const isAutoSendOn = localStorage.getItem("whatsapp_auto_send") === "true";
+      if (!isAutoSendOn) return; // Agar toggle OFF hai toh kuch mat karo
+
+      let phone = billData.farmerPhone;
+
+      // 🔍 AGAR PHONE NUMBER NAHI HAI, TOH WAHIN SE POPUP MEIN MAANG LO!
+      if (!phone || phone.trim() === "" || phone === "undefined" || phone.length < 10) {
+        Swal.fire({
+          title: "📱 Kisan ka Number Darj Nahi Hai",
+          text: "Kya aap WhatsApp par parchi bhejne ke liye kisan ka 10-digit mobile number yahan enter karna chahte hain?",
+          input: "text",
+          inputPlaceholder: "Enter 10-digit mobile number...",
+          showCancelButton: true,
+          confirmButtonText: "Send WhatsApp",
+          cancelButtonText: "Skip",
+          confirmButtonColor: "#27ae60",
+          cancelButtonColor: "#e74c3c",
+        }).then((result) => {
+          if (result.isConfirmed && result.value) {
+            let enteredPhone = result.value.trim();
+            if (enteredPhone.length >= 10) {
+              billData.farmerPhone = enteredPhone;
+              executeWhatsAppSend(billData);
+            } else {
+              Swal.fire({
+                icon: "error",
+                title: "Invalid Number",
+                text: "Kripya sahi 10-digit mobile number dalein.",
+              });
+            }
+          }
+        });
+        return;
+      }
+
+      // Agar number pehle se hi form mein hai, toh seedha bhej do
+      executeWhatsAppSend(billData);
+    };
+
+    // Internal helper to trigger WhatsApp URL
+    function executeWhatsAppSend(billData) {
+      let message =
+        `Namaste Kisan Ji, Ganesh Agri Industry mein aapka swagat hai. 🙏\n\n` +
+        `📋 *Bill No:* ${billData.billNo}\n` +
+        `🌾 *Item:* ${billData.itemName}\n` +
+        `⚖️ *Weight / Bori:* ${billData.bags} Bori (${billData.weight} Quintal)\n` +
+        `💰 *Rate:* ₹${billData.rate} / Quintal\n` +
+        `💵 *Total Amount:* ₹${billData.totalAmount}\n\n` +
+        `Aapka maal darj ho chuka hai. Dhanyawad! - Ganesh & Company`;
+
+      let encodedMessage = encodeURIComponent(message);
+      let whatsappUrl = `https://wa.me/91${billData.farmerPhone}?text=${encodedMessage}`;
+
+      window.open(whatsappUrl, "_blank");
+    }
   } catch (error) {
     if (error.message && error.message.startsWith("VALIDATION_ERROR:")) {
       const msg = error.message.replace("VALIDATION_ERROR: ", "");
@@ -1064,3 +1122,37 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+// Jab bill successfully save ho jaye, tab yeh function call karein:
+function checkAndSendWhatsApp(billData) {
+  // Check karo ki user ne settings mein toggle ON rakha hai ya nahi
+  const isAutoSendOn = localStorage.getItem("whatsapp_auto_send") === "true";
+
+  if (!isAutoSendOn) {
+    console.log("WhatsApp automation is OFF by user.");
+    return; // Agar OFF hai toh kuch mat karo, seedha bahar aajao
+  }
+
+  // Kisan ka phone number aur details uthao
+  let phone = billData.farmerPhone; // Jaise "9876543210"
+  if (!phone) {
+    alert("Kisan ka phone number nahi mila!");
+    return;
+  }
+
+  // Message format jo kisan ke paas jayega
+  let message =
+    `Namaste Kisan Ji, Ganesh Agri Industry mein aapka swagat hai. 🙏\n\n` +
+    `📋 *Bill No:* ${billData.billNo}\n` +
+    `🌾 *Item:* ${billData.itemName}\n` +
+    `⚖️ *Weight / Bori:* ${billData.bags} Bori (${billData.weight} Quintal)\n` +
+    `💰 *Rate:* ₹${billData.rate} / Quintal\n` +
+    `💵 *Total Amount:* ₹${billData.totalAmount}\n\n` +
+    `Aapka maal darj ho chuka hai. Dhanyawad! - Ganesh & Company`;
+
+  // URL encode karke WhatsApp Web ya API open kar do
+  let encodedMessage = encodeURIComponent(message);
+  let whatsappUrl = `https://wa.me/91${phone}?text=${encodedMessage}`;
+
+  // Naye tab mein WhatsApp khol dega jisse 1 click mein message send ho jayega
+  window.open(whatsappUrl, "_blank");
+}

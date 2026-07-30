@@ -383,8 +383,8 @@ input:checked + .slider:before {
 }
 
 /* ══════════════════════════════
-   BUTTONS — COLORFUL & DISTINCT
-══════════════════════════════ */
+      BUTTONS — COLORFUL & DISTINCT
+   ══════════════════════════════ */
 
 /* Base button reset */
 button,
@@ -978,8 +978,8 @@ button[type="submit"]:hover {
 }
 
 /* ══════════════════════════════
-   PRINT STYLES
-══════════════════════════════ */
+      PRINT STYLES
+   ══════════════════════════════ */
 @media print {
   @page {
     size: A5;
@@ -1104,8 +1104,126 @@ button[type="submit"]:hover {
 }
 
 /* ── SweetAlert2 z-index fix ──
-   Ensures SweetAlert popups always appear above navbar (z-index:1000),
-   template modals (z-index:99999), and all other overlays. */
+      Ensures SweetAlert popups always appear above navbar (z-index:1000),
+      template modals (z-index:99999), and all other overlays. */
 .swal2-container {
   z-index: 999999 !important;
+}
+
+/* ============================================================
+      CENTRALIZED NAVBAR — single source of truth for every page.
+      Previously this was copy-pasted inline into ~10 different HTML
+      files, which meant a fix (like the flex-wrap overflow bug) had
+      to be applied file-by-file and was easy to miss on new pages.
+      Now every page just links to main.css and gets this for free.
+      (themes.css still overrides the gradient colors via --nav-from /
+      --nav-to with !important when the user picks a theme in Settings —
+      that keeps working exactly as before.)
+      ============================================================ */
+.top-navbar {
+  position: sticky;
+  top: 0;
+  z-index: 1000;
+  background: linear-gradient(135deg, #003d6e, #005a9e);
+  box-shadow: 0 4px 20px rgba(0, 62, 110, 0.35);
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 62px;
+  height: auto;
+  flex-wrap: wrap;
+  row-gap: 8px;
+  padding: 0 24px;
+  margin: -20px -16px 24px;
+}
+.navbar-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  text-decoration: none;
+}
+.navbar-brand img {
+  height: 38px;
+  border-radius: 8px;
+  border: 2px solid rgba(255, 255, 255, 0.3);
+}
+.navbar-brand span {
+  color: #fff;
+  font-size: 1.1em;
+  font-weight: 800;
+  letter-spacing: 0.2px;
+}
+.navbar-links {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+  flex-wrap: wrap;
+  row-gap: 6px;
+}
+.nav-link {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  text-decoration: none;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+  white-space: nowrap;
+}
+.nav-link:hover,
+.nav-link.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+.nav-conn {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  padding: 6px 13px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  background: rgba(255, 255, 255, 0.1);
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: all 0.2s;
+  font-family: inherit;
+}
+.nav-conn:hover {
+  background: rgba(255, 255, 255, 0.2);
+}
+.cdot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: #ffc107;
+  transition: background 0.3s;
+}
+.cdot.ok {
+  background: #28a745;
+}
+.cdot.err {
+  background: #dc3545;
+}
+@media (max-width: 640px) {
+  .top-navbar {
+    padding: 0 12px;
+  }
+  .navbar-brand span {
+    font-size: 0.95em;
+  }
+  .navbar-links .nav-link span:not(:first-child) {
+    display: none;
+  }
+  .nav-link {
+    padding: 7px 9px;
+  }
 }

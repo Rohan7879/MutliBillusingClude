@@ -525,65 +525,7 @@
       }
 
       /* Navbar (same as other pages) */
-      .top-navbar {
-        position: sticky;
-        top: 0;
-        z-index: 1000;
-        background: linear-gradient(135deg, #003d6e, #005a9e);
-        box-shadow: 0 4px 20px rgba(0, 62, 110, 0.35);
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        height: 62px;
-        padding: 0 24px;
-        margin: -20px -16px 24px;
-      }
-      .navbar-brand {
-        display: flex;
-        align-items: center;
-        gap: 10px;
-        text-decoration: none;
-      }
-      .navbar-brand img {
-        height: 38px;
-        border-radius: 8px;
-        border: 2px solid rgba(255, 255, 255, 0.3);
-      }
-      .navbar-brand span {
-        color: #fff;
-        font-size: 1.1em;
-        font-weight: 800;
-      }
-      .navbar-links {
-        display: flex;
-        gap: 4px;
-        align-items: center;
-      }
-      .nav-link {
-        display: flex;
-        align-items: center;
-        gap: 6px;
-        padding: 7px 13px;
-        border-radius: 8px;
-        color: rgba(255, 255, 255, 0.85);
-        font-size: 13px;
-        font-weight: 600;
-        text-decoration: none;
-        border: none;
-        background: transparent;
-        cursor: pointer;
-        transition: all 0.2s;
-        font-family: inherit;
-      }
-      .nav-link:hover,
-      .nav-link.active {
-        background: rgba(255, 255, 255, 0.18);
-        color: #fff;
-      }
       @media (max-width: 640px) {
-        .navbar-links .nav-link span:not(:first-child) {
-          display: none;
-        }
       }
 
       .info-banner {

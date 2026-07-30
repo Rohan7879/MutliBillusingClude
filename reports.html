@@ -1,101 +1,244 @@
 <!DOCTYPE html>
 <html lang="en">
-<head>
-  <meta charset="UTF-8"/>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Reports — MandiBook</title>
-  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css"/>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
-  <script src="js/core/firebase-init.js"></script>
-  <script src="js/core/utils.js"></script>
-  <script src="js/core/core-engine.js"></script>
-  <script src="js/features/themes.js" defer></script>
-  <script src="js/features/reports.js" defer></script>
-  <link rel="stylesheet" href="css/main.css"/>
-  <link rel="stylesheet" href="css/themes.css"/>
-  <link rel="icon" href="assets/logo.jpg"/>
-  <style>
-    .top-navbar{position:sticky;top:0;z-index:1000;background:linear-gradient(135deg,var(--nav-from,#003d6e),var(--nav-to,#005a9e));box-shadow:0 4px 20px rgba(0,62,110,.35);display:flex;align-items:center;justify-content:space-between;height:62px;padding:0 24px;margin:-20px -16px 24px;}
-    .navbar-brand{display:flex;align-items:center;gap:10px;text-decoration:none;}
-    .navbar-brand img{height:38px;border-radius:8px;border:2px solid rgba(255,255,255,.3);}
-    .navbar-brand span{color:#fff;font-size:1.1em;font-weight:800;}
-    .navbar-links{display:flex;gap:4px;align-items:center;flex-wrap:wrap;}
-    .nav-link{display:flex;align-items:center;gap:6px;padding:7px 13px;border-radius:8px;color:rgba(255,255,255,.85);font-size:13px;font-weight:600;text-decoration:none;border:none;background:transparent;cursor:pointer;transition:all .2s;font-family:inherit;}
-    .nav-link:hover,.nav-link.active{background:rgba(255,255,255,.18);color:#fff;}
-    .pg{max-width:1000px;margin:0 auto;}
-    .sc{background:#fff;border-radius:14px;padding:22px 24px;margin-bottom:18px;border:1px solid #dee2e6;box-shadow:0 2px 10px rgba(0,90,158,.07);}
-    .sc-title{font-size:.9em;font-weight:800;color:#005a9e;margin:0 0 18px;padding-bottom:11px;border-bottom:2px solid #e7f3ff;text-transform:uppercase;letter-spacing:.5px;display:flex;align-items:center;justify-content:space-between;}
-    /* Report type cards */
-    .report-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(180px,1fr));gap:12px;margin-bottom:20px;}
-    .report-card{padding:16px;border-radius:12px;border:2px solid #dee2e6;cursor:pointer;transition:all .2s;text-align:center;background:#fff;}
-    .report-card:hover,.report-card.active{border-color:#005a9e;background:#e7f3ff;}
-    .report-card .rc-icon{font-size:28px;margin-bottom:8px;}
-    .report-card .rc-name{font-weight:700;font-size:13px;color:#343a40;}
-    /* Filters */
-    .filter-row{display:flex;gap:10px;flex-wrap:wrap;align-items:center;margin-bottom:16px;}
-    .filter-row input,.filter-row select{padding:9px 12px;border:1.5px solid #dee2e6;border-radius:8px;font-size:14px;font-family:inherit;}
-    .filter-btn{padding:9px 18px;border-radius:8px;border:none;background:linear-gradient(135deg,#005a9e,#003d6e);color:#fff;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;}
-    .export-btn{padding:9px 18px;border-radius:8px;border:none;background:linear-gradient(135deg,#28a745,#1e7e34);color:#fff;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;}
-    /* Report table */
-    .report-table{width:100%;border-collapse:collapse;}
-    .report-table th{background:#005a9e;color:#fff;padding:11px 12px;text-align:left;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.3px;}
-    .report-table td{padding:10px 12px;border-bottom:1px solid #f0f0f0;font-size:13px;}
-    .report-table tbody tr:hover td{background:#f0f6ff;}
-    .report-table tfoot td{background:#e7f3ff;font-weight:800;color:#005a9e;}
-    /* Summary cards */
-    .summary-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:12px;margin-bottom:16px;}
-    .summary-card{background:#f8f9fa;border:1px solid #dee2e6;border-radius:10px;padding:14px;text-align:center;}
-    .summary-val{font-size:1.4em;font-weight:800;color:#005a9e;}
-    .summary-lbl{font-size:11px;color:#6c757d;font-weight:600;text-transform:uppercase;margin-top:3px;}
-    @media(max-width:640px){.report-grid{grid-template-columns:repeat(2,1fr);}}
-  </style>
-</head>
-<body>
-<div id="navbar-root"></div>
-<div class="pg">
-  <!-- Report Type Selector -->
-  <div class="sc">
-    <div class="sc-title">📈 Reports</div>
-    <div class="report-grid">
-      <div class="report-card active" id="rc-daily" onclick="selectReport('daily')"><div class="rc-icon">📅</div><div class="rc-name">Daily</div></div>
-      <div class="report-card" id="rc-supplier" onclick="selectReport('supplier')"><div class="rc-icon">👤</div><div class="rc-name">Supplier</div></div>
-      <div class="report-card" id="rc-product" onclick="selectReport('product')"><div class="rc-icon">🌾</div><div class="rc-name">Product</div></div>
-      <div class="report-card" id="rc-broker" onclick="selectReport('broker')"><div class="rc-icon">🤝</div><div class="rc-name">Broker</div></div>
-      <div class="report-card" id="rc-village" onclick="selectReport('village')"><div class="rc-icon">🏘️</div><div class="rc-name">Village</div></div>
-      <div class="report-card" id="rc-vehicle" onclick="selectReport('vehicle')"><div class="rc-icon">🚛</div><div class="rc-name">Vehicle</div></div>
-      <div class="report-card" id="rc-monthly" onclick="selectReport('monthly')"><div class="rc-icon">📊</div><div class="rc-name">Monthly</div></div>
-      <div class="report-card" id="rc-payment" onclick="selectReport('payment')"><div class="rc-icon">💰</div><div class="rc-name">Payment</div></div>
-    </div>
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Reports — MandiBook</title>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/utils.js"></script>
+    <script src="js/core/core-engine.js"></script>
+    <script src="js/features/themes.js" defer></script>
+    <script src="js/features/reports.js" defer></script>
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="stylesheet" href="css/themes.css" />
+    <link rel="icon" href="assets/logo.jpg" />
+    <style>
+      .pg {
+        max-width: 1000px;
+        margin: 0 auto;
+      }
+      .sc {
+        background: #fff;
+        border-radius: 14px;
+        padding: 22px 24px;
+        margin-bottom: 18px;
+        border: 1px solid #dee2e6;
+        box-shadow: 0 2px 10px rgba(0, 90, 158, 0.07);
+      }
+      .sc-title {
+        font-size: 0.9em;
+        font-weight: 800;
+        color: #005a9e;
+        margin: 0 0 18px;
+        padding-bottom: 11px;
+        border-bottom: 2px solid #e7f3ff;
+        text-transform: uppercase;
+        letter-spacing: 0.5px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+      }
+      /* Report type cards */
+      .report-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+        gap: 12px;
+        margin-bottom: 20px;
+      }
+      .report-card {
+        padding: 16px;
+        border-radius: 12px;
+        border: 2px solid #dee2e6;
+        cursor: pointer;
+        transition: all 0.2s;
+        text-align: center;
+        background: #fff;
+      }
+      .report-card:hover,
+      .report-card.active {
+        border-color: #005a9e;
+        background: #e7f3ff;
+      }
+      .report-card .rc-icon {
+        font-size: 28px;
+        margin-bottom: 8px;
+      }
+      .report-card .rc-name {
+        font-weight: 700;
+        font-size: 13px;
+        color: #343a40;
+      }
+      /* Filters */
+      .filter-row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+        align-items: center;
+        margin-bottom: 16px;
+      }
+      .filter-row input,
+      .filter-row select {
+        padding: 9px 12px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 14px;
+        font-family: inherit;
+      }
+      .filter-btn {
+        padding: 9px 18px;
+        border-radius: 8px;
+        border: none;
+        background: linear-gradient(135deg, #005a9e, #003d6e);
+        color: #fff;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      .export-btn {
+        padding: 9px 18px;
+        border-radius: 8px;
+        border: none;
+        background: linear-gradient(135deg, #28a745, #1e7e34);
+        color: #fff;
+        font-weight: 700;
+        font-size: 13px;
+        cursor: pointer;
+        font-family: inherit;
+      }
+      /* Report table */
+      .report-table {
+        width: 100%;
+        border-collapse: collapse;
+      }
+      .report-table th {
+        background: #005a9e;
+        color: #fff;
+        padding: 11px 12px;
+        text-align: left;
+        font-size: 12px;
+        font-weight: 700;
+        text-transform: uppercase;
+        letter-spacing: 0.3px;
+      }
+      .report-table td {
+        padding: 10px 12px;
+        border-bottom: 1px solid #f0f0f0;
+        font-size: 13px;
+      }
+      .report-table tbody tr:hover td {
+        background: #f0f6ff;
+      }
+      .report-table tfoot td {
+        background: #e7f3ff;
+        font-weight: 800;
+        color: #005a9e;
+      }
+      /* Summary cards */
+      .summary-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+        gap: 12px;
+        margin-bottom: 16px;
+      }
+      .summary-card {
+        background: #f8f9fa;
+        border: 1px solid #dee2e6;
+        border-radius: 10px;
+        padding: 14px;
+        text-align: center;
+      }
+      .summary-val {
+        font-size: 1.4em;
+        font-weight: 800;
+        color: #005a9e;
+      }
+      .summary-lbl {
+        font-size: 11px;
+        color: #6c757d;
+        font-weight: 600;
+        text-transform: uppercase;
+        margin-top: 3px;
+      }
+      @media (max-width: 640px) {
+        .report-grid {
+          grid-template-columns: repeat(2, 1fr);
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <div id="navbar-root"></div>
+    <div class="pg">
+      <!-- Report Type Selector -->
+      <div class="sc">
+        <div class="sc-title">📈 Reports</div>
+        <div class="report-grid">
+          <div class="report-card active" id="rc-daily" onclick="selectReport('daily')">
+            <div class="rc-icon">📅</div>
+            <div class="rc-name">Daily</div>
+          </div>
+          <div class="report-card" id="rc-supplier" onclick="selectReport('supplier')">
+            <div class="rc-icon">👤</div>
+            <div class="rc-name">Supplier</div>
+          </div>
+          <div class="report-card" id="rc-product" onclick="selectReport('product')">
+            <div class="rc-icon">🌾</div>
+            <div class="rc-name">Product</div>
+          </div>
+          <div class="report-card" id="rc-broker" onclick="selectReport('broker')">
+            <div class="rc-icon">🤝</div>
+            <div class="rc-name">Broker</div>
+          </div>
+          <div class="report-card" id="rc-village" onclick="selectReport('village')">
+            <div class="rc-icon">🏘️</div>
+            <div class="rc-name">Village</div>
+          </div>
+          <div class="report-card" id="rc-vehicle" onclick="selectReport('vehicle')">
+            <div class="rc-icon">🚛</div>
+            <div class="rc-name">Vehicle</div>
+          </div>
+          <div class="report-card" id="rc-monthly" onclick="selectReport('monthly')">
+            <div class="rc-icon">📊</div>
+            <div class="rc-name">Monthly</div>
+          </div>
+          <div class="report-card" id="rc-payment" onclick="selectReport('payment')">
+            <div class="rc-icon">💰</div>
+            <div class="rc-name">Payment</div>
+          </div>
+        </div>
 
-    <!-- Filters -->
-    <div class="filter-row">
-      <input type="date" id="report-start" />
-      <span style="font-weight:700;color:#6c757d;">to</span>
-      <input type="date" id="report-end" />
-      <button class="filter-btn" onclick="generateReport()">🔍 Generate</button>
-      <button class="export-btn" onclick="exportReportExcel()">📥 Export Excel</button>
-    </div>
-  </div>
+        <!-- Filters -->
+        <div class="filter-row">
+          <input type="date" id="report-start" />
+          <span style="font-weight: 700; color: #6c757d">to</span>
+          <input type="date" id="report-end" />
+          <button class="filter-btn" onclick="generateReport()">🔍 Generate</button>
+          <button class="export-btn" onclick="exportReportExcel()">📥 Export Excel</button>
+        </div>
+      </div>
 
-  <!-- Summary Cards -->
-  <div class="summary-grid" id="report-summary"></div>
+      <!-- Summary Cards -->
+      <div class="summary-grid" id="report-summary"></div>
 
-  <!-- Report Table -->
-  <div class="sc" id="report-table-container" style="display:none;">
-    <div class="sc-title">
-      <span id="report-title">Report</span>
+      <!-- Report Table -->
+      <div class="sc" id="report-table-container" style="display: none">
+        <div class="sc-title">
+          <span id="report-title">Report</span>
+        </div>
+        <div style="overflow-x: auto">
+          <table class="report-table" id="report-table">
+            <thead id="report-thead"></thead>
+            <tbody id="report-tbody"></tbody>
+            <tfoot id="report-tfoot"></tfoot>
+          </table>
+        </div>
+      </div>
     </div>
-    <div style="overflow-x:auto;">
-      <table class="report-table" id="report-table">
-        <thead id="report-thead"></thead>
-        <tbody id="report-tbody"></tbody>
-        <tfoot id="report-tfoot"></tfoot>
-      </table>
-    </div>
-  </div>
-</div>
-</body>
+  </body>
 </html>

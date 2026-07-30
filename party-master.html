@@ -1,0 +1,328 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <title>Party Master Directory — MandiBook</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <!-- SheetJS for Excel Import/Export -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
+    <style>
+      body {
+        font-family: "Poppins", sans-serif;
+        background: #f8fafc;
+      }
+    </style>
+  </head>
+
+  <body>
+    <div id="navbar-root"></div>
+
+    <div class="max-w-7xl mx-auto mt-4 px-4">
+      <!-- Header -->
+      <div class="flex justify-between items-center mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
+        <div>
+          <h1 class="text-2xl font-bold text-slate-800">📖 Party Master Directory</h1>
+          <p class="text-sm text-slate-500">Manage all Farmers, Brokers, Buyers & Veparis securely.</p>
+        </div>
+        <a
+          href="index.html"
+          class="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-200 transition"
+          >← Back to Dashboard</a
+        >
+      </div>
+
+      <!-- Main Grid -->
+      <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <!-- Left Box: Add / Edit Form -->
+        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit">
+          <h2 id="formTitle" class="text-lg font-bold text-slate-800 mb-4 pb-2 border-b">➕ Add New Party</h2>
+
+          <form id="partyForm">
+            <input type="hidden" id="partyId" />
+
+            <div class="mb-4">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Party Type</label>
+              <select
+                id="partyType"
+                class="w-full p-2.5 border rounded-lg text-sm bg-slate-50 outline-none focus:ring-2 focus:ring-blue-500"
+              >
+                <option value="Farmer">🌾 Kisan (Farmer)</option>
+                <option value="Broker">🤝 Broker / Arhatiya</option>
+                <option value="Buyer">🏢 Buyer / Mill</option>
+                <option value="Vepari">🛒 Vepari / Merchant (વેપારી)</option>
+              </select>
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Party / Firm Name *</label>
+              <input
+                type="text"
+                id="partyName"
+                required
+                placeholder="E.G. RAMESH BHAI"
+                class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                oninput="this.value=this.value.toUpperCase()"
+              />
+            </div>
+
+            <!-- Feature 3: Munim / Reference Name -->
+            <div class="mb-4">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1"
+                >Munim / Reference Name (Optional)</label
+              >
+              <input
+                type="text"
+                id="partyMunim"
+                placeholder="E.G. SURESHBHAI (MUNIM)"
+                class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+                oninput="this.value=this.value.toUpperCase()"
+              />
+            </div>
+
+            <!-- Feature 3: Primary & Alternate Mobile -->
+            <div class="grid grid-cols-2 gap-2 mb-4">
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Mobile No *</label>
+                <input
+                  type="tel"
+                  id="partyPhone"
+                  required
+                  maxlength="10"
+                  placeholder="10-digit primary"
+                  class="w-full p-2.5 border rounded-lg text-sm outline-none"
+                />
+              </div>
+              <div>
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Alt. Mobile</label>
+                <input
+                  type="tel"
+                  id="partyAltPhone"
+                  maxlength="10"
+                  placeholder="Optional 2nd no"
+                  class="w-full p-2.5 border rounded-lg text-sm outline-none"
+                />
+              </div>
+            </div>
+
+            <!-- Default Commission (Sirf Broker ke liye) -->
+            <div class="mb-4" id="commFieldContainer" style="display: none">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1"
+                >Default Commission (₹ per bag)</label
+              >
+              <input
+                type="number"
+                id="partyComm"
+                placeholder="0"
+                step="any"
+                class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <!-- Credit Limit -->
+            <div class="mb-4">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Credit Limit (₹)</label>
+              <input
+                type="number"
+                id="partyCreditLimit"
+                placeholder="0"
+                step="any"
+                class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
+              />
+            </div>
+
+            <!-- Opening Balance -->
+            <div class="flex gap-2 mb-4">
+              <div class="flex-1">
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Opening Balance (₹)</label>
+                <input
+                  type="number"
+                  id="partyOpBal"
+                  placeholder="0.00"
+                  step="any"
+                  class="w-full p-2.5 border rounded-lg text-sm outline-none"
+                />
+              </div>
+              <div class="w-1/3">
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Dr / Cr</label>
+                <select id="partyOpBalType" class="w-full p-2.5 border rounded-lg text-sm bg-slate-50 outline-none">
+                  <option value="Cr">Credit (Jama)</option>
+                  <option value="Dr">Debit (Udhar)</option>
+                </select>
+              </div>
+            </div>
+
+            <!-- Bank Details -->
+            <div class="flex gap-2 mb-4">
+              <div class="flex-1">
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Bank Account</label>
+                <input
+                  type="text"
+                  id="partyBankAcc"
+                  placeholder="A/C Number"
+                  class="w-full p-2.5 border rounded-lg text-sm outline-none"
+                />
+              </div>
+              <div class="w-1/3">
+                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">IFSC</label>
+                <input
+                  type="text"
+                  id="partyIfsc"
+                  placeholder="IFSC"
+                  class="w-full p-2.5 border rounded-lg text-sm outline-none uppercase"
+                  oninput="this.value=this.value.toUpperCase()"
+                />
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Location / Village</label>
+              <input
+                type="text"
+                id="partyAddress"
+                placeholder="VILLAGE NAME"
+                class="w-full p-2.5 border rounded-lg text-sm outline-none"
+                oninput="this.value=this.value.toUpperCase()"
+              />
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">GSTIN (Optional)</label>
+              <input
+                type="text"
+                id="partyGst"
+                placeholder="24AAAAA0000A1Z5"
+                maxlength="15"
+                class="w-full p-2.5 border rounded-lg text-sm outline-none uppercase"
+                oninput="this.value=this.value.toUpperCase()"
+              />
+            </div>
+
+            <!-- Blacklist Toggle -->
+            <div class="mb-6 flex items-center gap-2 p-3 bg-red-50 border border-red-100 rounded-lg">
+              <input type="checkbox" id="partyBlacklist" class="w-4 h-4 accent-red-600 cursor-pointer" />
+              <label for="partyBlacklist" class="text-xs font-bold text-red-700 cursor-pointer uppercase tracking-wider"
+                >🚩 Mark as Blacklisted / Defaulter</label
+              >
+            </div>
+
+            <div class="flex gap-2">
+              <button
+                type="submit"
+                id="saveBtn"
+                class="flex-1 bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2.5 rounded-lg text-sm transition shadow-md"
+              >
+                Save Party
+              </button>
+              <button
+                type="button"
+                id="cancelBtn"
+                class="hidden bg-gray-200 hover:bg-gray-300 text-slate-700 px-4 py-2.5 rounded-lg text-sm transition"
+              >
+                Cancel
+              </button>
+            </div>
+          </form>
+        </div>
+
+        <!-- Right Box: List & Search -->
+        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+          <!-- Smart Filters, Excel Import & Export Buttons -->
+          <div class="flex flex-wrap justify-between items-center mb-4 border-b pb-4 gap-2">
+            <div class="flex flex-wrap gap-2">
+              <button
+                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-800 text-white"
+                onclick="applyTypeFilter('All', this)"
+              >
+                📋 All
+              </button>
+              <button
+                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                onclick="applyTypeFilter('Farmer', this)"
+              >
+                🌾 Farmers
+              </button>
+              <button
+                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                onclick="applyTypeFilter('Broker', this)"
+              >
+                🤝 Brokers
+              </button>
+              <button
+                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                onclick="applyTypeFilter('Buyer', this)"
+              >
+                🏢 Buyers
+              </button>
+              <button
+                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                onclick="applyTypeFilter('Vepari', this)"
+              >
+                🛒 Veparis
+              </button>
+            </div>
+
+            <div class="flex gap-2">
+              <!-- Feature 1: Excel Import Button -->
+              <label
+                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
+              >
+                📤 Import Excel
+                <input
+                  type="file"
+                  id="excelFile"
+                  accept=".xlsx, .xls"
+                  class="hidden"
+                  onchange="importPartiesExcel(event)"
+                />
+              </label>
+              <button
+                onclick="exportPartiesExcel()"
+                class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1"
+              >
+                📥 Export Excel
+              </button>
+            </div>
+          </div>
+
+          <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
+            <input
+              type="text"
+              id="searchInput"
+              placeholder="🔍 Search name, phone, village or munim..."
+              class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
+            />
+          </div>
+
+          <div class="overflow-x-auto">
+            <table class="w-full text-left border-collapse">
+              <thead>
+                <tr class="bg-slate-50 text-slate-600 text-xs uppercase border-b">
+                  <th class="p-3">Party Info</th>
+                  <th class="p-3">Contact & Bank</th>
+                  <th class="p-3">Summary / Terms</th>
+                  <th class="p-3 text-center">Actions</th>
+                </tr>
+              </thead>
+              <tbody id="partyTableBody" class="text-sm text-slate-700">
+                <tr>
+                  <td colspan="4" class="p-4 text-center text-slate-400">Loading parties directory...</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/utils.js"></script>
+    <script src="js/core/core-engine.js"></script>
+    <script src="js/features/party-master.js" defer></script>
+  </body>
+</html>
