@@ -42,8 +42,8 @@ function initializeLedgerPage() {
   });
 
   document.getElementById("back-to-list-btn").addEventListener("click", () => {
-    document.getElementById("ledger-view").style.display = "none";
-    document.getElementById("customer-selection-view").style.display = "block";
+    // List view par wapas jaane ke liye URL reset karein
+    window.location.href = "ledger.html";
   });
 
   document.getElementById("date-filter-btn").addEventListener("click", () => {
@@ -57,51 +57,87 @@ function initializeLedgerPage() {
   document.getElementById("close-payment-modal-btn").addEventListener("click", closePaymentModal);
   document.getElementById("save-payment-btn").addEventListener("click", savePayment);
 
-  document.getElementById("select-all-bills-ledger").addEventListener("change", (e) => {
-    document.querySelectorAll(".bill-checkbox-ledger:not(:disabled)").forEach((checkbox) => {
-      checkbox.checked = e.target.checked;
+  const selectAllBills = document.getElementById("select-all-bills-ledger");
+  if (selectAllBills) {
+    selectAllBills.addEventListener("change", (e) => {
+      document.querySelectorAll(".bill-checkbox-ledger:not(:disabled)").forEach((checkbox) => {
+        checkbox.checked = e.target.checked;
+      });
+      updateSelectionSummary();
     });
-    updateSelectionSummary();
-  });
-
-  showLoading();
-  fetchUniqueCustomers();
-
-  // --- Add this block to your initializeLedgerPage function ---
-  document.getElementById("select-all-bills-ledger").addEventListener("change", (e) => {
-    // Find all individual bill checkboxes that are not disabled
-    document.querySelectorAll(".bill-checkbox-ledger:not(:disabled)").forEach((checkbox) => {
-      // Set their 'checked' property to match the 'Select All' box
-      checkbox.checked = e.target.checked;
-    });
-    // Update the "Selected bills" summary
-    updateSelectionSummary();
-  });
+  }
 }
 
 async function fetchUniqueCustomers() {
   try {
-    const [billsSnapshot, paymentsSnapshot] = await Promise.all([billsCollection.get(), paymentsCollection.get()]);
+    const [partiesSnapshot, billsSnapshot, paymentsSnapshot] = await Promise.all([
+      db.collection("parties").where("deleted", "==", false).get(),
+      billsCollection.get(),
+      paymentsCollection.get(),
+    ]);
+
     const customerMap = new Map();
+
+    partiesSnapshot.docs.forEach((doc) => {
+      const pData = doc.data();
+      if (pData.type === "Farmer" || pData.type === "Vepari") {
+        const name = (pData.name || "").trim();
+        if (name) {
+          const village = (pData.address || "N/A").trim();
+          const key = `${name.toLowerCase()}|${village.toLowerCase()}`;
+          customerMap.set(key, {
+            name: name,
+            village: village,
+            customerId: doc.id,
+          });
+        }
+      }
+    });
+
     const processDoc = (doc) => {
-      if (doc.data().deleted === true) return; // skip soft-deleted bills
+      if (doc.data().deleted === true) return;
       const data = doc.data();
       const customerName = data["Customer Name"] || data.customerName;
       if (customerName) {
         const village = data["Village"] || data.customerVillage || "N/A";
         const key = `${customerName.toLowerCase()}|${village.toLowerCase()}`;
         if (!customerMap.has(key)) {
-          customerMap.set(key, { name: customerName, village: village, customerId: data.customerId || null });
+          customerMap.set(key, {
+            name: customerName,
+            village: village,
+            customerId: data.customerId || null,
+          });
         } else if (data.customerId && !customerMap.get(key).customerId) {
-          // Backfill customerId onto an already-seen entry if this doc has it
           customerMap.get(key).customerId = data.customerId;
         }
       }
     };
+
     billsSnapshot.docs.forEach(processDoc);
     paymentsSnapshot.docs.forEach(processDoc);
+
     allUniqueCustomers = Array.from(customerMap.values()).sort((a, b) => a.name.localeCompare(b.name));
     renderCustomerList(allUniqueCustomers);
+
+    // 🚀 NAYA LOGIC: Jaise hi list bane, check karo ki URL mein naam hai ya nahi
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetName = urlParams.get("name");
+
+    if (targetName) {
+      const targetVillage = (urlParams.get("village") || "").toLowerCase();
+
+      // List mein se specific kisan dhoondho
+      const foundCustomer = allUniqueCustomers.find(
+        (c) =>
+          c.name.toLowerCase() === targetName.toLowerCase() &&
+          (targetVillage === "" || c.village.toLowerCase() === targetVillage)
+      );
+
+      // Agar kisan mil gaya, toh bina kisi DOM hack ke seedha ledger render kar do!
+      if (foundCustomer) {
+        showCustomerLedger(foundCustomer);
+      }
+    }
   } catch (error) {
     console.error("Error fetching unique customers:", error);
     alert("Could not load customer list.");
@@ -121,7 +157,14 @@ function renderCustomerList(customers) {
     const customerCard = document.createElement("div");
     customerCard.className = "customer-card";
     customerCard.innerHTML = `<div class="customer-name">${customer.name}</div><div class="customer-village">${customer.village}</div>`;
-    customerCard.addEventListener("click", () => showCustomerLedger(customer));
+
+    // Yahan click par seedha URL change karenge, taaki browser history mein bhi path rahe
+    customerCard.addEventListener("click", () => {
+      window.location.href = `ledger.html?name=${encodeURIComponent(customer.name)}&village=${encodeURIComponent(
+        customer.village
+      )}`;
+    });
+
     container.appendChild(customerCard);
   });
 }
@@ -135,12 +178,6 @@ async function showCustomerLedger(customer) {
   document.getElementById("ledger-customer-village").textContent = customer.village;
 
   try {
-    // Phase 2 (item #10): query by Customer Name (works for ALL bills, old
-    // and new) AND by customerId if we have one (catches bills where the
-    // name was typed slightly differently but the customerId still matches —
-    // customerId is only present on bills created after this update, so the
-    // Name-based query remains the primary/required path for backward
-    // compatibility with historical data).
     const queries = [
       billsCollection.where("Customer Name", "==", customer.name).get(),
       paymentsCollection.where("customerName", "==", customer.name).get(),
@@ -151,11 +188,8 @@ async function showCustomerLedger(customer) {
     const results = await Promise.all(queries);
     const billsSnapshot = results[0];
     const paymentsSnapshot = results[1];
-    const extraBillsSnapshot = results[2]; // undefined if no customerId
+    const extraBillsSnapshot = results[2];
 
-    // Merge bill docs from both queries, de-duplicated by doc id — soft-
-    // deleted bills are excluded so a deleted bill's amount no longer
-    // counts toward the customer's outstanding balance.
     const billDocsById = new Map();
     billsSnapshot.docs.forEach((doc) => {
       if (doc.data().deleted !== true) billDocsById.set(doc.id, doc);
@@ -391,36 +425,22 @@ function closePaymentModal() {
   paymentModal.style.display = "none";
 }
 
-/**
- * PHASE 2 (item #10) — Master Ledger Balance.
- * Adjusts customers_master/{customerId}.currentBalance by `delta` inside a
- * Firebase Transaction (safe against concurrent writes from two users).
- * This is a best-effort CACHE, not the source of truth — ledger.js still
- * computes the real balance live from bills+payments, so a failure here
- * is logged but never blocks the actual payment/bill save.
- * @param {{name:string, village:string, customerId?:string}} customer
- * @param {number} delta - positive to increase balance, negative to decrease
- */
 async function updateCustomerMasterBalance(customer, delta) {
   if (!customer || !customer.customerId) return;
   try {
-    const masterRef = db.collection("customers_master").doc(customer.customerId);
+    const masterRef = db.collection("parties").doc(customer.customerId);
+
     await db.runTransaction(async (transaction) => {
       const masterDoc = await transaction.get(masterRef);
-      const prevBalance = masterDoc.exists ? masterDoc.data().currentBalance || 0 : 0;
-      transaction.set(
-        masterRef,
-        {
-          name: customer.name,
-          village: customer.village,
-          currentBalance: prevBalance + delta,
-          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        },
-        { merge: true }
-      );
+      if (!masterDoc.exists) return;
+      const prevBalance = masterDoc.data().currentBalance || 0;
+      transaction.update(masterRef, {
+        currentBalance: prevBalance + delta,
+        lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      });
     });
-  } catch (err) {
-    console.warn("customers_master balance update failed (non-critical):", err);
+  } catch (e) {
+    console.error("Master balance update error:", e);
   }
 }
 
@@ -487,7 +507,6 @@ async function savePayment() {
       }
       await batch.commit();
 
-      // Phase 2 (item #10): reduce the cached running balance by the payment amount
       await updateCustomerMasterBalance(currentCustomer, -totalCredit);
     } else {
       await paymentsCollection.add({
@@ -502,7 +521,6 @@ async function savePayment() {
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
       });
 
-      // Phase 2 (item #10): reduce the cached running balance by the payment amount
       await updateCustomerMasterBalance(currentCustomer, -totalCredit);
     }
 

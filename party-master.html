@@ -2,11 +2,11 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <title>Party Master Directory — MandiBook</title>
+    <title>Party Master Ledger</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link href="https://fonts.googleapis.com/css2?family=Poppins:wght@400;500;600;700&display=swap" rel="stylesheet" />
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <!-- SheetJS for Excel Import/Export -->
+    <!-- SheetJS for Excel Export -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <link rel="stylesheet" href="css/main.css" />
     <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
@@ -26,7 +26,7 @@
       <div class="flex justify-between items-center mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
         <div>
           <h1 class="text-2xl font-bold text-slate-800">📖 Party Master Directory</h1>
-          <p class="text-sm text-slate-500">Manage all Farmers, Brokers, Buyers & Veparis securely.</p>
+          <p class="text-sm text-slate-500">Manage all Farmers, Brokers, Buyers & Suppliers securely.</p>
         </div>
         <a
           href="index.html"
@@ -43,7 +43,6 @@
 
           <form id="partyForm">
             <input type="hidden" id="partyId" />
-
             <div class="mb-4">
               <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Party Type</label>
               <select
@@ -69,46 +68,19 @@
               />
             </div>
 
-            <!-- Feature 3: Munim / Reference Name -->
             <div class="mb-4">
-              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1"
-                >Munim / Reference Name (Optional)</label
-              >
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Mobile Number *</label>
               <input
-                type="text"
-                id="partyMunim"
-                placeholder="E.G. SURESHBHAI (MUNIM)"
+                type="tel"
+                id="partyPhone"
+                required
+                maxlength="10"
+                placeholder="10-digit mobile number"
                 class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
-                oninput="this.value=this.value.toUpperCase()"
               />
             </div>
 
-            <!-- Feature 3: Primary & Alternate Mobile -->
-            <div class="grid grid-cols-2 gap-2 mb-4">
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Mobile No *</label>
-                <input
-                  type="tel"
-                  id="partyPhone"
-                  required
-                  maxlength="10"
-                  placeholder="10-digit primary"
-                  class="w-full p-2.5 border rounded-lg text-sm outline-none"
-                />
-              </div>
-              <div>
-                <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Alt. Mobile</label>
-                <input
-                  type="tel"
-                  id="partyAltPhone"
-                  maxlength="10"
-                  placeholder="Optional 2nd no"
-                  class="w-full p-2.5 border rounded-lg text-sm outline-none"
-                />
-              </div>
-            </div>
-
-            <!-- Default Commission (Sirf Broker ke liye) -->
+            <!-- Default Commission (Sirf Broker select hone par dikhega) -->
             <div class="mb-4" id="commFieldContainer" style="display: none">
               <label class="block text-xs font-semibold text-slate-600 uppercase mb-1"
                 >Default Commission (₹ per bag)</label
@@ -230,7 +202,7 @@
 
         <!-- Right Box: List & Search -->
         <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
-          <!-- Smart Filters, Excel Import & Export Buttons -->
+          <!-- Smart Filters & Excel Export Button -->
           <div class="flex flex-wrap justify-between items-center mb-4 border-b pb-4 gap-2">
             <div class="flex flex-wrap gap-2">
               <button
@@ -257,42 +229,24 @@
               >
                 🏢 Buyers
               </button>
-              <button
-                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
-                onclick="applyTypeFilter('Vepari', this)"
+              <a
+                href="ledger.html?name=${encodeURIComponent(p.name)}&village=${encodeURIComponent(p.address || p.village || '')}"
+                >📒 Ledger</a
               >
-                🛒 Veparis
-              </button>
             </div>
-
-            <div class="flex gap-2">
-              <!-- Feature 1: Excel Import Button -->
-              <label
-                class="bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition cursor-pointer flex items-center gap-1"
-              >
-                📤 Import Excel
-                <input
-                  type="file"
-                  id="excelFile"
-                  accept=".xlsx, .xls"
-                  class="hidden"
-                  onchange="importPartiesExcel(event)"
-                />
-              </label>
-              <button
-                onclick="exportPartiesExcel()"
-                class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1"
-              >
-                📥 Export Excel
-              </button>
-            </div>
+            <button
+              onclick="exportPartiesExcel()"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1"
+            >
+              📥 Export Excel
+            </button>
           </div>
 
           <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
             <input
               type="text"
               id="searchInput"
-              placeholder="🔍 Search name, phone, village or munim..."
+              placeholder="🔍 Search name, phone or village..."
               class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
             />
           </div>
@@ -303,7 +257,7 @@
                 <tr class="bg-slate-50 text-slate-600 text-xs uppercase border-b">
                   <th class="p-3">Party Info</th>
                   <th class="p-3">Contact & Bank</th>
-                  <th class="p-3">Summary / Terms</th>
+                  <th class="p-3">Balance / Terms</th>
                   <th class="p-3 text-center">Actions</th>
                 </tr>
               </thead>

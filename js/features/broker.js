@@ -37,7 +37,6 @@ async function loadBrokerLedger() {
     });
 
     // Also include from master collection
-    // Also include from master collection
     brokersMasterSnap.docs.forEach((doc) => {
       const data = doc.data();
       if (data && data.name) {
@@ -141,6 +140,18 @@ async function loadBrokerLedger() {
       .join("");
 
     container.innerHTML = htmlContent;
+
+    // 🚀 NAYA LOGIC: URL se broker ka naam padho aur direct popup kholo
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetBrokerName = urlParams.get("name");
+
+    if (targetBrokerName) {
+      setTimeout(() => {
+        viewBrokerDetails(targetBrokerName);
+        // Is line se URL se naam hat jayega, taaki page refresh karne par wapas na khule
+        window.history.replaceState(null, "", window.location.pathname);
+      }, 400); // Thoda time diya taaki background mein sab load ho jaye
+    }
   } catch (e) {
     console.error("Error loading broker ledger:", e);
   } finally {

@@ -219,6 +219,18 @@ function drawTable(data) {
           ? `<span class="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded">🧾 ${totalBills} Bills</span>`
           : `<span class="text-[10px] text-slate-400">No bills yet</span>`;
 
+      // 🔗 NAYA LOGIC: Broker hai toh alag link, Farmer hai toh alag link
+      let actionLink = "";
+      if (p.type === "Broker") {
+        actionLink = `<a href="broker-ledger.html?name=${encodeURIComponent(
+          p.name
+        )}" class="inline-block text-blue-600 hover:text-blue-800 p-1 font-bold text-xs bg-blue-50 rounded px-2 mb-1">🤝 Broker Khata</a>`;
+      } else {
+        actionLink = `<a href="ledger.html?id=${p.id || p.customerId || ""}&name=${encodeURIComponent(
+          p.name
+        )}" class="inline-block text-purple-600 hover:text-purple-800 p-1 font-bold text-xs bg-purple-50 rounded px-2 mb-1">📒 Ledger</a>`;
+      }
+
       return `
         <tr class="border-b hover:bg-slate-50 transition ${p.isBlacklisted ? "bg-red-50/30" : ""}">
             <td class="p-3">
@@ -261,10 +273,8 @@ function drawTable(data) {
                 }
             </td>
             <td class="p-3 text-center">
-                <!-- Feature 2: Direct Ledger Shortcut Link -->
-                <a href="ledger.html" onclick="localStorage.setItem('selected_ledger_party', '${
-                  p.name
-                }')" class="inline-block text-purple-600 hover:text-purple-800 p-1 font-bold text-xs bg-purple-50 rounded px-2 mb-1">📒 Ledger</a>
+                <!-- Direct Ledger/Broker Shortcut Link -->
+                ${actionLink}
                 <div class="flex justify-center gap-1 mt-1">
                     <button onclick="editParty('${
                       p.id
@@ -279,7 +289,6 @@ function drawTable(data) {
     })
     .join("");
 }
-
 window.editParty = function (id) {
   const p = partiesList.find((item) => item.id === id);
   if (!p) return;

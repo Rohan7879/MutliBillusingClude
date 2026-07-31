@@ -78,14 +78,35 @@ document.addEventListener("DOMContentLoaded", () => {
 
 let uniqueCustomers = []; // To hold our customer list
 async function setupAutocomplete() {
-  // 1. Get the customer list directly from the Firestore 'customers' collection
   try {
-    const snapshot = await db.collection("customers").get();
-    uniqueCustomers = snapshot.docs.map((doc) => doc.data());
-  } catch (error) {
-    console.error("Could not fetch customer list for autocomplete:", error);
-  }
+    // 1. Bina kisi strict condition ke saara data fetch karo (Safe approach)
+    const snapshot = await db.collection("parties").get();
 
+    // 2. JS mein filter karo taaki agar 'deleted' field na bhi ho toh error na aaye
+    window.partiesMasterList = snapshot.docs.map((doc) => doc.data()).filter((p) => p.deleted !== true);
+
+    // 🔴 DEBUGGING: Console mein check karne ke liye ki kitni parties aayin
+    console.log("Total Parties Fetched:", window.partiesMasterList.length);
+    console.log("First Party Sample:", window.partiesMasterList[0]);
+
+    // 3. Filter and Map (Spelling/Small-Capitalization ki galti handle karne ke liye)
+    uniqueCustomers = window.partiesMasterList
+      .filter((p) => {
+        // Type ko lowercase karke check karenge taaki small/capital ka lafda na rahe
+        const type = (p.type || "").toLowerCase();
+        return type === "farmer" || type === "vepari" || type === "kisan" || type === "customer";
+      })
+      .map((p) => ({
+        ...p,
+        customer_name: p.name || "",
+        village: p.address || "",
+      }));
+
+    // 🔴 DEBUGGING: Final list mein kitne naam gaye
+    console.log("Autocomplete List Ready:", uniqueCustomers.length);
+  } catch (error) {
+    console.error("Could not fetch party list for autocomplete:", error);
+  }
   // 2. Get references to the input fields (no change here)
   const nameInput = document.querySelector('input[name="customer_name"]');
   const villageInput = document.querySelector('input[name="village"]');
@@ -782,25 +803,6 @@ async function collectData() {
     let data = calculateBillData(formData);
 
     // Save or update the customer in the 'customers' collection
-    const customerName = data["Customer Name"];
-    const customerVillage = data["Village"];
-    let customerId = null;
-    if (customerName) {
-      customerId = customerName.toLowerCase().replace(/\s+/g, "");
-      const customerRef = db.collection("customers").doc(customerId);
-      await customerRef.set(
-        {
-          name: customerName,
-          village: customerVillage,
-          createdAt: Date.now(),
-        },
-        { merge: true }
-      );
-      // Phase 2 (item #10): save customerId on the bill itself so ledger.js
-      // can group transactions by a stable ID instead of by Name (names can
-      // have typos/casing differences across bills — the ID never drifts).
-      data["customerId"] = customerId;
-    }
 
     // --- UPDATED TRANSACTION LOGIC ---
     const newSerialNo = await db.runTransaction(async (transaction) => {
@@ -1070,7 +1072,8 @@ document.addEventListener("DOMContentLoaded", () => {
   const bBox = document.getElementById("broker-suggestions");
 
   if (bInput && bBox) {
-    bInput.addEventListener("input", async function () {
+    // async hata diya kyunki ab Firebase call nahi karna padega
+    bInput.addEventListener("input", function () {
       const val = this.value.trim().toUpperCase();
       if (!val) {
         bBox.style.display = "none";
@@ -1078,19 +1081,24 @@ document.addEventListener("DOMContentLoaded", () => {
       }
 
       try {
-        const snap = await db.collection("brokers").get();
-        const uniqueBrokers = new Map(); // ID-based mapping taaki duplicate kabhi na aaye
+        // Agar Master List abhi load nahi hui hai toh wapas jao
+        if (!window.partiesMasterList) return;
 
-        snap.docs.forEach((d) => {
-          const data = d.data();
-          const name = (data.name || "").trim();
-          if (!name) return;
+        const uniqueBrokers = new Map();
 
-          // Unique normalized ID generate karo
-          const brokerId = (data.brokerId || name).toUpperCase().replace(/\s+/g, "_");
+        // Seedha memory (partiesMasterList) se filter karo, DB call ki zaroorat nahi
+        window.partiesMasterList.forEach((data) => {
+          // Sirf 'Broker' ko check karo jo deleted nahi hain
+          if (data.type === "Broker" && data.deleted !== true) {
+            const name = (data.name || "").trim();
+            if (!name) return;
 
-          if (name.toUpperCase().includes(val)) {
-            uniqueBrokers.set(brokerId, name);
+            const brokerId = name.toUpperCase().replace(/\s+/g, "_");
+
+            if (name.toUpperCase().includes(val)) {
+              // Pura object save kar rahe hain taaki commission bhi mil jaye
+              uniqueBrokers.set(brokerId, data);
+            }
           }
         });
 
@@ -1101,8 +1109,10 @@ document.addEventListener("DOMContentLoaded", () => {
             .map(
               (m) => `
             <div style="padding: 9px 14px; cursor: pointer; border-bottom: 1.5px solid #f0f0f0; background: white; font-weight: 600; color: #333;" 
-                 onmousedown="document.getElementById('broker_input_field').value='${m}'; document.getElementById('broker-suggestions').style.display='none';">
-              🤝 ${m}
+                 onmousedown="applyBrokerDetails('${m.name}', ${m.defaultComm || 0})">
+              🤝 ${m.name} ${
+                m.defaultComm ? `<small style="color:gray; font-weight:normal;">(₹${m.defaultComm}/Bag)</small>` : ""
+              }
             </div>`
             )
             .join("");
@@ -1122,6 +1132,29 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+// Yeh function Broker ka naam aur Commission dono set karega
+window.applyBrokerDetails = function (brokerName, commission) {
+  // 1. Naam set karo
+  document.getElementById("broker_input_field").value = brokerName;
+  document.getElementById("broker-suggestions").style.display = "none";
+
+  // 2. Commission auto-fill karo (Agar form mein commission input hai)
+  const commInput =
+    document.querySelector('input[name="broker_commission"]') || document.getElementById("broker-commission-input");
+
+  if (commInput && commission > 0) {
+    commInput.value = commission;
+
+    // 3. Toggle ON karo
+    const toggle = document.getElementById("broker-commission-toggle");
+    if (toggle && !toggle.checked) {
+      toggle.checked = true;
+      // Agar aapka koi calculation function total_amount wgera calculate karta hai, toh use call kar do
+      if (typeof calculateTotals === "function") calculateTotals();
+    }
+  }
+};
 // Jab bill successfully save ho jaye, tab yeh function call karein:
 function checkAndSendWhatsApp(billData) {
   // Check karo ki user ne settings mein toggle ON rakha hai ya nahi
@@ -1156,3 +1189,114 @@ function checkAndSendWhatsApp(billData) {
   // Naye tab mein WhatsApp khol dega jisse 1 click mein message send ho jayega
   window.open(whatsappUrl, "_blank");
 }
+
+// 3. Page load par dono function chalao
+document.addEventListener("DOMContentLoaded", () => {
+  loadPartyMasterForBill().then(() => {
+    setupBrokerAutoCommission();
+    setupCustomerAutoVillage();
+  });
+});
+
+// 🚨 STRICT PARTY MASTER VALIDATION (Customer + Broker)
+document.addEventListener("DOMContentLoaded", () => {
+  const billForm = document.getElementById("estimateForm");
+
+  if (billForm) {
+    billForm.addEventListener(
+      "submit",
+      function (e) {
+        // Agar master list load nahi hui hai toh aage badhne do (failsafe)
+        if (!window.partiesMasterList || window.partiesMasterList.length === 0) return;
+
+        // ==========================================
+        // 1. CUSTOMER / VEPARI CHECK
+        // ==========================================
+        const nameInput = document.querySelector('input[name="customer_name"]');
+        if (nameInput) {
+          const enteredName = nameInput.value.trim();
+          if (enteredName) {
+            const isPartyValid = window.partiesMasterList.some(
+              (party) =>
+                (party.type === "Farmer" || party.type === "Vepari") &&
+                party.name.toLowerCase() === enteredName.toLowerCase()
+            );
+
+            if (!isPartyValid) {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              Swal.fire({
+                icon: "error",
+                title: "Invalid Customer! 🚫",
+                text: `"${enteredName}" Party Master mein nahi hai. Kripya sahi naam select karein.`,
+                confirmButtonColor: "#d33",
+              });
+              return; // Galti milte hi yahin ruk jao, aage check mat karo
+            }
+          }
+        }
+
+        // ==========================================
+        // 2. BROKER CHECK
+        // ==========================================
+        // (Aapke html mein jo ID/Name hai dono cover kar liye hain)
+        const brokerInput =
+          document.getElementById("broker_input_field") || document.querySelector('input[name="broker_name"]');
+
+        if (brokerInput) {
+          const enteredBroker = brokerInput.value.trim();
+
+          // Sirf tab check karo jab box mein kuch likha ho (Khali box allowed hai)
+          if (enteredBroker) {
+            const isBrokerValid = window.partiesMasterList.some(
+              (party) => party.type === "Broker" && party.name.toLowerCase() === enteredBroker.toLowerCase()
+            );
+
+            if (!isBrokerValid) {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              Swal.fire({
+                icon: "error",
+                title: "Invalid Broker! 🤝🚫",
+                text: `"${enteredBroker}" Broker list mein nahi hai. Kripya list me se chunein ya box khali chhod dein.`,
+                confirmButtonColor: "#d33",
+              });
+              return; // Galti milte hi yahin ruk jao
+            }
+          }
+        }
+      },
+      true // Capture phase - sabse pehle ye check hoga!
+    );
+  }
+});
+// 🚚 SMART VEHICLE NUMBER FORMATTER (Auto-Hyphen)
+document.addEventListener("DOMContentLoaded", () => {
+  const vehicleInput = document.querySelector('input[name="vehicle_no"]');
+
+  if (vehicleInput) {
+    vehicleInput.addEventListener("input", function () {
+      // 1. Sabse pehle jo bhi likha hai usko UPPERCASE kar do
+      let val = this.value.toUpperCase();
+
+      // 2. Beech ke saare spaces aur purane hyphens hata do (Clean string)
+      let clean = val.replace(/[^A-Z0-9]/g, "");
+
+      // 3. Check karo ki kya yeh standard Indian format jaisa lag raha hai?
+      // (e.g., GJ 11 AB 1234 => 2 Letters + 2 Numbers + 1-3 Letters + 4 Numbers)
+      let match = clean.match(/^([A-Z]{1,2})([0-9]{1,2})?([A-Z]{1,3})?([0-9]{1,4})?$/);
+
+      if (match) {
+        // Agar standard format hai, toh apne aap hyphen (-) laga do
+        let res = match[1];
+        if (match[2]) res += "-" + match[2];
+        if (match[3]) res += "-" + match[3];
+        if (match[4]) res += "-" + match[4];
+        this.value = res;
+      } else {
+        // 🛑 AGAR NON-STANDARD HAI (e.g. TRACTOR): Toh bina hyphen ke waisa hi rehne do
+        this.value = val;
+      }
+    });
+  }
+});

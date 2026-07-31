@@ -1280,14 +1280,16 @@
                 <input type="date" name="bill_date" id="bill_date_input" required />
               </div>
               <div class="ff">
-                <label>નામ (Name) *</label>
+                <label>નામ (Customer Name)</label>
                 <input
                   type="text"
                   name="customer_name"
+                  list="customer_datalist"
+                  placeholder="Vepari ka naam type karein..."
+                  autocomplete="off"
                   oninput="this.value=this.value.toUpperCase()"
-                  required
-                  placeholder="Customer name..."
                 />
+                <datalist id="customer_datalist"></datalist>
                 <div id="autocomplete-container"></div>
               </div>
               <div class="ff">
@@ -1312,12 +1314,12 @@
                 <label>દલાલ (Broker)</label>
                 <input
                   type="text"
-                  name="broker"
-                  id="broker_input_field"
-                  oninput="this.value=this.value.toUpperCase()"
-                  placeholder="Broker..."
+                  name="broker_name"
+                  list="broker_datalist"
+                  placeholder="Broker select karein..."
                   autocomplete="off"
                 />
+                <datalist id="broker_datalist"></datalist>
                 <!-- Yeh raha autocomplete dropdown box -->
                 <div
                   id="broker-suggestions"
