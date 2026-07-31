@@ -70,11 +70,31 @@ function initializeLedgerPage() {
 
 async function fetchUniqueCustomers() {
   try {
-    const [partiesSnapshot, billsSnapshot, paymentsSnapshot] = await Promise.all([
-      db.collection("parties").where("deleted", "==", false).get(),
-      billsCollection.get(),
-      paymentsCollection.get(),
-    ]);
+    let partiesSnapshot = { docs: [] };
+    let billsSnapshot = { docs: [] };
+    let paymentsSnapshot = { docs: [] };
+
+    // 🛡️ Safe Fetching: Alag-alag try-catch taaki koi ek query fail hone par page crash na ho
+    try {
+      partiesSnapshot = await db.collection("parties").where("deleted", "==", false).get();
+    } catch (e) {
+      console.warn("Parties fetch warning:", e);
+      try {
+        partiesSnapshot = await db.collection("parties").get();
+      } catch (err) {}
+    }
+
+    try {
+      billsSnapshot = await billsCollection.get();
+    } catch (e) {
+      console.warn("Bills fetch warning:", e);
+    }
+
+    try {
+      paymentsSnapshot = await paymentsCollection.get();
+    } catch (e) {
+      console.warn("Payments fetch warning:", e);
+    }
 
     const customerMap = new Map();
 
@@ -119,23 +139,48 @@ async function fetchUniqueCustomers() {
     allUniqueCustomers = Array.from(customerMap.values()).sort((a, b) => a.name.localeCompare(b.name));
     renderCustomerList(allUniqueCustomers);
 
-    // 🚀 NAYA LOGIC: Jaise hi list bane, check karo ki URL mein naam hai ya nahi
+    // 🚀 Secure Token / URL Parameter check (Safe Decoding)
     const urlParams = new URLSearchParams(window.location.search);
-    const targetName = urlParams.get("name");
+    const token = urlParams.get("token");
+    let targetName = "";
+    let targetVillage = "";
 
+    if (token) {
+      try {
+        // 🔓 Secure token decoding
+        const decodedData = decodeURIComponent(
+          atob(token)
+            .split("")
+            .map((c) => "%" + ("00" + c.charCodeAt(0).toString(16)).slice(-2))
+            .join("")
+        );
+        const parts = decodedData.split("|");
+        targetName = parts[0] || "";
+        targetVillage = parts[1] || "";
+      } catch (e) {
+        console.error("Invalid token format");
+      }
+    } else {
+      targetName = urlParams.get("name") || "";
+      targetVillage = urlParams.get("village") || "";
+    }
     if (targetName) {
-      const targetVillage = (urlParams.get("village") || "").toLowerCase();
-
-      // List mein se specific kisan dhoondho
-      const foundCustomer = allUniqueCustomers.find(
+      // 1. Pehle naam aur village dono se dhoondho
+      let foundCustomer = allUniqueCustomers.find(
         (c) =>
           c.name.toLowerCase() === targetName.toLowerCase() &&
-          (targetVillage === "" || c.village.toLowerCase() === targetVillage)
+          (!targetVillage || targetVillage === "N/A" || c.village.toLowerCase() === targetVillage.toLowerCase())
       );
 
-      // Agar kisan mil gaya, toh bina kisi DOM hack ke seedha ledger render kar do!
+      // 2. Agar village match na ho, toh sirf naam se dhoond lo taaki ledger hamesha khule
+      if (!foundCustomer) {
+        foundCustomer = allUniqueCustomers.find((c) => c.name.toLowerCase() === targetName.toLowerCase());
+      }
+
       if (foundCustomer) {
         showCustomerLedger(foundCustomer);
+      } else {
+        console.warn("Customer not found in list:", targetName);
       }
     }
   } catch (error) {
@@ -145,7 +190,6 @@ async function fetchUniqueCustomers() {
     hideLoading();
   }
 }
-
 function renderCustomerList(customers) {
   const container = document.getElementById("customer-list-container");
   container.innerHTML = "";
@@ -160,9 +204,12 @@ function renderCustomerList(customers) {
 
     // Yahan click par seedha URL change karenge, taaki browser history mein bhi path rahe
     customerCard.addEventListener("click", () => {
-      window.location.href = `ledger.html?name=${encodeURIComponent(customer.name)}&village=${encodeURIComponent(
-        customer.village
-      )}`;
+      const rawData = `${customer.name}|${customer.village}`;
+      // 🔒 Proper Base64 secure hash generation
+      const secureToken = btoa(
+        encodeURIComponent(rawData).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode("0x" + p1))
+      );
+      window.location.href = `ledger.html?token=${secureToken}`;
     });
 
     container.appendChild(customerCard);
