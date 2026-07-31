@@ -80,7 +80,7 @@ async function loadOrders() {
   try {
     const snap = await ordersCollection.orderBy("createdAt", "desc").get();
     allOrders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
-    extractBrokersAndSuppliers(); // 👈 Yahan call kar do taaki list update rahe
+    // Yahan se extra kachra list nikalne wala code hata diya gaya hai
     renderOrders();
   } catch (e) {
     console.error("Error loading orders:", e);
@@ -659,10 +659,9 @@ async function getNextOrderNumber() {
 }
 
 // =====================================================================
-// Aapka Updated saveOrder Function
+// Aapka Updated saveOrder Function (Strict Validation Ke Sath)
 // =====================================================================
 async function saveOrder() {
-  // 1. Correct IDs se values fetch karna
   const rawDate = document.getElementById("order-date")?.value || "";
   let formattedDate = rawDate;
   if (rawDate.includes("-")) {
@@ -675,45 +674,30 @@ async function saveOrder() {
   const brokerName = document.getElementById("order-broker")?.value || "";
   const notes = document.getElementById("order-notes")?.value || "";
 
-  // Name aur Village alag-alag lena
   const baseName = document.getElementById("order-supplier")?.value?.trim().toUpperCase() || "";
   const villageVal = document.getElementById("order-village")?.value?.trim().toUpperCase() || "";
 
-  // Validation: Supplier/Customer name zaroori hai
   if (!baseName) {
     Swal.fire("Error", "Please enter Supplier / Customer name.", "error");
     return;
   }
 
-  // Combine karke final supplierName banana
-  const supplierName = villageVal ? `${baseName} (${villageVal})` : baseName;
-
-  // 🔗 2. Automatic Customer Master Sync
-  try {
-    const custId = baseName.toLowerCase().replace(/\s+/g, "_");
-    const custRef = db.collection("customers").doc(custId);
-    const custDoc = await custRef.get();
-
-    if (!custDoc.exists) {
-      await custRef.set(
-        {
-          name: baseName,
-          village: villageVal,
-          createdAt: Date.now(),
-        },
-        { merge: true }
-      );
-      if (typeof loadCustomersForOrder === "function") loadCustomersForOrder();
-    } else {
-      if (villageVal && !custDoc.data().village) {
-        await custRef.update({ village: villageVal });
-      }
-    }
-  } catch (err) {
-    console.warn("Customer master auto-sync warning:", err);
+  // 🚨 STRICT VALIDATION: Agar Party Master mein naam nahi hai toh error dekar rok do
+  if (!window.validPartyNames || !window.validPartyNames.includes(baseName)) {
+    Swal.fire({
+      icon: "error",
+      title: "Party Not Found! 🛑",
+      text: `"${baseName}" Party Master mein nahi hai. Pehle Party Master mein khata banayein, tabhi order book hoga.`,
+      confirmButtonColor: "#d33",
+    });
+    return; // Code yahin ruk jayega, order save nahi hoga
   }
 
-  // 3. Direct product dropdowns check karna
+  const supplierName = villageVal ? `${baseName} (${villageVal})` : baseName;
+
+  // Purana 'customers' collection auto-sync yahan se hata diya gaya hai
+  // kyunki ab hum sirf Party Master par depend kar rahe hain.
+
   const prodDropdowns = document.querySelectorAll('select[name^="s-product-"]');
   if (prodDropdowns.length === 0) {
     Swal.fire("Error", "Please add at least one Vakal item.", "error");
@@ -723,7 +707,6 @@ async function saveOrder() {
   let suppliers = [];
   let valid = true;
 
-  // 4. Dropdown wise loop chalakar data extract karna
   prodDropdowns.forEach((prodDropdown) => {
     const nameAttr = prodDropdown.getAttribute("name") || "";
     const idx = nameAttr.split("-")[2] || "1";
@@ -763,7 +746,6 @@ async function saveOrder() {
     }
   });
 
-  // 5. Validation check
   if (!valid) {
     Swal.fire({
       icon: "error",
@@ -776,7 +758,6 @@ async function saveOrder() {
     return;
   }
 
-  // 6. Database mein save karne ka logic
   try {
     const orderData = {
       date: formattedDate,
@@ -801,7 +782,6 @@ async function saveOrder() {
       orderData.status = "Pending";
       orderData.createdAt = Date.now();
 
-      // 👇 Naya Number Generator Yahan Set Hai 👇
       let manualOrderNo = document.getElementById("orderNo")?.value;
       if (!manualOrderNo || manualOrderNo.trim() === "") {
         orderData.orderNo = await getNextOrderNumber();
@@ -1221,72 +1201,6 @@ function generateVarietyDatalistOptions() {
 let allCustomersList = [];
 let allBrokersList = [];
 
-// Firestore se Customers aur Brokers load karne ke liye
-async function loadCustomersAndBrokers() {
-  try {
-    // 1. Customers fetch karo (Firestore ki 'customers' collection se)
-    const custSnap = await db.collection("customers").get();
-    allCustomersList = custSnap.docs.map((doc) => {
-      const data = doc.data();
-      return data.name ? (data.village ? `${data.name} (${data.village})` : data.name) : doc.id;
-    });
-
-    // 2. Brokers fetch karo (Firestore ki 'brokers' collection ya orders se)
-    const brokerSnap = await db.collection("brokers").get();
-    if (!brokerSnap.empty) {
-      allBrokersList = brokerSnap.docs.map((doc) => doc.data().name || doc.id);
-    } else {
-      // Fallback: Agar brokers collection nahi hai toh orders se nikal lo
-      const bSet = new Set();
-      allOrders.forEach((o) => {
-        if (o.broker) bSet.add(o.broker.toUpperCase());
-      });
-      allBrokersList = Array.from(bSet);
-    }
-
-    updateOrderBookDatalists();
-  } catch (e) {
-    console.error("Error loading customers/brokers:", e);
-  }
-}
-
-// Datalists ko HTML mein inject karne ka function
-function updateOrderBookDatalists() {
-  // Customer/Supplier Datalist
-  let custDatalist = document.getElementById("order-supplier-list");
-  if (!custDatalist) {
-    custDatalist = document.createElement("datalist");
-    custDatalist.id = "order-supplier-list";
-    document.body.appendChild(custDatalist);
-  }
-  custDatalist.innerHTML = allCustomersList.map((c) => `<option value="${c}">`).join("");
-
-  // Broker Datalist
-  let brokerDatalist = document.getElementById("order-broker-list");
-  if (!brokerDatalist) {
-    brokerDatalist = document.createElement("datalist");
-    brokerDatalist.id = "order-broker-list";
-    document.body.appendChild(brokerDatalist);
-  }
-  brokerDatalist.innerHTML = allBrokersList.map((b) => `<option value="${b}">`).join("");
-
-  // Input fields par list attribute set karna
-  const supplierInput = document.getElementById("order-supplier");
-  if (supplierInput) {
-    supplierInput.setAttribute("list", "order-supplier-list");
-    supplierInput.oninput = function () {
-      this.value = this.value.toUpperCase();
-    };
-  }
-
-  const brokerInput = document.getElementById("order-broker");
-  if (brokerInput) {
-    brokerInput.setAttribute("list", "order-broker-list");
-    brokerInput.oninput = function () {
-      this.value = this.value.toUpperCase();
-    };
-  }
-}
 function openNewOrderModal() {
   editingOrderId = null;
   document.getElementById("order-modal-title").textContent = "➕ New Order";
@@ -1295,109 +1209,15 @@ function openNewOrderModal() {
   document.getElementById("order-supplier").value = "";
   setDefaultDate();
 
-  updateOrderBookDatalists(); // 👈 Yahan bhi call kar do
+  // 🚀 NAYA: Har baar modal khulne par Party Master se fresh list layega
+  setupPartyMasterDatalists();
 
   document.getElementById("supplier-entries").innerHTML = "";
   supplierCount = 0;
   addSupplierEntry();
   document.getElementById("order-modal").classList.add("open");
 }
-function extractBrokersAndSuppliers() {
-  const brokersSet = new Set();
-  const suppliersSet = new Set();
 
-  allOrders.forEach((order) => {
-    if (order.broker) brokersSet.add(order.broker.trim().toUpperCase());
-    if (order.supplierName) suppliersSet.add(order.supplierName.trim().toUpperCase());
-    if (order.suppliers) {
-      order.suppliers.forEach((s) => {
-        if (s.supplierName) suppliersSet.add(s.supplierName.trim().toUpperCase());
-      });
-    }
-  });
-
-  allBrokersList = Array.from(brokersSet).sort();
-  allSuppliersList = Array.from(suppliersSet).sort();
-}
-// ── LOAD CUSTOMERS INTO ORDER MODAL DATALIST (FINAL FIX) ───────────────────
-async function loadCustomersForOrder() {
-  let datalist = document.getElementById("order-customer-datalist");
-  if (!datalist) {
-    datalist = document.createElement("datalist");
-    datalist.id = "order-customer-datalist";
-    document.body.appendChild(datalist);
-  }
-  datalist.innerHTML = "";
-
-  window.customerVillageMap = {};
-
-  try {
-    const snap = await db.collection("customers").orderBy("name").get();
-
-    snap.forEach((doc) => {
-      const c = doc.data();
-      let rawName = (c.name || "").trim().toUpperCase();
-      let village = (c.village || "").trim().toUpperCase();
-
-      if (rawName.includes("(") && rawName.includes(")")) {
-        const parts = rawName.split("(");
-        rawName = parts[0].trim();
-        if (!village) {
-          village = parts[1].replace(")", "").trim();
-        }
-      }
-
-      if (rawName) {
-        window.customerVillageMap[rawName] = village;
-        const opt = document.createElement("option");
-        // Datalist mein name + village dono dikhenge taaki search karne mein asani ho
-        opt.value = village ? `${rawName} (${village})` : rawName;
-        datalist.appendChild(opt);
-      }
-    });
-
-    const supplierInput = document.getElementById("order-supplier");
-    const villageInput = document.getElementById("order-village");
-    if (villageInput) {
-      villageInput.addEventListener("input", function () {
-        this.value = this.value.toUpperCase();
-      });
-    }
-
-    if (supplierInput) {
-      supplierInput.setAttribute("list", "order-customer-datalist");
-
-      const handleSelection = () => {
-        let fullText = supplierInput.value.trim().toUpperCase();
-        let cleanName = fullText;
-        let village = "";
-
-        // Agar user ne bracket wala option select kiya hai
-        if (fullText.includes("(") && fullText.includes(")")) {
-          const parts = fullText.split("(");
-          cleanName = parts[0].trim();
-          village = parts[1].replace(")", "").trim();
-
-          // Supplier name box mein se bracket hata kar sirf clean name set karo
-          supplierInput.value = cleanName;
-        } else if (window.customerVillageMap[fullText]) {
-          // Agar sirf naam type kiya hai toh map se village utha lo
-          village = window.customerVillageMap[fullText];
-        }
-
-        // Village box mein automatic gaon daal do
-        if (villageInput && village) {
-          villageInput.value = village.toUpperCase();
-        }
-      };
-
-      supplierInput.addEventListener("input", handleSelection);
-      supplierInput.addEventListener("change", handleSelection);
-    }
-  } catch (e) {
-    console.error("Error loading customers datalist:", e);
-  }
-}
 // Page load hone par yeh function apne aap chal jayega
 document.addEventListener("DOMContentLoaded", () => {
   loadCustomersForOrder();
@@ -1722,5 +1542,107 @@ function filterBySummaryGroup(groupKey) {
     searchInput.value = searchTerm;
     currentSearchQuery = searchTerm.toLowerCase();
     renderOrders();
+  }
+}
+// ── 🚀 NAYA ALL-IN-ONE PARTY MASTER DATALIST FUNCTION ──
+window.validPartyNames = [];
+window.customerVillageMap = {};
+
+async function setupPartyMasterDatalists() {
+  try {
+    // 🚨 FIX: Yahan se .where() hata diya hai taaki saara purana data bhi aa sake
+    const snap = await db.collection("parties").get();
+
+    let suppliersHTML = "";
+    let brokersHTML = "";
+
+    window.validPartyNames = [];
+    window.customerVillageMap = {};
+
+    snap.forEach((doc) => {
+      const p = doc.data();
+
+      // 🚨 FIX: Agar deleted true hai tabhi roko, warna aane do
+      if (p.deleted === true) return;
+
+      const name = (p.name || "").trim().toUpperCase();
+      const village = (p.address || p.village || "").trim().toUpperCase();
+      const type = p.type || "Farmer";
+
+      if (name) {
+        window.validPartyNames.push(name);
+
+        if (type === "Broker") {
+          brokersHTML += `<option value="${name}">`;
+        } else {
+          window.customerVillageMap[name] = village;
+          const displayVal = village ? `${name} (${village})` : name;
+          suppliersHTML += `<option value="${displayVal}">`;
+        }
+      }
+    });
+
+    // Supplier Datalist create/update karein
+    let suppList = document.getElementById("order-supplier-list");
+    if (!suppList) {
+      suppList = document.createElement("datalist");
+      suppList.id = "order-supplier-list";
+      document.body.appendChild(suppList);
+    }
+    suppList.innerHTML = suppliersHTML;
+
+    // Broker Datalist create/update karein
+    let brokerList = document.getElementById("order-broker-list");
+    if (!brokerList) {
+      brokerList = document.createElement("datalist");
+      brokerList.id = "order-broker-list";
+      document.body.appendChild(brokerList);
+    }
+    brokerList.innerHTML = brokersHTML;
+
+    // Input fields ko link karein aur Chrome history OFF karein
+    const supplierInput = document.getElementById("order-supplier");
+    const brokerInput = document.getElementById("order-broker");
+    const villageInput = document.getElementById("order-village");
+
+    if (supplierInput) {
+      supplierInput.setAttribute("list", "order-supplier-list");
+      supplierInput.setAttribute("autocomplete", "off"); // 🚫 Chrome History Block
+
+      supplierInput.oninput = function () {
+        let val = this.value.toUpperCase();
+        let cleanName = val;
+        let village = "";
+
+        if (val.includes("(") && val.includes(")")) {
+          const parts = val.split("(");
+          cleanName = parts[0].trim();
+          village = parts[1].replace(")", "").trim();
+          this.value = cleanName;
+        } else if (window.customerVillageMap[val]) {
+          village = window.customerVillageMap[val];
+        }
+
+        if (villageInput && village) {
+          villageInput.value = village;
+        }
+      };
+    }
+
+    if (brokerInput) {
+      brokerInput.setAttribute("list", "order-broker-list");
+      brokerInput.setAttribute("autocomplete", "off"); // 🚫 Chrome History Block
+      brokerInput.oninput = function () {
+        this.value = this.value.toUpperCase();
+      };
+    }
+
+    if (villageInput) {
+      villageInput.oninput = function () {
+        this.value = this.value.toUpperCase();
+      };
+    }
+  } catch (e) {
+    console.error("Error setting up datalists:", e);
   }
 }
