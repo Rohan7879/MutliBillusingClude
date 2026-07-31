@@ -490,15 +490,28 @@ function openPaymentModal() {
   if (amountInput) amountInput.value = "";
   if (deductionAmountInput) deductionAmountInput.value = "";
   if (deductionReasonInput) deductionReasonInput.value = "";
-  if (dateInput) dateInput.valueAsDate = new Date();
+  if (dateInput) {
+    const today = new Date();
+    const year = today.getFullYear();
+    const month = String(today.getMonth() + 1).padStart(2, "0");
+    const day = String(today.getDate()).padStart(2, "0");
+    dateInput.value = `${year}-${month}-${day}`;
+  }
 
   if (selectedCheckboxes.length > 0) {
-    let totalAmount = 0;
-    selectedCheckboxes.forEach((cb) => (totalAmount += Number(cb.dataset.amount)));
+    let totalPendingToPay = 0;
+
+    selectedCheckboxes.forEach((cb) => {
+      const pendingAmount = Number(cb.dataset.amount) || 0;
+      if (pendingAmount > 0) {
+        totalPendingToPay += pendingAmount;
+      }
+    });
+
     if (modalTitle) modalTitle.textContent = "Pay Selected Bills";
     if (modalDescription)
       modalDescription.innerHTML = `Enter payment for <strong>${selectedCheckboxes.length} selected bill(s)</strong>.`;
-    if (amountInput) amountInput.value = totalAmount;
+    if (amountInput) amountInput.value = totalPendingToPay;
   } else {
     if (modalTitle) modalTitle.textContent = "Record a General Payment";
     if (modalDescription)
@@ -536,6 +549,8 @@ async function updateCustomerMasterBalance(customer, delta) {
 }
 
 async function savePayment() {
+  const saveBtn = document.getElementById("save-payment-btn");
+
   const selectedCheckboxes = document.querySelectorAll(".bill-checkbox-ledger:checked");
   const cashAmount = Number(amountInput.value) || 0;
   const deductionAmount = Number(deductionAmountInput.value) || 0;
@@ -552,9 +567,19 @@ async function savePayment() {
     return;
   }
 
+  // 🛡️ SAFETY LOCK: Double-click / Duplicate entries se bachne ke liye button disable karo
+  if (saveBtn) {
+    saveBtn.disabled = true;
+    saveBtn.style.opacity = "0.6";
+    saveBtn.style.cursor = "not-allowed";
+    saveBtn.innerHTML = "Saving...";
+  }
+
   showLoading();
   try {
     const paymentDate = firebase.firestore.Timestamp.fromDate(new Date(dateStr));
+    const affectedOrderIds = new Set();
+
     if (selectedCheckboxes.length > 0) {
       const selectedBillIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
 
@@ -580,33 +605,53 @@ async function savePayment() {
         const billDoc = await billRef.get();
         if (billDoc.exists) {
           const billData = billDoc.data();
-          const currentAmountPaid = billData.amountPaid || 0;
-          const amountOwedOnBill = billData["Final Total"] - currentAmountPaid;
+
+          const currentAmountPaid = Number(billData.amountPaid || 0);
+          const billTotal = Number(
+            billData["Final Total"] ||
+              billData.total ||
+              billData.amount ||
+              Number(billData.amountDue || 0) + currentAmountPaid ||
+              0
+          );
+
+          const amountOwedOnBill = billTotal - currentAmountPaid;
           const paymentForThisBill = Math.min(remainingCredit, amountOwedOnBill);
 
           const newAmountPaid = currentAmountPaid + paymentForThisBill;
-          const newAmountDue = billData["Final Total"] - newAmountPaid;
-          const newStatus = newAmountDue <= 0.01 ? "Paid" : "Partially Paid";
+          const newAmountDue = billTotal - newAmountPaid;
+          const newStatus = newAmountDue <= 0.01 ? "Paid" : "Partial";
 
           batch.update(billRef, {
             amountPaid: newAmountPaid,
             amountDue: newAmountDue,
             paymentStatus: newStatus,
           });
-          const billSerial = billData["Serial No"] || billData.serialNo;
-          if (billSerial) {
-            const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
-            matchingOrders.forEach((ordDoc) => {
-              batch.update(ordDoc.ref, {
-                paymentStatus: newStatus === "Paid" ? "Paid" : "Partial",
-                updatedAt: Date.now(),
-              });
-            });
-          }
+
           remainingCredit -= paymentForThisBill;
+
+          try {
+            const billSerial = billData["Serial No"] || billData.serialNo;
+            if (billSerial) {
+              const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
+              matchingOrders.forEach((ordDoc) => affectedOrderIds.add(ordDoc.id));
+
+              const matchingOrdersArray = await db
+                .collection("orders")
+                .where("linkedBillNos", "array-contains", billSerial)
+                .get();
+              matchingOrdersArray.forEach((ordDoc) => affectedOrderIds.add(ordDoc.id));
+            }
+          } catch (e) {
+            console.warn("Order match error non-fatal");
+          }
         }
       }
       await batch.commit();
+
+      for (const ordId of affectedOrderIds) {
+        await recalculateAndUpdateOrderPaymentStatus(ordId);
+      }
 
       await updateCustomerMasterBalance(currentCustomer, -totalCredit);
     } else {
@@ -633,9 +678,16 @@ async function savePayment() {
     Swal.fire("Error", "Could not save the payment.", "error");
   } finally {
     hideLoading();
+
+    // 🔓 UNLOCK BUTTON: Process khatam hone par button wapas normal karo
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.style.opacity = "1";
+      saveBtn.style.cursor = "pointer";
+      saveBtn.innerHTML = "💾 Save Entry"; // Aapka original button text
+    }
   }
 }
-
 function printLedger() {
   const startDate = document.getElementById("start_date").value;
   const endDate = document.getElementById("end_date").value;
@@ -785,7 +837,7 @@ function printLedger() {
   }, 500);
 }
 window.deletePaymentEntry = async function (paymentId) {
-  // 🛑 Strict Security Check: 1-click delete band, ab 'DELETE' type karna padega
+  // 🛑 Strict Security Check
   const confirm = await Swal.fire({
     title: "⚠️ Security Check: Delete Payment?",
     text: "Yeh ek critical action hai! Galti ya fraud se bachne ke liye niche box mein 'DELETE' type karein.",
@@ -808,7 +860,6 @@ window.deletePaymentEntry = async function (paymentId) {
 
   showLoading("Deleting payment securely...");
   try {
-    // 1. Payment doc fetch karo
     const paymentRef = paymentsCollection.doc(paymentId);
     const paymentDoc = await paymentRef.get();
 
@@ -819,29 +870,69 @@ window.deletePaymentEntry = async function (paymentId) {
     }
 
     const paymentData = paymentDoc.data();
-    const totalCredit = paymentData.totalCredit || 0;
+    const totalCredit = Number(paymentData.totalCredit || 0);
     const appliedBills = paymentData.appliedToBills || [];
+    const affectedOrderIds = new Set();
 
     // 2. Agar kisi bill par apply hua tha, toh bills ka amountPaid wapas adjust karo
     if (appliedBills.length > 0) {
+      let remainingRefund = totalCredit; // 🚀 FIX: Ab proper amount minus hoga
+      const batch = db.batch(); // 🚀 FIX: Multiple bills ke liye safe batch process
+
       for (const billId of appliedBills) {
+        if (remainingRefund <= 0) break;
+
         const billRef = billsCollection.doc(billId);
         const billDoc = await billRef.get();
+
         if (billDoc.exists) {
           const billData = billDoc.data();
-          const currentPaid = billData.amountPaid || 0;
-          const refundAmount = Math.min(totalCredit, currentPaid);
-          const newAmountPaid = currentPaid - refundAmount;
-          const newAmountDue = (billData["Final Total"] || 0) - newAmountPaid;
-          const newStatus = newAmountDue <= 0.01 ? "Paid" : newAmountPaid > 0 ? "Partially Paid" : "Unpaid";
+          const currentPaid = Number(billData.amountPaid || 0);
 
-          await billRef.update({
+          // 🚀 FIX: Sahi Bill Total Pakdo (Jaise Save mein karte hain)
+          const billTotal = Number(
+            billData["Final Total"] ||
+              billData.total ||
+              billData.amount ||
+              Number(billData.amountDue || 0) + currentPaid ||
+              0
+          );
+
+          const refundForThisBill = Math.min(remainingRefund, currentPaid);
+          const newAmountPaid = currentPaid - refundForThisBill;
+          const newAmountDue = billTotal - newAmountPaid;
+
+          // 🚀 FIX: "Partially Paid" hata kar "Partial" kiya
+          const newStatus = newAmountDue <= 0.01 ? "Paid" : newAmountPaid > 0 ? "Partial" : "Unpaid";
+
+          batch.update(billRef, {
             amountPaid: newAmountPaid,
             amountDue: newAmountDue,
             paymentStatus: newStatus,
           });
+
+          remainingRefund -= refundForThisBill;
+
+          // 🚀 FIX: Try-catch lagaya taaki agar Order fetch fail ho toh kam se kam delete to ho jaye
+          try {
+            const billSerial = billData["Serial No"] || billData.serialNo;
+            if (billSerial) {
+              const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
+              matchingOrders.forEach((ordDoc) => affectedOrderIds.add(ordDoc.id));
+
+              const matchingOrdersArray = await db
+                .collection("orders")
+                .where("linkedBillNos", "array-contains", billSerial)
+                .get();
+              matchingOrdersArray.forEach((ordDoc) => affectedOrderIds.add(ordDoc.id));
+            }
+          } catch (orderFetchError) {
+            console.warn("Order match nahi mila, par process continue rahega.");
+          }
         }
       }
+      // Saare bills update commit karo
+      await batch.commit();
     }
 
     // 3. Master Party balance ko wapas update karo
@@ -849,44 +940,80 @@ window.deletePaymentEntry = async function (paymentId) {
       await updateCustomerMasterBalance(currentCustomer, totalCredit);
     }
 
-    // 4. Payment document ko delete karo
+    // 4. 🔥 FIREBASE SE ORIGINAL PAYMENT DELETE KARO 🔥
     await paymentRef.delete();
 
+    // 5. Affected orders ko safe tarike se update karo
+    for (const ordId of affectedOrderIds) {
+      try {
+        await recalculateAndUpdateOrderPaymentStatus(ordId);
+      } catch (err) {
+        console.error("Order recalculate mein dikkat:", err);
+      }
+    }
+
     hideLoading();
-    Swal.fire("Deleted!", "Payment entry safely removed.", "success");
-    showCustomerLedger(currentCustomer); // Ledger refresh karo
+    Swal.fire("Deleted!", "Payment entry successfully removed.", "success");
+
+    // Ledger ko refresh karke wapas load karo
+    showCustomerLedger(currentCustomer);
   } catch (error) {
     console.error("Error deleting payment:", error);
     hideLoading();
-    Swal.fire("Error", "Could not delete payment.", "error");
+    Swal.fire("Error", "Could not delete payment. Please try again.", "error");
   }
 };
 // Payment delete hone ke baad order ka status wapas update karne ke liye:
-async function syncOrderStatusAfterPaymentDelete(billId) {
-  const billDoc = await db.collection("bills").doc(billId).get();
-  if (!billDoc.exists) return;
 
-  const billData = billDoc.data();
-  const billSerial = billData["Serial No"] || billData.serialNo;
-  const amountDue = billData["amountDue"] || 0;
-  const finalTotal = billData["Final Total"] || 0;
+// 🔄 Order ke saare linked bills ko check karke sahi payment status calculate karne ka function
+async function recalculateAndUpdateOrderPaymentStatus(orderId) {
+  if (!orderId) return;
+  try {
+    const orderRef = db.collection("orders").doc(orderId);
+    const orderDoc = await orderRef.get();
+    if (!orderDoc.exists) return;
+    const order = orderDoc.data();
 
-  // Naya status decide karo
-  let newStatus = "Unpaid";
-  if (amountDue <= 0) {
-    newStatus = "Paid";
-  } else if (amountDue < finalTotal) {
-    newStatus = "Partial";
-  }
+    // Is order ke saare linked bills nikal lo
+    let billSerials = [];
+    if (order.linkedBillNos && Array.isArray(order.linkedBillNos)) {
+      billSerials = order.linkedBillNos.map((b) => (b.billNo || b).toString().trim());
+    } else if (order.linkedBillNo) {
+      billSerials = order.linkedBillNo.split(",").map((s) => s.trim());
+    }
+    if (billSerials.length === 0) return;
 
-  // Order Book mein update kar do
-  if (billSerial) {
-    const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
-    matchingOrders.forEach(async (ordDoc) => {
-      await ordDoc.ref.update({
-        paymentStatus: newStatus,
-        updatedAt: Date.now(),
-      });
+    // Bills collection se inke records fetch karo
+    let allLinkedBills = [];
+    for (let i = 0; i < billSerials.length; i += 10) {
+      const chunk = billSerials.slice(i, i + 10);
+      const snap = await db.collection("bills").where("Serial No", "in", chunk).get();
+      snap.forEach((d) => allLinkedBills.push(d.data()));
+    }
+
+    if (allLinkedBills.length === 0) return;
+
+    let totalFinal = 0;
+    let totalPaid = 0;
+    allLinkedBills.forEach((b) => {
+      totalFinal += Number(b["Final Total"] || 0);
+      totalPaid += Number(b.amountPaid || 0);
     });
+
+    // Logical Status Calculation
+    let newPayStatus = "Unpaid";
+    if (totalPaid >= totalFinal && totalFinal > 0) {
+      newPayStatus = "Paid";
+    } else if (totalPaid > 0) {
+      newPayStatus = "Partial";
+    }
+
+    // Order update kar do
+    await orderRef.update({
+      paymentStatus: newPayStatus,
+      updatedAt: Date.now(),
+    });
+  } catch (e) {
+    console.error("Error updating consolidated order payment status:", e);
   }
 }

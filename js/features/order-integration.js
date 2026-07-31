@@ -209,36 +209,78 @@ function clearOrderLink() {
  *   math (user manually checked "Close this Order" on the bill form).
  */
 async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
-  console.log("Bill Data Check:", billData);
   const orderId = billData["LinkedOrderId"];
-  const supplierIdx = billData["LinkedSupplierIdx"];
   if (!orderId) return;
 
-  // Phase 4 (item #16): wrapped in a Transaction so two bills saved against
-  // the same order at nearly the same time (e.g. two people billing off the
-  // same order) can't silently overwrite each other's delivered-quantity
-  // update — each transaction re-reads the latest order state before writing.
   try {
     const orderRef = db.collection("orders").doc(orderId);
-    await db.runTransaction(async (transaction) => {
-      const doc = await transaction.get(orderRef);
-      if (!doc.exists) return;
-      const order = doc.data();
-      const suppliers = [...(order.suppliers || [])];
-      const idx = Number(supplierIdx) || 0;
-      if (!suppliers[idx]) return;
+    const orderDoc = await orderRef.get();
+    if (!orderDoc.exists) return;
+    const order = orderDoc.data();
 
-      // Add net weight as delivered (in Khadi/Man based on unit)
-      const netWeight = billData["Net Weight"] || 0;
-      const unit = suppliers[idx].unit || "Man";
-      const delivered = unit === "Khadi" ? netWeight / 400 : netWeight / 20;
-      suppliers[idx].delivered = Math.round(((suppliers[idx].delivered || 0) + delivered) * 100) / 100;
+    // 1. Is order ke saare linked bill numbers nikal lo
+    let billSerials = [];
+    if (order.linkedBillNos && Array.isArray(order.linkedBillNos)) {
+      billSerials = order.linkedBillNos.map((b) => (b.billNo || b).toString().trim());
+    } else if (order.linkedBillNo) {
+      billSerials = order.linkedBillNo.split(",").map((s) => s.trim());
+    }
 
-      const totalOrdered = suppliers[idx].quantity || 0;
-      const totalDelivered = suppliers[idx].delivered;
+    // Naya bill bhi add kar lo agar current bill serial me nahi hai
+    const currentBillSerial = billData["Serial No"] || billData["billNo"] || "";
+    if (currentBillSerial && !billSerials.includes(currentBillSerial)) {
+      billSerials.push(currentBillSerial);
+    }
+
+    // 2. Database se un saare bills ka data fetch karo aur Total Net Weight calculate karo
+    let totalNetWeightKg = 0;
+    if (billSerials.length > 0) {
+      for (let i = 0; i < billSerials.length; i += 10) {
+        const chunk = billSerials.slice(i, i + 10);
+        const snap = await db.collection("bills").where("Serial No", "in", chunk).get();
+        snap.forEach((doc) => {
+          const bData = doc.data();
+          if (bData.deleted !== true) {
+            // Net weight kg ya Man/Quintal me ho sakta hai, apne bill structure ke mutabiq uthayein
+            const netWt = Number(bData["Net Weight"] || bData.netWeight || 0);
+            totalNetWeightKg += netWt;
+          }
+        });
+      }
+    }
+
+    // 3. Suppliers array ko update karo
+    const suppliers = [...(order.suppliers || [])];
+    const supplierIdx = Number(billData["LinkedSupplierIdx"]) || 0;
+    if (suppliers[supplierIdx]) {
+      const unit = suppliers[supplierIdx].unit || "Man";
+
+      // Agar unit Man hai toh kg ko Man me convert karein (20kg = 1 Man, ya jo bhi aapka standard ho)
+      // Yahan hum direct bill ka weight unit ke hisaab se calculate karenge:
+      let totalDeliveredCalculated = 0;
+      if (billSerials.length > 0) {
+        for (let i = 0; i < billSerials.length; i += 10) {
+          const chunk = billSerials.slice(i, i + 10);
+          const snap = await db.collection("bills").where("Serial No", "in", chunk).get();
+          snap.forEach((doc) => {
+            const bData = doc.data();
+            if (bData.deleted !== true) {
+              const netWt = Number(bData["Net Weight"] || 0);
+              const bUnit = suppliers[supplierIdx].unit || "Man";
+              const wtInUnit = bUnit === "Khadi" ? netWt / 400 : netWt / 20; // 20kg per Man standard
+              totalDeliveredCalculated += wtInUnit;
+            }
+          });
+        }
+      }
+
+      suppliers[supplierIdx].delivered = Math.round(totalDeliveredCalculated * 100) / 100;
+
+      const totalOrdered = suppliers[supplierIdx].quantity || 0;
+      const totalDelivered = suppliers[supplierIdx].delivered;
+
       let newStatus;
       if (closeOrderOverride) {
-        // Manual override: force Completed regardless of the math
         newStatus = "Completed";
       } else if (totalDelivered >= totalOrdered) {
         newStatus = "Completed";
@@ -248,31 +290,19 @@ async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
         newStatus = order.status;
       }
 
-      // 👇 YAHAN NAYA LINKING LOGIC ADD HUA HAI 👇
-      // Bill data me se bill number nikalna (jo bhi key tum save karte ho)
-      const currentBillNo = billData["Serial No"] || billData["billNo"] || billData["display_serial_no"] || "";
-
+      // Update payload prepare karein
       let updatePayload = {
         suppliers,
         status: newStatus,
+        linkedBillNos: billSerials,
         updatedAt: Date.now(),
       };
 
-      if (currentBillNo) {
-        // Agar pehle se koi bill linked hai, toh comma lagakar naya add kar do (Partial case ke liye)
-        let existingBills = order.linkedBillNo ? order.linkedBillNo : "";
-        if (!existingBills.includes(currentBillNo)) {
-          updatePayload.linkedBillNo = existingBills ? `${existingBills}, ${currentBillNo}` : currentBillNo;
-        }
-      }
-      // 👆 LINKING LOGIC END 👆
-
-      transaction.update(orderRef, updatePayload);
-    });
-
-    console.log(`Order ${orderId} updated (supplier ${supplierIdx})${closeOrderOverride ? " — manually closed" : ""}`);
+      await orderRef.update(updatePayload);
+      console.log(`Order ${orderId} delivered quantity successfully synced: ${totalDelivered}`);
+    }
   } catch (e) {
-    console.warn("Could not update order delivered qty:", e);
+    console.error("Could not update order delivered qty:", e);
   }
 }
 window.loadOrderIntoForm = loadOrderIntoForm;

@@ -64,100 +64,110 @@ window.applyTypeFilter = function (type, btnElement) {
 };
 
 async function saveParty() {
-  const partyId = document.getElementById("partyId").value;
-  const partyType = document.getElementById("partyType").value;
-  const partyPhone = document.getElementById("partyPhone").value.trim();
-  const partyAltPhone = document.getElementById("partyAltPhone").value.trim();
-  const partyName = document.getElementById("partyName").value.trim().toUpperCase();
-  const partyGst = document.getElementById("partyGst").value.trim().toUpperCase();
+  const form = document.getElementById("partyForm");
+  const partyId = document.getElementById("partyId")?.value || (form ? form.dataset.editId : "") || "";
 
-  // Validations: Primary Mobile
-  if (partyPhone.length !== 10 || isNaN(partyPhone)) {
-    return Swal.fire("Invalid Mobile", "Please enter a valid 10-digit primary mobile number.", "error");
-  }
-  if (!/^[6-9]\d{9}$/.test(partyPhone)) {
-    return Swal.fire("Invalid Mobile Series", "Mobile number must start with 6, 7, 8, or 9.", "error");
-  }
-  if (/^(\d)\1{9}$/.test(partyPhone)) {
-    return Swal.fire("Fake Number", "Invalid phone number pattern.", "error");
+  const partyType = document.getElementById("partyType")?.value || "";
+  const partyName = document.getElementById("partyName")?.value?.trim()?.toUpperCase() || "";
+  const partyPhone = document.getElementById("partyPhone")?.value?.trim() || "";
+  const partyAltPhone = document.getElementById("partyAltPhone")?.value?.trim() || "";
+  const partyGst = document.getElementById("partyGst")?.value?.trim()?.toUpperCase() || "";
+
+  if (!partyName) {
+    return Swal.fire("Error", "Party name is required.", "error");
   }
 
-  // Alternate Mobile Validation (if entered)
-  if (partyAltPhone) {
-    if (partyAltPhone.length !== 10 || isNaN(partyAltPhone) || !/^[6-9]\d{9}$/.test(partyAltPhone)) {
-      return Swal.fire("Invalid Alt Mobile", "Alternate mobile number is invalid.", "error");
-    }
-    if (partyAltPhone === partyPhone) {
-      return Swal.fire("Duplicate Number", "Primary and Alternate mobile numbers cannot be the same.", "error");
-    }
+  // ── Duplicate Checks (Current editing ID ko ignore karega taaki self-duplicate error na aaye) ──
+  let nameTypeExists = partiesList.find((p) => p.id !== partyId && p.name === partyName && p.type === partyType);
+  if (nameTypeExists) {
+    return Swal.fire("Duplicate Entry", `"${partyName}" is already registered as a ${partyType}.`, "error");
   }
 
-  // Feature 4: Strict GSTIN Regex Format Validation
-  if (partyGst) {
-    const gstinRegex = /^[0-9]{2}[A-Z]{5}[0-9]{4}[A-Z]{1}[1-9A-Z]{1}Z[0-9A-Z]{1}$/;
-    if (!gstinRegex.test(partyGst)) {
+  if (partyPhone) {
+    let phoneTypeExists = partiesList.find(
+      (p) => p.id !== partyId && (p.phone === partyPhone || p.altPhone === partyPhone) && p.type === partyType
+    );
+    if (phoneTypeExists) {
       return Swal.fire(
-        "Invalid GSTIN Format",
-        "Please enter a valid 15-character Indian GSTIN (e.g. 24AAAAA0000A1Z5).",
+        "Duplicate Number",
+        `Mobile number ${partyPhone} is already registered under ${phoneTypeExists.name}.`,
         "error"
       );
     }
   }
 
-  // Duplicate Checks (Role-based)
-  let nameTypeExists = partiesList.find((p) => p.id !== partyId && p.name === partyName && p.type === partyType);
-  if (nameTypeExists) {
-    return Swal.fire("Duplicate Entry", `"${partyName}" is already registered as a ${partyType}.`, "error");
-  }
-  let phoneTypeExists = partiesList.find(
-    (p) => p.id !== partyId && (p.phone === partyPhone || p.altPhone === partyPhone) && p.type === partyType
-  );
-  if (phoneTypeExists) {
-    return Swal.fire(
-      "Duplicate Number",
-      `Mobile number ${partyPhone} is already registered under ${phoneTypeExists.name}.`,
-      "error"
-    );
-  }
   if (partyGst) {
     let gstExists = partiesList.find((p) => p.id !== partyId && p.gst === partyGst);
-    if (gstExists)
+    if (gstExists) {
       return Swal.fire("Duplicate GST", `This GSTIN is already registered for ${gstExists.name}.`, "error");
+    }
   }
 
   const partyData = {
     type: partyType,
     name: partyName,
-    munimName: document.getElementById("partyMunim").value.trim().toUpperCase(),
+    munimName: document.getElementById("partyMunim")?.value?.trim()?.toUpperCase() || "",
     phone: partyPhone,
     altPhone: partyAltPhone,
-    address: document.getElementById("partyAddress").value.trim().toUpperCase(),
+    address: document.getElementById("partyAddress")?.value?.trim()?.toUpperCase() || "",
     gst: partyGst,
-    defaultComm: partyType === "Broker" ? parseFloat(document.getElementById("partyComm").value) || 0 : 0,
-    creditLimit: parseFloat(document.getElementById("partyCreditLimit").value) || 0,
-    opBal: parseFloat(document.getElementById("partyOpBal").value) || 0,
-    opBalType: document.getElementById("partyOpBalType").value,
-    bankAcc: document.getElementById("partyBankAcc").value.trim(),
-    ifsc: document.getElementById("partyIfsc").value.trim().toUpperCase(),
-    isBlacklisted: document.getElementById("partyBlacklist").checked,
+    defaultComm: partyType === "Broker" ? parseFloat(document.getElementById("partyComm")?.value) || 0 : 0,
+    creditLimit: parseFloat(document.getElementById("partyCreditLimit")?.value) || 0,
+    opBal: parseFloat(document.getElementById("partyOpBal")?.value) || 0,
+    opBalType: document.getElementById("partyOpBalType")?.value || "Cr",
+    bankAcc: document.getElementById("partyBankAcc")?.value?.trim() || "",
+    ifsc: document.getElementById("partyIfsc")?.value?.trim()?.toUpperCase() || "",
+    isBlacklisted: document.getElementById("partyBlacklist")?.checked || false,
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    deleted: false,
   };
 
   try {
     if (partyId) {
+      // ✏️ Update Existing Party
       await db.collection("parties").doc(partyId).update(partyData);
-      Swal.fire("Updated!", "Party details updated successfully.", "success");
+      Swal.fire({
+        icon: "success",
+        title: "Updated!",
+        text: "Party details updated successfully.",
+        timer: 1500,
+        showConfirmButton: false,
+      });
     } else {
+      // ➕ Create New Party
       partyData.createdAt = firebase.firestore.FieldValue.serverTimestamp();
       await db.collection("parties").add(partyData);
-      Swal.fire("Saved!", "New party added to master directory.", "success");
+      Swal.fire({
+        icon: "success",
+        title: "Added!",
+        text: "New party added successfully.",
+        timer: 1500,
+        showConfirmButton: false,
+      });
     }
-    resetForm();
-    fetchParties();
-  } catch (error) {
-    console.error("Error saving party: ", error);
-    Swal.fire("Error", "Could not save party details.", "error");
+
+    // Form Reset & UI cleanup
+    if (form) {
+      form.reset();
+      delete form.dataset.editId;
+    }
+    const partyIdInput = document.getElementById("partyId");
+    if (partyIdInput) partyIdInput.value = "";
+
+    const formTitle = document.getElementById("formTitle");
+    if (formTitle) formTitle.innerText = "+ Add New Party";
+
+    const saveBtn = document.getElementById("saveBtn");
+    if (saveBtn) saveBtn.innerText = "Save Party";
+
+    const cancelBtn = document.getElementById("cancelBtn");
+    if (cancelBtn) cancelBtn.classList.add("hidden");
+
+    if (typeof fetchParties === "function") {
+      fetchParties();
+    }
+  } catch (err) {
+    console.error("Error saving party:", err);
+    Swal.fire("Error", "Could not save party. Please try again.", "error");
   }
 }
 
@@ -290,39 +300,69 @@ function drawTable(data) {
     .join("");
 }
 window.editParty = function (id) {
-  const p = partiesList.find((item) => item.id === id);
-  if (!p) return;
-  document.getElementById("partyId").value = p.id;
-  document.getElementById("partyType").value = p.type;
-
-  const commContainer = document.getElementById("commFieldContainer");
-  if (p.type === "Broker") {
-    commContainer.style.display = "block";
-    document.getElementById("partyComm").value = p.defaultComm || "";
-  } else {
-    commContainer.style.display = "none";
-    document.getElementById("partyComm").value = "";
+  const form = document.getElementById("partyForm");
+  if (form) {
+    form.dataset.editId = id; // Form par ID set kar rahe hain taaki save ke waqt pata chale
   }
 
-  document.getElementById("partyName").value = p.name;
-  document.getElementById("partyMunim").value = p.munimName || "";
-  document.getElementById("partyPhone").value = p.phone;
-  document.getElementById("partyAltPhone").value = p.altPhone || "";
-  document.getElementById("partyAddress").value = p.address || "";
-  document.getElementById("partyGst").value = p.gst || "";
-  document.getElementById("partyCreditLimit").value = p.creditLimit || "";
-  document.getElementById("partyOpBal").value = p.opBal || "";
-  document.getElementById("partyOpBalType").value = p.opBalType || "Cr";
-  document.getElementById("partyBankAcc").value = p.bankAcc || "";
-  document.getElementById("partyIfsc").value = p.ifsc || "";
-  document.getElementById("partyBlacklist").checked = p.isBlacklisted || false;
+  const partyIdInput = document.getElementById("partyId");
+  if (partyIdInput) {
+    partyIdInput.value = id;
+  }
 
-  document.getElementById("formTitle").innerText = "✏️ Edit Party Details";
-  document.getElementById("saveBtn").innerText = "Update Party";
-  document.getElementById("cancelBtn").classList.remove("hidden");
+  // Global list se party data dhoondhein
+  const p = partiesList.find((party) => party.id === id);
+  if (!p) {
+    console.warn("Party not found in list for editing.");
+    return;
+  }
+
+  const setVal = (elId, val) => {
+    const el = document.getElementById(elId);
+    if (el) el.value = val;
+  };
+
+  const setCheck = (elId, checked) => {
+    const el = document.getElementById(elId);
+    if (el) el.checked = checked;
+  };
+
+  const commContainer = document.getElementById("commContainer");
+  if (commContainer) {
+    if (p.type === "Broker") {
+      commContainer.style.display = "block";
+      setVal("partyComm", p.defaultComm || "");
+    } else {
+      commContainer.style.display = "none";
+      setVal("partyComm", "");
+    }
+  }
+
+  setVal("partyType", p.type || "Kisan (Farmer)");
+  setVal("partyName", p.name || "");
+  setVal("partyMunim", p.munimName || "");
+  setVal("partyPhone", p.phone || "");
+  setVal("partyAltPhone", p.altPhone || "");
+  setVal("partyAddress", p.address || "");
+  setVal("partyGst", p.gst || "");
+  setVal("partyCreditLimit", p.creditLimit || "");
+  setVal("partyOpBal", p.opBal || "");
+  setVal("partyOpBalType", p.opBalType || "Cr");
+  setVal("partyBankAcc", p.bankAcc || "");
+  setVal("partyIfsc", p.ifsc || "");
+  setCheck("partyBlacklist", p.isBlacklisted || false);
+
+  const formTitle = document.getElementById("formTitle");
+  if (formTitle) formTitle.innerText = "✏️ Edit Party Details";
+
+  const saveBtn = document.getElementById("saveBtn");
+  if (saveBtn) saveBtn.innerText = "Update Party";
+
+  const cancelBtn = document.getElementById("cancelBtn");
+  if (cancelBtn) cancelBtn.classList.remove("hidden");
+
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
-
 function resetForm() {
   document.getElementById("partyForm").reset();
   document.getElementById("partyId").value = "";

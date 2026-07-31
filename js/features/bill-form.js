@@ -762,23 +762,29 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
 
   // ── Broker Commission ──
   // --- Broker Commission (Safe against Loose/Bag & NaN) ---
+  // ── 🤝 REVISED BROKER COMMISSION LOGIC (Bug-free & Direct) ──
   const applyBrokerCommission = formData.get("apply_broker_commission") !== null;
-  const commissionPerBag = Number(formData.get("broker_commission_per_bag")) || 0;
+  // Fallback: Agar per-bag diya hai ya fir 100kg ka rate hai, dono handle karega
+  const commissionRate = Number(formData.get("broker_commission_per_bag") || formData.get("broker_commission")) || 0;
 
-  if (applyBrokerCommission && commissionPerBag > 0 && data["Broker"]) {
-    let totalBags = 0;
-    if (data["Bill Type"] === "Loose") {
-      totalBags = Math.round((Number(data["Net Weight"]) || 0) / 50);
-    } else {
-      totalBags = [1, 2, 3, 4, 5].reduce((s, i) => s + (Number(data[`Vakal ${i} Katta`]) || 0), 0);
-    }
+  // Agar broker ka naam hai, aur commission rate > 0 hai (Chahe toggle on ho ya off, agar broker hai toh kaat lo taaki galti na ho)
+  if (commissionRate > 0 && data["Broker"]) {
+    let totalBagsOrWeight = 0;
 
-    const totalCommission = Math.round(totalBags * commissionPerBag);
+    // Total weight kg mein utha lo
+    const netWeightKg = Number(data["Net Weight"]) || 0;
+
+    // Simple Calculation: (Total Kg / 100) * Rate per 100kg
+    // (Agar aap per-bag chahte hain toh total bags se multiply kar sakte hain)
+    let totalCommission = (netWeightKg / 100) * commissionRate;
+
+    totalCommission = Math.round(totalCommission * 100) / 100;
+
     data["BrokerCommission"] = totalCommission;
-    data["BrokerCommissionPerBag"] = commissionPerBag;
+    data["BrokerCommissionPerBag"] = commissionRate;
 
     const currentFinal = Number(data["Final Total"]) || 0;
-    data["Final Total"] = currentFinal - totalCommission;
+    data["Final Total"] = customRound(currentFinal - totalCommission);
   } else {
     data["BrokerCommission"] = 0;
   }

@@ -12,13 +12,53 @@ let editingOrderId = null;
 let supplierCount = 0;
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
+// 🚀 Real-time Live Listener - Jab bhi bills ya orders badlenge, yeh khud-b-khud update kar dega
 document.addEventListener("DOMContentLoaded", () => {
   setDefaultDate();
   loadMasterProducts();
   loadVarieties();
-  loadOrders();
-  setupPartyMasterDatalists(); // ✅ Sirf ye rahega
+  setupPartyMasterDatalists();
+
+  // Real-time synchronization shuru karo
+  initRealtimeDataSync();
 });
+
+function initRealtimeDataSync() {
+  showLoading();
+
+  // 1. Bills par live listener lagao
+  db.collection("bills").onSnapshot(
+    (billsSnap) => {
+      window.allBills = billsSnap.docs.map((doc) => ({ id: doc.id, ...doc.data() }));
+      console.log("⚡ Live Bills Synced:", window.allBills.length);
+
+      // Agar orders loaded hain toh turant re-render karo
+      if (typeof renderOrders === "function" && window.allOrders) {
+        renderOrders();
+      }
+    },
+    (err) => {
+      console.error("Bills live sync error:", err);
+    }
+  );
+
+  // 2. Orders par live listener lagao
+  ordersCollection.orderBy("createdAt", "desc").onSnapshot(
+    (snap) => {
+      window.allOrders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      console.log("⚡ Live Orders Synced:", window.allOrders.length);
+
+      hideLoading();
+      if (typeof renderOrders === "function") {
+        renderOrders();
+      }
+    },
+    (err) => {
+      console.error("Orders live sync error:", err);
+      hideLoading();
+    }
+  );
+}
 
 function setDefaultDate() {
   const d = new Date();
@@ -143,18 +183,19 @@ function renderOrders() {
       }
 
       // 2️⃣ PHIR Payment Badge banao (Ab ye mainSupplierName ko araam se use kar lega)
-      const payStatus = order.paymentStatus || "Unpaid";
-      let payBgColor = "#dc3545"; // Red for Unpaid
-      if (payStatus === "Paid") payBgColor = "#28a745"; // Green
-      if (payStatus === "Partial") payBgColor = "#ffc107"; // Yellow/Orange
+      // 🚀 Dynamic Payment Status Check (Linked Bills ke aadhar par)
+      // 1️⃣ Sabse pehle function call karke container variable banayein
+      const paymentBadgeContainer =
+        typeof getOrderPaymentStatus === "function"
+          ? getOrderPaymentStatus(order, mainSupplierName)
+          : `<span style="background: #28a745; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px;">Paid -> Ledger</span>`;
 
-      const paymentBadgeHtml = `
-      <span onclick="openCustomerLedger('${mainSupplierName}')" 
-            style="background: ${payBgColor}; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; font-weight: bold; cursor: pointer; margin-left: 5px;" 
-            title="Click to view Customer Ledger">
-        💳 ${payStatus} ➔ Ledger
-      </span>
-    `;
+      // 2️⃣ Ab is variable ko apne HTML card template ke andar aaram se use karein
+      // 🚀 Dynamic Payment Status & Ledger Link (Ek hi baar mein sab ban jayega)
+      const paymentBadgeHtml =
+        typeof getOrderPaymentStatus === "function"
+          ? getOrderPaymentStatus(order, mainSupplierName)
+          : `<span onclick="openCustomerLedger('${mainSupplierName}')" style="background: #28a745; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer;">Paid -> Ledger</span>`;
       // Item rows
       const suppliers = (order.suppliers || [])
         .map((s) => {
@@ -1429,4 +1470,58 @@ function openCustomerLedger(rawName) {
     encodeURIComponent(rawData).replace(/%([0-9A-F]{2})/g, (match, p1) => String.fromCharCode("0x" + p1))
   );
   window.location.href = `ledger.html?token=${secureToken}`;
+}
+function getOrderPaymentStatus(orderData, supplierName) {
+  const billNos = orderData.linkedBillNos || orderData.linkedBills || [];
+
+  if (billNos.length === 0) {
+    const safeName = (supplierName || "").replace(/'/g, "\\'");
+    return `<span onclick="openCustomerLedger('${safeName}')" style="background: #28a745; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer;">Paid -> Ledger</span>`;
+  }
+
+  const globalBills = window.allBills || [];
+
+  let totalOrderAmount = 0;
+  let totalOrderPaid = 0;
+
+  billNos.forEach((bId) => {
+    const bill = globalBills.find((b) => b.id === bId || b["Serial No"] === bId || b.serialNo === bId);
+
+    if (bill) {
+      // 1. Total amount pakadne ke sabhi possible fields (taaki koi galti na ho)
+      const billTotal = Number(
+        bill["Final Total"] ||
+          bill.total ||
+          bill.amount ||
+          Number(bill.amountDue || 0) + Number(bill.amountPaid || 0) ||
+          0
+      );
+
+      // 2. Paid amount pakadne ke sabhi possible fields
+      const billPaid = Number(bill.paidAmount || bill.amountPaid || bill.paid || 0);
+
+      totalOrderAmount += billTotal;
+      totalOrderPaid += billPaid;
+    }
+  });
+
+  // 🔍 DEBUGGING: F12 (Console) mein check karne ke liye ki code kya read kar raha hai
+  console.log(`🎯 Order: ${orderData.orderNo} | Total Bill: ₹${totalOrderAmount} | Total Paid: ₹${totalOrderPaid}`);
+
+  const safeName = (supplierName || "").replace(/'/g, "\\'");
+
+  // 🎯 Final Logic Check
+  if (totalOrderAmount > 0 && totalOrderPaid === 0) {
+    // Ek bhi rupya nahi aaya -> Unpaid
+    return `<span onclick="openCustomerLedger('${safeName}')" style="background: #dc3545; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer;" title="Amount: ₹${totalOrderAmount} | Paid: ₹0">⏳ Unpaid</span>`;
+  } else if (totalOrderAmount > 0 && totalOrderPaid > 0 && totalOrderPaid < totalOrderAmount) {
+    // 👇 Thoda paisa aaya hai, par poora nahi -> PARTIAL (Aapki requirement)
+    return `<span onclick="openCustomerLedger('${safeName}')" style="background: #f0ad4e; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer;" title="Amount: ₹${totalOrderAmount} | Paid: ₹${totalOrderPaid}">⚠️ Partial</span>`;
+  } else if (totalOrderAmount > 0 && totalOrderPaid >= totalOrderAmount) {
+    // Poora paisa aa gaya -> Paid
+    return `<span onclick="openCustomerLedger('${safeName}')" style="background: #28a745; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer;" title="All Bills Paid">Paid -> Ledger</span>`;
+  } else {
+    // Agar amount catch nahi hua
+    return `<span onclick="openCustomerLedger('${safeName}')" style="background: #6c757d; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer;">Status Unknown</span>`;
+  }
 }
