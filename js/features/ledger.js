@@ -256,16 +256,27 @@ async function showCustomerLedger(customer) {
       let particulars = "General Payment";
       if (payment.appliedToBills && payment.appliedToBills.length > 0) {
         const serials = payment.appliedToBills.map((id) => billIdToSerialMap.get(id) || id.slice(0, 4)).join(", #");
-        particulars = `Payment for Bill #${serials}`;
+        if (cashAmount > 0 && deductionAmount > 0) {
+          particulars = `Bill #${serials} | Cash: ₹${formatNumber(cashAmount)} | Kapat: ₹${formatNumber(
+            deductionAmount
+          )} (${payment.deductionReason || "Kapat"})`;
+        } else if (deductionAmount > 0) {
+          particulars = `Bill #${serials} | Kapat: ₹${formatNumber(deductionAmount)} (${
+            payment.deductionReason || "Kapat"
+          })`;
+        } else {
+          particulars = `Payment for Bill #${serials}`;
+        }
       } else if (cashAmount > 0 && deductionAmount > 0) {
-        particulars = `Cash: ${formatNumber(cashAmount)} + Ded.: ${formatNumber(deductionAmount)} (${
-          payment.deductionReason
+        particulars = `Cash: ₹${formatNumber(cashAmount)} + Kapat: ₹${formatNumber(deductionAmount)} (${
+          payment.deductionReason || "Kapat"
         })`;
       } else if (deductionAmount > 0) {
-        particulars = `Deduction (${payment.deductionReason})`;
+        particulars = `Kapat: ₹${formatNumber(deductionAmount)} (${payment.deductionReason || "Kapat"})`;
       }
 
       allTransactions.push({
+        id: doc.id,
         type: "payment",
         date: paymentDate,
         particulars: particulars,
@@ -354,6 +365,9 @@ function renderLedgerTable(transactions, startDateStr = null, endDateStr = null)
         checkboxHtml = `<td class="no-print"><input type="checkbox" class="bill-checkbox-ledger" value="${
           tx.id
         }" data-amount="${tx.amountDue}" onchange="updateSelectionSummary()" ${isDisabled ? "disabled" : ""}></td>`;
+      } else if (tx.type === "payment" && tx.id) {
+        // 🗑️ Payment entry ke liye delete button
+        checkboxHtml = `<td class="no-print"><button onclick="deletePaymentEntry('${tx.id}')" style="background:#dc3545; color:white; border:none; padding:3px 8px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">Delete</button></td>`;
       }
 
       const row = document.createElement("tr");
@@ -399,26 +413,58 @@ function updateSelectionSummary() {
 }
 
 function openPaymentModal() {
-  if (!currentCustomer || !modalCustomerName) return;
+  // 🛡️ Safety Fix: Agar currentCustomer missing ho toh URL se naam nikal kar set kar lo
+  if (!currentCustomer) {
+    const urlParams = new URLSearchParams(window.location.search);
+    const targetName = urlParams.get("name");
+    const targetVillage = urlParams.get("village") || "N/A";
+    if (targetName) {
+      currentCustomer = { name: targetName, village: targetVillage };
+    } else {
+      alert("Please select a customer first.");
+      return;
+    }
+  }
+
+  if (!paymentModal) {
+    paymentModal = document.getElementById("payment-modal");
+  }
+  if (!modalCustomerName) {
+    modalCustomerName = document.getElementById("modal-customer-name");
+  }
+  if (!amountInput) {
+    amountInput = document.getElementById("payment-amount-input");
+  }
+  if (!dateInput) {
+    dateInput = document.getElementById("payment-date-input");
+  }
+
   const selectedCheckboxes = document.querySelectorAll(".bill-checkbox-ledger:checked");
 
-  modalCustomerName.textContent = currentCustomer.name;
-  amountInput.value = "";
-  deductionAmountInput.value = "";
-  deductionReasonInput.value = "";
-  dateInput.valueAsDate = new Date();
+  if (modalCustomerName) modalCustomerName.textContent = currentCustomer.name;
+  if (amountInput) amountInput.value = "";
+  if (deductionAmountInput) deductionAmountInput.value = "";
+  if (deductionReasonInput) deductionReasonInput.value = "";
+  if (dateInput) dateInput.valueAsDate = new Date();
 
   if (selectedCheckboxes.length > 0) {
     let totalAmount = 0;
     selectedCheckboxes.forEach((cb) => (totalAmount += Number(cb.dataset.amount)));
-    modalTitle.textContent = "Pay Selected Bills";
-    modalDescription.innerHTML = `Enter payment for <strong>${selectedCheckboxes.length} selected bill(s)</strong>.`;
-    amountInput.value = totalAmount;
+    if (modalTitle) modalTitle.textContent = "Pay Selected Bills";
+    if (modalDescription)
+      modalDescription.innerHTML = `Enter payment for <strong>${selectedCheckboxes.length} selected bill(s)</strong>.`;
+    if (amountInput) amountInput.value = totalAmount;
   } else {
-    modalTitle.textContent = "Record a General Payment";
-    modalDescription.innerHTML = `Enter details for a general payment to <strong>${currentCustomer.name}</strong>.`;
+    if (modalTitle) modalTitle.textContent = "Record a General Payment";
+    if (modalDescription)
+      modalDescription.innerHTML = `Enter details for a general payment to <strong>${currentCustomer.name}</strong>.`;
   }
-  paymentModal.style.display = "flex";
+
+  if (paymentModal) {
+    paymentModal.style.display = "flex";
+  } else {
+    console.error("Payment modal element not found in DOM!");
+  }
 }
 
 function closePaymentModal() {
@@ -609,3 +655,80 @@ function printLedger() {
     document.body.removeChild(printFrame);
   }, 500);
 }
+window.deletePaymentEntry = async function (paymentId) {
+  // 🛑 Strict Security Check: 1-click delete band, ab 'DELETE' type karna padega
+  const confirm = await Swal.fire({
+    title: "⚠️ Security Check: Delete Payment?",
+    text: "Yeh ek critical action hai! Galti ya fraud se bachne ke liye niche box mein 'DELETE' type karein.",
+    input: "text",
+    inputPlaceholder: "Yahan 'DELETE' likhein...",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonText: "Confirm & Delete",
+    confirmButtonColor: "#dc3545",
+    cancelButtonColor: "#6c757d",
+    preConfirm: (inputValue) => {
+      if (inputValue !== "DELETE") {
+        Swal.showValidationMessage("Aage badhne ke liye 'DELETE' likhna anivarya (mandatory) hai!");
+      }
+      return inputValue;
+    },
+  });
+
+  if (!confirm.isConfirmed) return;
+
+  showLoading("Deleting payment securely...");
+  try {
+    // 1. Payment doc fetch karo
+    const paymentRef = paymentsCollection.doc(paymentId);
+    const paymentDoc = await paymentRef.get();
+
+    if (!paymentDoc.exists) {
+      Swal.fire("Error", "Payment record not found.", "error");
+      hideLoading();
+      return;
+    }
+
+    const paymentData = paymentDoc.data();
+    const totalCredit = paymentData.totalCredit || 0;
+    const appliedBills = paymentData.appliedToBills || [];
+
+    // 2. Agar kisi bill par apply hua tha, toh bills ka amountPaid wapas adjust karo
+    if (appliedBills.length > 0) {
+      for (const billId of appliedBills) {
+        const billRef = billsCollection.doc(billId);
+        const billDoc = await billRef.get();
+        if (billDoc.exists) {
+          const billData = billDoc.data();
+          const currentPaid = billData.amountPaid || 0;
+          const refundAmount = Math.min(totalCredit, currentPaid);
+          const newAmountPaid = currentPaid - refundAmount;
+          const newAmountDue = (billData["Final Total"] || 0) - newAmountPaid;
+          const newStatus = newAmountDue <= 0.01 ? "Paid" : newAmountPaid > 0 ? "Partially Paid" : "Unpaid";
+
+          await billRef.update({
+            amountPaid: newAmountPaid,
+            amountDue: newAmountDue,
+            paymentStatus: newStatus,
+          });
+        }
+      }
+    }
+
+    // 3. Master Party balance ko wapas update karo
+    if (currentCustomer) {
+      await updateCustomerMasterBalance(currentCustomer, totalCredit);
+    }
+
+    // 4. Payment document ko delete karo
+    await paymentRef.delete();
+
+    hideLoading();
+    Swal.fire("Deleted!", "Payment entry safely removed.", "success");
+    showCustomerLedger(currentCustomer); // Ledger refresh karo
+  } catch (error) {
+    console.error("Error deleting payment:", error);
+    hideLoading();
+    Swal.fire("Error", "Could not delete payment.", "error");
+  }
+};

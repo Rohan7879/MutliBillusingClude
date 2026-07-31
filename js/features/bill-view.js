@@ -21,10 +21,82 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   if (savePaymentBtn) {
-    savePaymentBtn.addEventListener("click", () => {
-      // The primary payment system is now in the ledger.
-      // This button can be re-enabled with logic similar to the ledger's savePayment if needed.
-      alert("Please use the Customer Ledger to record payments.");
+    savePaymentBtn.addEventListener("click", async () => {
+      const paymentInput = document.getElementById("payment-amount-input"); // ya jo bhi aapke input ka ID ho
+      const cashAmount = Number(paymentInput ? paymentInput.value : 0) || 0;
+
+      if (cashAmount <= 0) {
+        alert("Please enter a valid amount.");
+        return;
+      }
+
+      const urlParams = new URLSearchParams(window.location.search);
+      const billId = urlParams.get("id") || urlParams.get("billId");
+      if (!billId) {
+        alert("Bill ID not found.");
+        return;
+      }
+
+      try {
+        showLoading("Saving payment...");
+        const billRef = billsCollection.doc(billId);
+        const billDoc = await billRef.get();
+
+        if (!billDoc.exists) {
+          alert("Bill not found.");
+          hideLoading();
+          return;
+        }
+
+        const billData = billDoc.data();
+        const currentAmountPaid = billData.amountPaid || 0;
+        const finalTotal = billData["Final Total"] || 0;
+        const newAmountPaid = currentAmountPaid + cashAmount;
+        const newAmountDue = finalTotal - newAmountPaid;
+        const newStatus = newAmountDue <= 0.01 ? "Paid" : "Partially Paid";
+
+        // 1. Bill update karo
+        await billRef.update({
+          amountPaid: newAmountPaid,
+          amountDue: newAmountDue,
+          paymentStatus: newStatus,
+        });
+
+        // 2. Payments collection mein entry daalo
+        await db.collection("payments").add({
+          customerName: billData["Customer Name"] || billData.customerName,
+          customerVillage: billData["Village"] || billData.customerVillage || "N/A",
+          customerId: billData.customerId || null,
+          cashAmount: cashAmount,
+          deductionAmount: 0,
+          totalCredit: cashAmount,
+          paymentDate: firebase.firestore.Timestamp.fromDate(new Date()),
+          appliedToBills: [billId],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+
+        // 3. Party Master ka balance update karo
+        if (billData.customerId) {
+          const masterRef = db.collection("parties").doc(billData.customerId);
+          const masterDoc = await masterRef.get();
+          if (masterDoc.exists) {
+            const prevBalance = masterDoc.data().currentBalance || 0;
+            await masterRef.update({
+              currentBalance: prevBalance - cashAmount,
+              lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          }
+        }
+
+        hideLoading();
+        alert("Payment saved successfully!");
+        if (paymentModal) paymentModal.style.display = "none";
+        fetchBillAndDisplay(billId); // Page refresh / reload data
+      } catch (error) {
+        console.error("Error saving payment from bill view:", error);
+        hideLoading();
+        alert("Could not save the payment.");
+      }
     });
   }
 });

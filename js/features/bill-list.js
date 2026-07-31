@@ -109,7 +109,7 @@ async function markSelectedBillsAsPaid() {
 
   const result = await Swal.fire({
     title: "Are you sure?",
-    text: `You are about to mark ${selectedCheckboxes.length} bill(s) as Paid.`,
+    text: `You are about to mark ${selectedCheckboxes.length} bill(s) as Paid with today's date.`,
     icon: "question",
     showCancelButton: true,
     confirmButtonColor: "#28a745",
@@ -117,28 +117,43 @@ async function markSelectedBillsAsPaid() {
   });
 
   if (result.isConfirmed) {
-    showLoading("Updating bills...");
+    showLoading("Updating bills and recording payments...");
 
     try {
-      const batch = db.batch();
       const selectedIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
+      const billsToUpdate = allBillsForList.filter((billDoc) => selectedIds.includes(billDoc.id));
 
-      // --- CORRECTED PART ---
-      // Ensure we use 'allBillsForList', which is the correct variable for this page
-      const billsToUpdate = allBillsForList.filter((bill) => selectedIds.includes(bill.id));
+      for (const billDoc of billsToUpdate) {
+        const billData = billDoc.data();
+        const billId = billDoc.id;
+        const totalAmount = billData["Final Total"] || 0;
 
-      billsToUpdate.forEach((bill) => {
-        const billRef = billsCollection.doc(bill.id);
-        batch.update(billRef, {
+        // 1. Bill ko Paid mark karo
+        await billsCollection.doc(billId).update({
           paymentStatus: "Paid",
-          amountPaid: bill["Final Total"],
+          amountPaid: totalAmount,
           amountDue: 0,
         });
-      });
 
-      await batch.commit();
+        // 2. 🚀 NAYA: Payments collection mein AAJ KI DATE ke sath entry save karo
+        await db.collection("payments").add({
+          customerName: billData["Customer Name"] || "",
+          customerVillage: billData["Village"] || "N/A",
+          customerId: billData.customerId || null,
+          cashAmount: totalAmount,
+          deductionAmount: 0,
+          totalCredit: totalAmount,
+          paymentDate: firebase.firestore.Timestamp.fromDate(new Date()), // 👈 Aaj ki date save hogi
+          appliedToBills: [billId],
+          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
-      Swal.fire("Success!", `${selectedCheckboxes.length} bill(s) have been marked as Paid.`, "success");
+      Swal.fire(
+        "Success!",
+        `${selectedCheckboxes.length} bill(s) have been marked as Paid with today's date.`,
+        "success"
+      );
     } catch (error) {
       console.error("Error marking bills as paid:", error);
       Swal.fire("Error", "Could not update the bills.", "error");
