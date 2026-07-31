@@ -209,6 +209,7 @@ function clearOrderLink() {
  *   math (user manually checked "Close this Order" on the bill form).
  */
 async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
+  console.log("Bill Data Check:", billData);
   const orderId = billData["LinkedOrderId"];
   const supplierIdx = billData["LinkedSupplierIdx"];
   if (!orderId) return;

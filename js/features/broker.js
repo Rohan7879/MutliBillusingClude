@@ -24,9 +24,24 @@ async function loadBrokerLedger() {
     const billsSnap = await billsCollection.get();
     const paymentsSnap = await db.collection("broker_payments").get();
     const brokersMasterSnap = await db.collection("brokers").get();
+    const partiesSnap = await db.collection("parties").get(); // 🚀 Party Master se saare records uthane ke liye
 
-    // 1. Collect unique brokers from existing bills & sync to master collection
     const brokerNamesSet = new Set();
+
+    // 1. Party Master se jinka type "Broker" hai unhe add karein
+    partiesSnap.docs.forEach((doc) => {
+      const p = doc.data();
+      if (p.deleted === true) return;
+      const pType = (p.type || "").trim();
+      const pName = (p.name || "").trim();
+
+      // Agar party type Broker hai, toh seedha master list mein le lo
+      if (pName && (pType.toLowerCase() === "broker" || pType === "Broker")) {
+        brokerNamesSet.add(pName);
+      }
+    });
+
+    // 2. Bills se unique brokers collect karein (agar kisi bill mein purana broker ho)
     billsSnap.docs.forEach((doc) => {
       const b = doc.data();
       if (b.deleted === true) return;
@@ -36,7 +51,7 @@ async function loadBrokerLedger() {
       }
     });
 
-    // Also include from master collection
+    // 3. Purane brokers collection se bhi le lein
     brokersMasterSnap.docs.forEach((doc) => {
       const data = doc.data();
       if (data && data.name) {
@@ -57,7 +72,7 @@ async function loadBrokerLedger() {
       }
     }
 
-    // 2. Fetch final Master Brokers list
+    // 4. Fetch final Master Brokers list
     const masterSnap = await db.collection("brokers").orderBy("name").get();
     const brokerMap = {};
 
@@ -67,7 +82,7 @@ async function loadBrokerLedger() {
       brokerMap[name.toUpperCase()] = { displayName: name, totalCommission: 0, paidAmount: 0, totalBills: 0 };
     });
 
-    // 3. Calculate Totals from Bills
+    // 5. Calculate Totals from Bills
     billsSnap.docs.forEach((doc) => {
       const b = doc.data();
       if (b.deleted === true) return;
@@ -78,7 +93,7 @@ async function loadBrokerLedger() {
       }
     });
 
-    // 4. Calculate Paid from Broker Payments
+    // 6. Calculate Paid from Broker Payments
     paymentsSnap.docs.forEach((doc) => {
       const p = doc.data();
       if (p.deleted === true) return;
@@ -141,16 +156,14 @@ async function loadBrokerLedger() {
 
     container.innerHTML = htmlContent;
 
-    // 🚀 NAYA LOGIC: URL se broker ka naam padho aur direct popup kholo
     const urlParams = new URLSearchParams(window.location.search);
     const targetBrokerName = urlParams.get("name");
 
     if (targetBrokerName) {
       setTimeout(() => {
         viewBrokerDetails(targetBrokerName);
-        // Is line se URL se naam hat jayega, taaki page refresh karne par wapas na khule
         window.history.replaceState(null, "", window.location.pathname);
-      }, 400); // Thoda time diya taaki background mein sab load ho jaye
+      }, 400);
     }
   } catch (e) {
     console.error("Error loading broker ledger:", e);
@@ -207,111 +220,6 @@ window.openAddBrokerModal = function () {
     }
   });
 };
-
-async function viewBrokerDetails(brokerName) {
-  showLoading();
-  try {
-    const snap = await billsCollection.get();
-    const billDocs = snap.docs.filter((d) => {
-      const b = d.data();
-      if (b.deleted === true) return;
-      const bName = (b["Broker"] || "").trim().toUpperCase();
-      return bName === brokerName.toUpperCase();
-    });
-
-    let totalComm = 0;
-    billDocs.forEach((d) => (totalComm += Number(d.data()["BrokerCommission"] || 0)));
-
-    let totalPaid = 0;
-    let paymentsList = [];
-    try {
-      const paySnap = await db.collection("broker_payments").where("brokerName", "==", brokerName.toUpperCase()).get();
-      paySnap.docs.forEach((pDoc) => {
-        const pData = pDoc.data();
-        if (pData.deleted !== true) {
-          totalPaid += Number(pData.amount || 0);
-          paymentsList.push({ id: pDoc.id, ...pData });
-        }
-      });
-    } catch (err) {
-      console.log("No payments found");
-    }
-
-    const balanceDue = totalComm - totalPaid;
-
-    let html = `<h3 style="color:#005a9e; margin-top:0;">🤝 ${brokerName}</h3>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
-        <div class="kpi-card" style="background:#f8f9fa; padding:12px; border-radius:10px; border:1px solid #dee2e6;"><div class="kpi-label" style="font-size:12px; color:#6c757d;">Total Commission</div><div class="kpi-value" style="font-size:1.3em; font-weight:800; color:#005a9e;">₹${Number(
-          totalComm
-        ).toLocaleString("en-IN")}</div></div>
-        <div class="kpi-card" style="background:#f8f9fa; padding:12px; border-radius:10px; border:1px solid #dee2e6;"><div class="kpi-label" style="font-size:12px; color:#6c757d;">Paid</div><div class="kpi-value" style="font-size:1.3em; font-weight:800; color:#28a745;">₹${Number(
-          totalPaid
-        ).toLocaleString("en-IN")}</div></div>
-        <div class="kpi-card" style="background:#f8f9fa; padding:12px; border-radius:10px; border:1px solid #dee2e6;"><div class="kpi-label" style="font-size:12px; color:#6c757d;">Balance Due</div><div class="kpi-value" style="font-size:1.3em; font-weight:800; color:#dc3545;">₹${Number(
-          balanceDue
-        ).toLocaleString("en-IN")}</div></div>
-      </div>
-      
-      <div style="margin-bottom:14px; text-align:right;">
-        <button onclick="openBrokerPaymentModal('${brokerName}', ${balanceDue})" style="background:linear-gradient(135deg, #28a745, #1e7e34); color:white; padding:9px 18px; border-radius:8px; border:none; font-weight:700; cursor:pointer; font-family:inherit;">💰 Record Payment</button>
-      </div>
-
-      <h4 style="color:#005a9e; margin:14px 0 6px; text-align:left; font-size:13px; text-transform:uppercase;">Bills List</h4>
-      <table class="blt" style="width:100%; border-collapse:collapse; margin-bottom:16px; font-size:13px;">
-        <thead><tr style="background:#005a9e; color:white;"><th style="padding:8px; text-align:left;">Bill No</th><th style="padding:8px; text-align:left;">Date</th><th style="padding:8px; text-align:left;">Supplier</th><th style="padding:8px; text-align:right;">Bags</th><th style="padding:8px; text-align:right;">Commission</th></tr></thead>
-        <tbody>${billDocs
-          .map((d) => {
-            const bill = d.data();
-            const bags =
-              bill["Bill Type"] === "Loose"
-                ? Math.round((bill["Net Weight"] || 0) / 50)
-                : [1, 2, 3, 4, 5].reduce((s, i) => s + (Number(bill[`Vakal ${i} Katta`]) || 0), 0);
-            return `<tr style="border-bottom:1px solid #f0f0f0;">
-            <td style="padding:8px;">${bill["Serial No"]}</td>
-            <td style="padding:8px;">${bill["Date"]}</td>
-            <td style="padding:8px;">${bill["Customer Name"]}</td>
-            <td style="padding:8px; text-align:right;">${bags}</td>
-            <td style="padding:8px; text-align:right; font-weight:700; color:#005a9e;">₹${Number(
-              bill["BrokerCommission"] || 0
-            ).toLocaleString("en-IN")}</td>
-          </tr>`;
-          })
-          .join("")}</tbody>
-      </table>`;
-
-    if (paymentsList.length > 0) {
-      html += `<h4 style="color:#28a745; margin:14px 0 6px; text-align:left; font-size:13px; text-transform:uppercase;">Payment History</h4>
-        <table class="blt" style="width:100%; border-collapse:collapse; font-size:13px;">
-          <thead><tr style="background:#28a745; color:white;"><th style="padding:8px; text-align:left;">Date</th><th style="padding:8px; text-align:right;">Amount</th><th style="padding:8px; text-align:center;">Action</th></tr></thead>
-          <tbody>${paymentsList
-            .map(
-              (p) => `
-            <tr style="border-bottom:1px solid #f0f0f0;">
-              <td style="padding:8px;">${p.date}</td>
-              <td style="padding:8px; text-align:right; color:#28a745; font-weight:700;">₹${Number(
-                p.amount
-              ).toLocaleString("en-IN")}</td>
-              <td style="padding:8px; text-align:center;"><button onclick="deleteBrokerPayment('${
-                p.id
-              }', '${brokerName}')" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:700;">Delete</button></td>
-            </tr>`
-            )
-            .join("")}</tbody>
-        </table>`;
-    }
-
-    Swal.fire({
-      html,
-      width: "850px",
-      confirmButtonText: "Close",
-      confirmButtonColor: "#005a9e",
-    });
-  } catch (e) {
-    console.error(e);
-  } finally {
-    hideLoading();
-  }
-}
 
 window.openBrokerPaymentModal = function (brokerName, defaultAmount) {
   Swal.fire({

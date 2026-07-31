@@ -1311,30 +1311,19 @@
                 />
               </div>
               <div class="ff">
-                <label>દલાલ (Broker)</label>
-                <input
-                  type="text"
-                  name="broker_name"
-                  list="broker_datalist"
-                  placeholder="Broker select karein..."
-                  autocomplete="off"
-                />
-                <datalist id="broker_datalist"></datalist>
-                <!-- Yeh raha autocomplete dropdown box -->
-                <div
-                  id="broker-suggestions"
-                  style="
-                    position: absolute;
-                    background: white;
-                    border: 1px solid #ced4da;
-                    border-radius: 6px;
-                    max-height: 150px;
-                    overflow-y: auto;
-                    width: 100%;
-                    z-index: 1000;
-                    display: none;
-                  "
-                ></div>
+                <label>દલાલ (BROKER)</label>
+                <div style="position: relative">
+                  <input
+                    type="text"
+                    id="broker_name"
+                    name="broker_name"
+                    placeholder="Broker select karein..."
+                    autocomplete="off"
+                    oninput="this.value = this.value.toUpperCase()"
+                  />
+                  <!-- Ye raha Vepari jaisa same dropdown box -->
+                  <div id="broker-suggestions"></div>
+                </div>
               </div>
             </div>
           </div>

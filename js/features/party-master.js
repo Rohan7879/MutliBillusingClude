@@ -506,11 +506,80 @@ window.deleteParty = async function (id) {
 
   if (confirm.isConfirmed) {
     try {
+      // 1. Party ka data nikalein
+      const partyDoc = await db.collection("parties").doc(id).get();
+      const partyData = partyDoc.exists ? partyDoc.data() : {};
+      const partyName = (partyData.name || "").trim().toLowerCase();
+
+      // 2. Bills collection ke saare bills fetch karein
+      const billsSnapshot = await db.collection("bills").get();
+      let hasActiveBills = false;
+
+      // 3. JavaScript mein loop chala kar check karein ki kisi bhi bill mein ye party hai ya nahi
+      billsSnapshot.forEach((doc) => {
+        const bill = doc.data();
+        // Bill ke andar jitni bhi values hain, unhe string mein convert karke check kar lo
+        const billValues = Object.values(bill).map((v) => String(v).trim().toLowerCase());
+
+        const matchesId = billValues.includes(id.toLowerCase());
+        const matchesName = partyName && billValues.includes(partyName);
+
+        if (matchesId || matchesName) {
+          hasActiveBills = true;
+        }
+      });
+
+      // 4. Agar bill mil gaya, toh yahin rok do
+      if (hasActiveBills) {
+        Swal.fire(
+          "Error!",
+          "Yeh party delete nahi ho sakti, kyunki iska bill bana hua hai aur paisa dena baaki hai!",
+          "error"
+        );
+        return;
+      }
+
+      console.log("-> ALLOWED: No bills found anywhere, proceeding to delete.");
+      // 5. Agar sach mein koi bill nahi hai, tabhi delete hone do
       await db.collection("parties").doc(id).update({ deleted: true });
       Swal.fire("Deleted!", "Party removed successfully.", "success");
       fetchParties();
     } catch (error) {
+      console.error("DELETE ERROR:", error);
       Swal.fire("Error", "Could not delete party.", "error");
     }
   }
 };
+async function handleDeleteParty(partyId, partyName) {
+  try {
+    console.log("Checking bills for Party ID:", partyId, "Name:", partyName);
+
+    // 1. Check karein bills collection mein
+    const checkById = await db.collection("bills").where("partyId", "==", partyId).get();
+    const checkByName = await db.collection("bills").where("partyName", "==", partyName).get();
+
+    console.log("Bills found by ID:", checkById.size);
+    console.log("Bills found by Name:", checkByName.size);
+
+    // 2. Agar koi bhi bill mil gaya, toh rok do
+    if (!checkById.empty || !checkByName.empty) {
+      alert(`⚠️ Error: "${partyName}" ko delete nahi kiya ja sakta, kyunki is party ke bills active hain!`);
+      return;
+    }
+
+    // 3. Agar bill nahi hai tabhi delete hone do
+    const confirmDelete = confirm(`Kya aap sach mein "${partyName}" ko delete karna chahte hain?`);
+    if (!confirmDelete) return;
+
+    await db.collection("parties").doc(partyId).update({
+      deleted: true,
+      updatedAt: new Date().toISOString(),
+    });
+
+    alert("Party successfully deleted.");
+    loadParties();
+  } catch (error) {
+    console.error("Error deleting party:", error);
+    alert("Delete karne mein error aaya. Console check karein.");
+  }
+}

@@ -77,6 +77,7 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 let uniqueCustomers = []; // To hold our customer list
+let uniqueBrokers = []; // 🚀 YE NAYI LINE ADD KARNI HAI
 async function setupAutocomplete() {
   try {
     // 1. Bina kisi strict condition ke saara data fetch karo (Safe approach)
@@ -84,10 +85,6 @@ async function setupAutocomplete() {
 
     // 2. JS mein filter karo taaki agar 'deleted' field na bhi ho toh error na aaye
     window.partiesMasterList = snapshot.docs.map((doc) => doc.data()).filter((p) => p.deleted !== true);
-
-    // 🔴 DEBUGGING: Console mein check karne ke liye ki kitni parties aayin
-    console.log("Total Parties Fetched:", window.partiesMasterList.length);
-    console.log("First Party Sample:", window.partiesMasterList[0]);
 
     // 3. Filter and Map (Spelling/Small-Capitalization ki galti handle karne ke liye)
     uniqueCustomers = window.partiesMasterList
@@ -102,8 +99,73 @@ async function setupAutocomplete() {
         village: p.address || "",
       }));
 
-    // 🔴 DEBUGGING: Final list mein kitne naam gaye
-    console.log("Autocomplete List Ready:", uniqueCustomers.length);
+    // 4. Sirf Brokers ke liye ek alag list banayein
+    // 4. Sirf Brokers ke liye alag list (with Village format)
+    uniqueBrokers = window.partiesMasterList
+      .filter((p) => {
+        const type = (p.type || "").toLowerCase();
+        return type === "broker";
+      })
+      .map((p) => {
+        return {
+          value: p.name || "",
+          address: p.address || "",
+          defaultComm: p.defaultComm || 0,
+        };
+      });
+
+    // 🚀 CUSTOM JS AUTOCOMPLETE (Bilkul Customer Jaisa!)
+    const brokerInput = document.getElementById("broker_name");
+    const brokerSuggestionsBox = document.getElementById("broker-suggestions");
+
+    if (brokerInput && brokerSuggestionsBox) {
+      brokerInput.addEventListener("input", () => {
+        const value = brokerInput.value.toLowerCase();
+        brokerSuggestionsBox.innerHTML = "";
+
+        if (!value) return;
+
+        const filteredBrokers = uniqueBrokers.filter((broker) => broker.value.toLowerCase().includes(value));
+
+        const suggestionsList = document.createElement("div");
+        // Customer wali same CSS class laga rahe hain taaki design ekdum sundar aaye
+        suggestionsList.classList.add("autocomplete-items");
+
+        filteredBrokers.forEach((broker) => {
+          const item = document.createElement("div");
+          // HTML format: BOLD Naam (Gaon ka naam)
+          item.innerHTML = `<strong>${broker.value}</strong> ${broker.address ? `(${broker.address})` : ""}`;
+
+          item.addEventListener("click", () => {
+            // 1. Select karne par sirf Broker ka naam dabbe me jayega
+            brokerInput.value = broker.value;
+            brokerSuggestionsBox.innerHTML = "";
+
+            // 2. Agar Broker ka default commission hai toh auto-fill kar dega
+            const commInput = document.querySelector('input[name="broker_commission_per_bag"]');
+            const commToggle = document.getElementById("broker-commission-toggle");
+            const commBox = document.getElementById("broker-commission-input");
+
+            if (commInput && broker.defaultComm > 0) {
+              commInput.value = broker.defaultComm;
+              if (commToggle && !commToggle.checked) {
+                commToggle.checked = true;
+                if (commBox) commBox.style.display = "block";
+              }
+            }
+          });
+          suggestionsList.appendChild(item);
+        });
+        brokerSuggestionsBox.appendChild(suggestionsList);
+      });
+
+      // Box ke bahar click karne par dropdown band ho jaye
+      document.addEventListener("click", (e) => {
+        if (e.target !== brokerInput) {
+          brokerSuggestionsBox.innerHTML = "";
+        }
+      });
+    }
   } catch (error) {
     console.error("Could not fetch party list for autocomplete:", error);
   }
@@ -802,6 +864,11 @@ async function collectData() {
     const formData = new FormData(form);
     let data = calculateBillData(formData);
 
+    // 📍 Yahin par (calculateBillData ke turant baad) ye 3 line daal deni hain:
+    const customerId = formData.get("customer_id") || data.customerId || "";
+    const customerName = formData.get("Customer Name") || data["Customer Name"] || "";
+    const customerVillage = formData.get("Village") || data["Village"] || "N/A";
+
     // Save or update the customer in the 'customers' collection
 
     // --- UPDATED TRANSACTION LOGIC ---
@@ -948,13 +1015,17 @@ async function collectData() {
     // Internal helper to trigger WhatsApp URL
     function executeWhatsAppSend(billData) {
       let message =
-        `Namaste Kisan Ji, Ganesh Agri Industry mein aapka swagat hai. 🙏\n\n` +
-        `📋 *Bill No:* ${billData.billNo}\n` +
+        `Namaste Kisan Ji, ${
+          globalSettings && globalSettings.companyName ? globalSettings.companyName : "Hamari Company"
+        } mein aapka swagat hai. 🙏\n\n` +
+        +`📋 *Bill No:* ${billData.billNo}\n` +
         `🌾 *Item:* ${billData.itemName}\n` +
         `⚖️ *Weight / Bori:* ${billData.bags} Bori (${billData.weight} Quintal)\n` +
         `💰 *Rate:* ₹${billData.rate} / Quintal\n` +
         `💵 *Total Amount:* ₹${billData.totalAmount}\n\n` +
-        `Aapka maal darj ho chuka hai. Dhanyawad! - Ganesh & Company`;
+        `Aapka maal darj ho chuka hai. Dhanyawad! - ${
+          globalSettings && globalSettings.companyName ? globalSettings.companyName : "Company"
+        }`;
 
       let encodedMessage = encodeURIComponent(message);
       let whatsappUrl = `https://wa.me/91${billData.farmerPhone}?text=${encodedMessage}`;
@@ -1174,13 +1245,17 @@ function checkAndSendWhatsApp(billData) {
 
   // Message format jo kisan ke paas jayega
   let message =
-    `Namaste Kisan Ji, Ganesh Agri Industry mein aapka swagat hai. 🙏\n\n` +
-    `📋 *Bill No:* ${billData.billNo}\n` +
+    `Namaste Kisan Ji, ${
+      globalSettings && globalSettings.companyName ? globalSettings.companyName : "Hamari Company"
+    } mein aapka swagat hai. 🙏\n\n` +
+    +`📋 *Bill No:* ${billData.billNo}\n` +
     `🌾 *Item:* ${billData.itemName}\n` +
     `⚖️ *Weight / Bori:* ${billData.bags} Bori (${billData.weight} Quintal)\n` +
     `💰 *Rate:* ₹${billData.rate} / Quintal\n` +
     `💵 *Total Amount:* ₹${billData.totalAmount}\n\n` +
-    `Aapka maal darj ho chuka hai. Dhanyawad! - Ganesh & Company`;
+    `Aapka maal darj ho chuka hai. Dhanyawad! - ${
+      globalSettings && globalSettings.companyName ? globalSettings.companyName : "Company"
+    }`;
 
   // URL encode karke WhatsApp Web ya API open kar do
   let encodedMessage = encodeURIComponent(message);
@@ -1192,10 +1267,8 @@ function checkAndSendWhatsApp(billData) {
 
 // 3. Page load par dono function chalao
 document.addEventListener("DOMContentLoaded", () => {
-  loadPartyMasterForBill().then(() => {
-    setupBrokerAutoCommission();
-    setupCustomerAutoVillage();
-  });
+  if (typeof setupBrokerAutoCommission === "function") setupBrokerAutoCommission();
+  if (typeof setupCustomerAutoVillage === "function") setupCustomerAutoVillage();
 });
 
 // 🚨 STRICT PARTY MASTER VALIDATION (Customer + Broker)
@@ -1300,3 +1373,151 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+// --- 🚀 HELPER FUNCTION: List mein color highlight karne ke liye ---
+function setActiveItem(items, index) {
+  for (let i = 0; i < items.length; i++) {
+    items[i].style.background = "#fff"; // Default color
+    items[i].style.color = "#333";
+  }
+  if (index > -1 && index < items.length) {
+    items[index].style.background = "#e7f3ff"; // Select karne par Nila background
+    items[index].style.color = "#005a9e";
+  }
+}
+
+// ==========================================
+// 1. CUSTOMER AUTOCOMPLETE (With Keyboard Support)
+// ==========================================
+const nameInput = document.querySelector('input[name="customer_name"]');
+const villageInput = document.querySelector('input[name="village"]');
+const suggestionsBox = document.getElementById("autocomplete-container");
+let currentCustFocus = -1; // Keyboard index track karne ke liye
+
+if (nameInput) {
+  nameInput.addEventListener("input", () => {
+    const value = nameInput.value.toLowerCase();
+    suggestionsBox.innerHTML = "";
+    currentCustFocus = -1; // Naya type karne par reset
+
+    if (!value) return;
+
+    const filteredCustomers = uniqueCustomers.filter((customer) => customer.name.toLowerCase().includes(value));
+
+    const suggestionsList = document.createElement("div");
+    suggestionsList.classList.add("autocomplete-items");
+    filteredCustomers.forEach((customer) => {
+      const item = document.createElement("div");
+      item.innerHTML = `<strong>${customer.name}</strong> (${customer.village})`;
+      item.addEventListener("click", () => {
+        nameInput.value = customer.name;
+        villageInput.value = customer.village;
+        suggestionsBox.innerHTML = "";
+      });
+      suggestionsList.appendChild(item);
+    });
+    suggestionsBox.appendChild(suggestionsList);
+  });
+
+  // ⌨️ Customer Keyboard Controls
+  nameInput.addEventListener("keydown", function (e) {
+    const listDiv = suggestionsBox.querySelector(".autocomplete-items");
+    if (!listDiv) return;
+    const items = listDiv.getElementsByTagName("div");
+    if (items.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      currentCustFocus++;
+      if (currentCustFocus >= items.length) currentCustFocus = 0; // Wapas upar
+      setActiveItem(items, currentCustFocus);
+    } else if (e.key === "ArrowUp") {
+      currentCustFocus--;
+      if (currentCustFocus < 0) currentCustFocus = items.length - 1; // Sabse neeche
+      setActiveItem(items, currentCustFocus);
+    } else if (e.key === "Enter") {
+      e.preventDefault(); // Enter dabane par bill form submit na ho jaye!
+      if (currentCustFocus > -1) {
+        items[currentCustFocus].click(); // Jo highlight hai usko click karo
+      } else {
+        items[0].click(); // Agar arrow use nahi kiya toh by default 1st wala select kar lo
+      }
+    }
+  });
+}
+
+// ==========================================
+// 2. BROKER AUTOCOMPLETE (With Keyboard Support)
+// ==========================================
+const brokerInput = document.getElementById("broker_name");
+const brokerSuggestionsBox = document.getElementById("broker-suggestions");
+let currentBrokerFocus = -1;
+
+if (brokerInput && brokerSuggestionsBox) {
+  brokerInput.addEventListener("input", () => {
+    const value = brokerInput.value.toLowerCase();
+    brokerSuggestionsBox.innerHTML = "";
+    currentBrokerFocus = -1;
+
+    if (!value) return;
+
+    const filteredBrokers = uniqueBrokers.filter((broker) => broker.value.toLowerCase().includes(value));
+
+    const suggestionsList = document.createElement("div");
+    suggestionsList.classList.add("autocomplete-items");
+
+    filteredBrokers.forEach((broker) => {
+      const item = document.createElement("div");
+      item.innerHTML = `<strong>${broker.value}</strong> ${broker.address ? `(${broker.address})` : ""}`;
+
+      item.addEventListener("click", () => {
+        brokerInput.value = broker.value;
+        brokerSuggestionsBox.innerHTML = "";
+
+        const commInput = document.querySelector('input[name="broker_commission_per_bag"]');
+        const commToggle = document.getElementById("broker-commission-toggle");
+        const commBox = document.getElementById("broker-commission-input");
+
+        if (commInput && broker.defaultComm > 0) {
+          commInput.value = broker.defaultComm;
+          if (commToggle && !commToggle.checked) {
+            commToggle.checked = true;
+            if (commBox) commBox.style.display = "block";
+          }
+        }
+      });
+      suggestionsList.appendChild(item);
+    });
+    brokerSuggestionsBox.appendChild(suggestionsList);
+  });
+
+  // ⌨️ Broker Keyboard Controls
+  brokerInput.addEventListener("keydown", function (e) {
+    const listDiv = brokerSuggestionsBox.querySelector(".autocomplete-items");
+    if (!listDiv) return;
+    const items = listDiv.getElementsByTagName("div");
+    if (items.length === 0) return;
+
+    if (e.key === "ArrowDown") {
+      currentBrokerFocus++;
+      if (currentBrokerFocus >= items.length) currentBrokerFocus = 0;
+      setActiveItem(items, currentBrokerFocus);
+    } else if (e.key === "ArrowUp") {
+      currentBrokerFocus--;
+      if (currentBrokerFocus < 0) currentBrokerFocus = items.length - 1;
+      setActiveItem(items, currentBrokerFocus);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      if (currentBrokerFocus > -1) {
+        items[currentBrokerFocus].click();
+      } else {
+        items[0].click();
+      }
+    }
+  });
+
+  // Kahin aur click karne par dropdown hide karna
+  document.addEventListener("click", (e) => {
+    if (e.target !== brokerInput && brokerSuggestionsBox) {
+      brokerSuggestionsBox.innerHTML = "";
+    }
+  });
+}

@@ -829,7 +829,9 @@ document.addEventListener("DOMContentLoaded", async () => {
       cssCode =
         baseCSS +
         `#global-loader-ui { background: rgba(255, 255, 255, 0.9); } .brand-text { font-size: 36px; font-weight: 900; font-family: 'Poppins', sans-serif; background: linear-gradient(90deg, #005a9e, #e67e22); -webkit-background-clip: text; -webkit-text-fill-color: transparent; animation: breathe 1s infinite ease-in-out alternate; letter-spacing: 2px; } @keyframes breathe { 0% { transform: scale(0.95); opacity: 0.8; } 100% { transform: scale(1.05); opacity: 1; filter: drop-shadow(0px 5px 10px rgba(230,126,34,0.4)); } }`;
-      htmlCode = `<div class="brand-text">Ganesh Agri</div>`;
+      htmlCode = `<div class="brand-text">${
+        globalSettings && globalSettings.companyName ? globalSettings.companyName : "MandiBook"
+      }</div>`;
     } else if (themeId === 4) {
       cssCode =
         baseCSS +

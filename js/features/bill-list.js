@@ -4,6 +4,10 @@ const itemsPerPageForList = 25;
 
 let billListInitialized = false;
 
+// Newest-first (desc) by default; ascending shows oldest bills first —
+// toggle button in the toolbar flips this and reloads the list.
+let billSortDirection = "desc";
+
 // Phase 3 (item #14): keep a reference to the active onSnapshot unsubscribe
 // function so we can detach it before attaching a new one — previously every
 // call to showBillListView() (e.g. after delete/mark-paid) stacked up a NEW
@@ -33,6 +37,7 @@ function showBillListView() {
     const prevBtn = document.getElementById("prev_page_list_btn");
     const nextBtn = document.getElementById("next_page_list_btn");
     const paidBtn = document.getElementById("mark_paid_btn");
+    const sortBtn = document.getElementById("sort_direction_btn");
     if (searchEl)
       searchEl.addEventListener(
         "input",
@@ -41,6 +46,12 @@ function showBillListView() {
     if (prevBtn) prevBtn.addEventListener("click", goToPrevListPage);
     if (nextBtn) nextBtn.addEventListener("click", goToNextListPage);
     if (paidBtn) paidBtn.addEventListener("click", markSelectedBillsAsPaid);
+    if (sortBtn) sortBtn.addEventListener("click", toggleBillSortDirection);
+  }
+
+  const sortBtnLabel = document.getElementById("sort_direction_btn");
+  if (sortBtnLabel) {
+    sortBtnLabel.textContent = billSortDirection === "desc" ? "⬇️ Newest First" : "⬆️ Oldest First";
   }
 
   // Detach any previously-active listener before attaching a new one
@@ -50,8 +61,8 @@ function showBillListView() {
   }
 
   unsubscribeBillsListener = billsCollection
-    .orderBy("Serial No", "desc")
-    .limit(200) // Phase 3 (item #15): cap the live list to the 200 most recent bills
+    .orderBy("Serial No", billSortDirection)
+    .limit(200) // Phase 3 (item #15): cap the live list to the 200 most recent/oldest bills
     .onSnapshot((snapshot) => {
       const syncStatus = document.getElementById("sync_status");
       if (syncStatus) {
@@ -75,6 +86,11 @@ function showBillListView() {
       filterAndRenderList();
       hideLoading();
     });
+}
+
+function toggleBillSortDirection() {
+  billSortDirection = billSortDirection === "desc" ? "asc" : "desc";
+  showBillListView();
 }
 
 function filterAndRenderList(searchTerm = null) {
@@ -347,7 +363,11 @@ function downloadAsPDF(billsData) {
     startY: 20,
   });
 
-  doc.text("Ganesh Agri Industries - Bill Report", 14, 15);
+  doc.text(
+    "`${globalSettings && globalSettings.companyName ? globalSettings.companyName : 'Company'} - Bill Report",
+    14,
+    15
+  );
   doc.save("GaneshAgri_Bills.pdf");
 }
 // MOVED to core-engine.js — checkFirebaseConnection() is now a shared utility

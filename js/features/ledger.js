@@ -74,14 +74,11 @@ async function fetchUniqueCustomers() {
     let billsSnapshot = { docs: [] };
     let paymentsSnapshot = { docs: [] };
 
-    // 🛡️ Safe Fetching: Alag-alag try-catch taaki koi ek query fail hone par page crash na ho
+    // 🛡️ Safe Fetching: Saari parties bina strict condition ke uthao
     try {
-      partiesSnapshot = await db.collection("parties").where("deleted", "==", false).get();
+      partiesSnapshot = await db.collection("parties").get();
     } catch (e) {
       console.warn("Parties fetch warning:", e);
-      try {
-        partiesSnapshot = await db.collection("parties").get();
-      } catch (err) {}
     }
 
     try {
@@ -98,9 +95,10 @@ async function fetchUniqueCustomers() {
 
     const customerMap = new Map();
 
+    // 🚀 Safe mapping with deleted !== true filter
     partiesSnapshot.docs.forEach((doc) => {
       const pData = doc.data();
-      if (pData.type === "Farmer" || pData.type === "Vepari") {
+      if (pData.deleted !== true && (pData.type === "Farmer" || pData.type === "Vepari")) {
         const name = (pData.name || "").trim();
         if (name) {
           const village = (pData.address || "N/A").trim();
@@ -595,6 +593,16 @@ async function savePayment() {
             amountDue: newAmountDue,
             paymentStatus: newStatus,
           });
+          const billSerial = billData["Serial No"] || billData.serialNo;
+          if (billSerial) {
+            const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
+            matchingOrders.forEach((ordDoc) => {
+              batch.update(ordDoc.ref, {
+                paymentStatus: newStatus === "Paid" ? "Paid" : "Partial",
+                updatedAt: Date.now(),
+              });
+            });
+          }
           remainingCredit -= paymentForThisBill;
         }
       }
@@ -699,7 +707,7 @@ function printLedger() {
       <body>
         <div class="header-container">
           <div class="company-info">
-            <h1>Ganesh Agri Industries</h1>
+           <h1>${globalSettings && globalSettings.companyName ? globalSettings.companyName : "Company Name"}</h1>
             <p>Sortex Cleaned Wheat, Commission Agents & Logistics</p>
           </div>
           <div class="doc-title">
@@ -753,7 +761,7 @@ function printLedger() {
             <p>Generated on: ${new Date().toLocaleString("en-IN")}</p>
           </div>
           <div class="sign-area">
-            <p>For, Ganesh Agri Industries</p>
+            <p>For, ${globalSettings && globalSettings.companyName ? globalSettings.companyName : "Company Name"}</p>
             <br><br>
             <p>Authorized Signatory</p>
           </div>
@@ -853,3 +861,32 @@ window.deletePaymentEntry = async function (paymentId) {
     Swal.fire("Error", "Could not delete payment.", "error");
   }
 };
+// Payment delete hone ke baad order ka status wapas update karne ke liye:
+async function syncOrderStatusAfterPaymentDelete(billId) {
+  const billDoc = await db.collection("bills").doc(billId).get();
+  if (!billDoc.exists) return;
+
+  const billData = billDoc.data();
+  const billSerial = billData["Serial No"] || billData.serialNo;
+  const amountDue = billData["amountDue"] || 0;
+  const finalTotal = billData["Final Total"] || 0;
+
+  // Naya status decide karo
+  let newStatus = "Unpaid";
+  if (amountDue <= 0) {
+    newStatus = "Paid";
+  } else if (amountDue < finalTotal) {
+    newStatus = "Partial";
+  }
+
+  // Order Book mein update kar do
+  if (billSerial) {
+    const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
+    matchingOrders.forEach(async (ordDoc) => {
+      await ordDoc.ref.update({
+        paymentStatus: newStatus,
+        updatedAt: Date.now(),
+      });
+    });
+  }
+}
