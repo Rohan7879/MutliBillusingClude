@@ -383,8 +383,8 @@ input:checked + .slider:before {
 }
 
 /* ══════════════════════════════
-      BUTTONS — COLORFUL & DISTINCT
-   ══════════════════════════════ */
+         BUTTONS — COLORFUL & DISTINCT
+      ══════════════════════════════ */
 
 /* Base button reset */
 button,
@@ -949,6 +949,12 @@ button[type="submit"]:hover {
   body {
     padding: 8px;
   }
+  .top-navbar {
+    /* Body ka padding chhoti screen pe 20px/16px se 8px ho jata hai —
+          navbar ka negative margin bhi isi ke hisaab se match karna zaroori
+          hai, warna background edge tak sahi se nahi pahunchta. */
+    margin: -8px -8px 24px;
+  }
   .container {
     padding: 18px 14px;
     border-radius: var(--radius-md);
@@ -978,8 +984,8 @@ button[type="submit"]:hover {
 }
 
 /* ══════════════════════════════
-      PRINT STYLES
-   ══════════════════════════════ */
+         PRINT STYLES
+      ══════════════════════════════ */
 @media print {
   @page {
     size: A5;
@@ -1104,22 +1110,22 @@ button[type="submit"]:hover {
 }
 
 /* ── SweetAlert2 z-index fix ──
-      Ensures SweetAlert popups always appear above navbar (z-index:1000),
-      template modals (z-index:99999), and all other overlays. */
+         Ensures SweetAlert popups always appear above navbar (z-index:1000),
+         template modals (z-index:99999), and all other overlays. */
 .swal2-container {
   z-index: 999999 !important;
 }
 
 /* ============================================================
-      CENTRALIZED NAVBAR — single source of truth for every page.
-      Previously this was copy-pasted inline into ~10 different HTML
-      files, which meant a fix (like the flex-wrap overflow bug) had
-      to be applied file-by-file and was easy to miss on new pages.
-      Now every page just links to main.css and gets this for free.
-      (themes.css still overrides the gradient colors via --nav-from /
-      --nav-to with !important when the user picks a theme in Settings —
-      that keeps working exactly as before.)
-      ============================================================ */
+         CENTRALIZED NAVBAR — single source of truth for every page.
+         Previously this was copy-pasted inline into ~10 different HTML
+         files, which meant a fix (like the flex-wrap overflow bug) had
+         to be applied file-by-file and was easy to miss on new pages.
+         Now every page just links to main.css and gets this for free.
+         (themes.css still overrides the gradient colors via --nav-from /
+         --nav-to with !important when the user picks a theme in Settings —
+         that keeps working exactly as before.)
+         ============================================================ */
 .top-navbar {
   position: sticky;
   top: 0;
@@ -1129,11 +1135,8 @@ button[type="submit"]:hover {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 62px;
-  height: auto;
   flex-wrap: wrap;
-  row-gap: 8px;
-  padding: 0 24px;
+  padding: 10px 24px;
   margin: -20px -16px 24px;
 }
 .navbar-brand {
@@ -1153,12 +1156,22 @@ button[type="submit"]:hover {
   font-weight: 800;
   letter-spacing: 0.2px;
 }
+.navbar-toggle {
+  display: none;
+  background: rgba(255, 255, 255, 0.12);
+  border: 1px solid rgba(255, 255, 255, 0.25);
+  border-radius: 8px;
+  color: #fff;
+  font-size: 20px;
+  line-height: 1;
+  padding: 6px 12px;
+  cursor: pointer;
+}
 .navbar-links {
   display: flex;
   gap: 4px;
   align-items: center;
   flex-wrap: wrap;
-  row-gap: 6px;
 }
 .nav-link {
   display: flex;
@@ -1213,17 +1226,36 @@ button[type="submit"]:hover {
 .cdot.err {
   background: #dc3545;
 }
-@media (max-width: 640px) {
+
+/* ── Chhoti/medium screen: hamburger menu ──
+      9-10 tabs kabhi bhi ek line mein comfortably fit nahi honge, is liye
+      inhe wrap karne ke bajaye ☰ button ke peeche chhupa dete hain — click
+      karne par poori chaudai ka dropdown khulta hai (background bhi navbar
+      jaisa hi hota hai, koi white gap nahi rehta). */
+@media (max-width: 900px) {
   .top-navbar {
-    padding: 0 12px;
+    padding: 10px 16px;
   }
-  .navbar-brand span {
-    font-size: 0.95em;
+  .navbar-toggle {
+    display: block;
   }
-  .navbar-links .nav-link span:not(:first-child) {
+  .navbar-links {
     display: none;
+    width: 100%;
+    flex-direction: column;
+    align-items: stretch;
+    gap: 2px;
+    margin-top: 6px;
+    padding-top: 10px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+  }
+  .navbar-links.open {
+    display: flex;
   }
   .nav-link {
-    padding: 7px 9px;
+    padding: 11px 14px;
+  }
+  .nav-conn {
+    justify-content: center;
   }
 }

@@ -543,29 +543,35 @@ function renderNavbar() {
        </button>`
       : "";
 
-  // 🔥 UNIVERSAL CSS + HTML (Ek hi jagah se har page par jayega)
+  // Navbar CSS now lives ONLY in css/main.css — this used to ALSO inject
+  // its own <style> block here with old values (fixed height, nowrap),
+  // and because it's added to the DOM via JS (after main.css already
+  // loaded), it was winning the cascade and silently undoing every fix
+  // made in main.css. Removed — single source of truth now.
   root.innerHTML = `
-    <style>
-      .top-navbar { position: sticky; top: 0; z-index: 1000; background: linear-gradient(135deg, #003d6e, #005a9e); box-shadow: 0 4px 20px rgba(0, 62, 110, 0.35); display: flex; align-items: center; justify-content: space-between; height: 62px; padding: 0 24px; margin: -20px -16px 24px; }
-      .navbar-brand { display: flex; align-items: center; gap: 10px; text-decoration: none; }
-      .navbar-brand img { height: 38px; border-radius: 8px; border: 2px solid rgba(255, 255, 255, 0.3); }
-      .navbar-brand span { color: #fff; font-size: 1.1em; font-weight: 800; letter-spacing: 0.2px; }
-      .navbar-links { display: flex; gap: 4px; align-items: center; flex-wrap: nowrap; }
-      .nav-link { display: flex; align-items: center; gap: 6px; padding: 7px 13px; border-radius: 8px; color: rgba(255, 255, 255, 0.85); font-size: 13px; font-weight: 600; text-decoration: none; border: none; background: transparent; cursor: pointer; transition: all 0.2s; font-family: inherit; white-space: nowrap; }
-      .nav-link:hover, .nav-link.active { background: rgba(255, 255, 255, 0.18); color: #fff; }
-      .nav-conn { display: flex; align-items: center; gap: 7px; padding: 6px 13px; border-radius: 20px; border: 1px solid rgba(255, 255, 255, 0.25); background: rgba(255, 255, 255, 0.1); color: #fff; font-size: 12px; font-weight: 700; cursor: pointer; transition: all 0.2s; font-family: inherit; }
-      .nav-conn:hover { background: rgba(255, 255, 255, 0.2); }
-      .cdot { width: 8px; height: 8px; border-radius: 50%; background: #ffc107; transition: background 0.3s; }
-      .cdot.ok { background: #28a745; }
-      .cdot.err { background: #dc3545; }
-    </style>
     <nav class="top-navbar">
       <a class="navbar-brand" href="index.html">
         <img src="assets/logo.jpg" alt="Logo"/>
         <span>MandiBook</span>
       </a>
-      <div class="navbar-links">${linksHtml}${connHtml}</div>
+      <button class="navbar-toggle" id="navbar-toggle" aria-label="Menu" type="button">☰</button>
+      <div class="navbar-links" id="navbar-links">${linksHtml}${connHtml}</div>
     </nav>`;
+
+  // Hamburger toggle — chhoti screen par links ek dropdown ke peeche chhup
+  // jaate hain, ☰ dabane par khulte hain (bade screen par ye button khud
+  // hidden rehta hai, CSS se — dekho main.css ka .navbar-toggle rule).
+  const toggleBtn = document.getElementById("navbar-toggle");
+  const linksPanel = document.getElementById("navbar-links");
+  if (toggleBtn && linksPanel) {
+    toggleBtn.addEventListener("click", () => {
+      linksPanel.classList.toggle("open");
+    });
+    // Kisi link pe click karte hi menu apne aap band ho jaye
+    linksPanel.querySelectorAll("a.nav-link").forEach((a) => {
+      a.addEventListener("click", () => linksPanel.classList.remove("open"));
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════
