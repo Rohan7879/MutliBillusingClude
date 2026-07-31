@@ -641,9 +641,11 @@ function printLedger() {
     const isOpening = row.Particulars.includes("Opening Balance");
     tableRowsHtml += `
         <tr class="${isOpening ? "opening-balance-row" : ""}">
-          <td>${row.Date}</td><td>${row.Particulars}</td><td>${row.Debit}</td><td>${row.Credit}</td><td>${
-      row.Balance
-    }</td>
+          <td>${row.Date}</td>
+          <td>${row.Particulars}</td>
+          <td class="text-right">${row.Debit}</td>
+          <td class="text-right">${row.Credit}</td>
+          <td class="text-right">${row.Balance}</td>
         </tr>`;
   });
 
@@ -653,36 +655,108 @@ function printLedger() {
   const openingBalance = ledgerAsTableData.length > 0 ? ledgerAsTableData[0].Balance : "₹0";
 
   const printHtml = `
+      <!DOCTYPE html>
       <html>
       <head>
         <title>${currentCustomer.name} - Statement</title>
-        <link rel="stylesheet" href="print-ledger.css">
-        <style> body { margin: 0; } </style>
+        <style>
+          @page { size: A4; margin: 12mm 15mm; }
+          body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; color: #2d3748; margin: 0; padding: 0; font-size: 10pt; line-height: 1.4; background: #fff; }
+          
+          /* Company Header */
+          .header-container { display: flex; justify-content: space-between; border-bottom: 2.5px solid #1a365d; padding-bottom: 12px; margin-bottom: 15px; }
+          .company-info h1 { font-size: 18pt; font-weight: 800; color: #1a365d; margin: 0; text-transform: uppercase; letter-spacing: 0.5px; }
+          .company-info p { font-size: 9pt; color: #4a5568; margin: 3px 0 0 0; }
+          .doc-title { text-align: right; }
+          .doc-title h2 { font-size: 13pt; margin: 0; color: #2d3748; text-transform: uppercase; letter-spacing: 1px; font-weight: 700; }
+          .doc-title p { font-size: 8.5pt; color: #718096; margin: 2px 0 0 0; }
+
+          /* Customer & Meta Box */
+          .meta-box { background: #f8fafc; border: 1px solid #cbd5e0; border-radius: 6px; padding: 10px 14px; margin-bottom: 15px; display: flex; justify-content: space-between; }
+          .meta-left h3 { margin: 0 0 3px 0; font-size: 11pt; color: #1a202c; }
+          .meta-left p { margin: 1px 0; font-size: 9.5pt; color: #4a5568; }
+          .meta-right { text-align: right; font-size: 9pt; color: #4a5568; }
+
+          /* Summary Grid */
+          .summary-grid { display: flex; gap: 10px; margin-bottom: 15px; }
+          .summary-card { flex: 1; background: #fff; border: 1px solid #cbd5e0; border-radius: 5px; padding: 8px 10px; text-align: center; }
+          .summary-card .label { font-size: 7.5pt; color: #718096; text-transform: uppercase; font-weight: bold; letter-spacing: 0.5px; }
+          .summary-card .value { font-size: 10.5pt; color: #1a202c; font-weight: bold; margin-top: 2px; }
+
+          /* Table Styling */
+          table { width: 100%; border-collapse: collapse; margin-bottom: 20px; font-size: 9.5pt; }
+          th { background-color: #1a365d; color: #ffffff; text-align: left; padding: 7px 10px; font-weight: 600; text-transform: uppercase; font-size: 8pt; letter-spacing: 0.5px; }
+          th.text-right, td.text-right { text-align: right; }
+          td { padding: 7px 10px; border-bottom: 1px solid #e2e8f0; color: #2d3748; }
+          tr:nth-child(even) { background-color: #f8fafc; }
+          .opening-balance-row { background-color: #edf2f7; font-weight: bold; }
+
+          /* Footer & Signature */
+          .footer { margin-top: 25px; display: flex; justify-content: space-between; align-items: flex-end; font-size: 8.5pt; color: #718096; border-top: 1px solid #e2e8f0; padding-top: 10px; }
+          .sign-area { text-align: right; font-weight: bold; color: #2d3748; margin-top: 30px; font-size: 9pt; }
+        </style>
       </head>
       <body>
-        <div class="statement-info">
-          <div class="customer-info">
-            <h3>Account Statement</h3>
-            <p><strong>${currentCustomer.name}</strong><br>${currentCustomer.village}</p>
+        <div class="header-container">
+          <div class="company-info">
+            <h1>Ganesh Agri Industries</h1>
+            <p>Sortex Cleaned Wheat, Commission Agents & Logistics</p>
           </div>
-          <div class="statement-summary">
-              <div class="summary-line"><strong>Statement Period:</strong> ${dateRange}</div>
-              <div class="summary-line"><strong>Opening Balance:</strong> ${openingBalance}</div>
-              <div class="summary-line"><strong>Total Debits:</strong> ${totalDebit}</div>
-              <div class="summary-line"><strong>Total Credits:</strong> ${totalCredit}</div>
-              <div class="summary-line closing-balance"><strong>Closing Balance:</strong> ${closingBalance}</div>
+          <div class="doc-title">
+            <h2>Account Statement</h2>
+            <p>Date: ${new Date().toLocaleDateString("en-IN")}</p>
           </div>
         </div>
-        <table class="print-table">
+
+        <div class="meta-box">
+          <div class="meta-left">
+            <h3>Account Holder: ${currentCustomer.name}</h3>
+            <p>Village / Location: ${currentCustomer.village || "N/A"}</p>
+          </div>
+          <div class="meta-right">
+            <p><strong>Statement Period:</strong> ${dateRange}</p>
+            <p><strong>Opening Balance:</strong> ${openingBalance}</p>
+          </div>
+        </div>
+
+        <div class="summary-grid">
+          <div class="summary-card">
+            <div class="label">Total Debit (उधार)</div>
+            <div class="value" style="color: #c53030;">${totalDebit}</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">Total Credit (जमा)</div>
+            <div class="value" style="color: #2f855a;">${totalCredit}</div>
+          </div>
+          <div class="summary-card">
+            <div class="label">Closing Balance (बाकी)</div>
+            <div class="value" style="color: #2b6cb0;">${closingBalance}</div>
+          </div>
+        </div>
+
+        <table>
           <thead>
             <tr>
-              <th>Date</th><th>Particulars</th><th>Debit</th><th>Credit</th><th>Balance</th>
+              <th style="width: 15%;">Date</th>
+              <th style="width: 43%;">Particulars (विवरण)</th>
+              <th class="text-right" style="width: 14%;">Debit (उधार)</th>
+              <th class="text-right" style="width: 14%;">Credit (जमा)</th>
+              <th class="text-right" style="width: 14%;">Balance (बाकी)</th>
             </tr>
           </thead>
           <tbody>${tableRowsHtml}</tbody>
         </table>
-        <div class="print-footer">
-          Generated on: ${new Date().toLocaleString("en-IN")} | This is a computer-generated statement.
+
+        <div class="footer">
+          <div>
+            <p>This is a computer-generated official account statement.</p>
+            <p>Generated on: ${new Date().toLocaleString("en-IN")}</p>
+          </div>
+          <div class="sign-area">
+            <p>For, Ganesh Agri Industries</p>
+            <br><br>
+            <p>Authorized Signatory</p>
+          </div>
         </div>
       </body>
       </html>
