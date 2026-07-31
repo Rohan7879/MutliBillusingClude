@@ -39,6 +39,32 @@
       .meta-value {
         color: #000000;
       }
+      /* Screen par Final Total ka text white karne ke liye */
+      .final-total-box,
+      .final-total-box .detail-label,
+      .final-total-box .detail-value,
+      #display_final_total {
+        color: #ffffff !important;
+      }
+
+      /* Print ya PDF mode mein text ko wapas black/normal rakhne ke liye */
+      @media print {
+        .final-total-box,
+        .final-total-box .detail-label,
+        .final-total-box .detail-value,
+        #display_final_total {
+          color: #000000 !important;
+        }
+      }
+      /* Amount in words text ko bada aur bold karne ke liye */
+      #amount_in_words,
+      .amount-in-words,
+      .container div[style*="Amount in words"] {
+        font-size: 13pt !important;
+        font-weight: bold !important;
+        color: #000000 !important;
+        margin-top: 10px !important;
+      }
     </style>
   </head>
   <body>
@@ -50,7 +76,6 @@
 
       <div class="bill-meta">
         <div class="meta-item">
-          <!-- <span class="meta-label bill-label">Bill No:</span> -->
           <span class="meta-value bill-no" id="display_serial_no"></span>
         </div>
         <div class="meta-item">
@@ -65,8 +90,6 @@
           <span class="detail-label-enter" style="margin-left: 20px">ગાડી નં :</span>
           <span class="detail-value-line" id="display_vehicle_no"></span>
         </div>
-        <!-- </div> -->
-        <!-- <div class="print-only-details"> -->
         <div class="detail-line">
           <span class="detail-label-enter">ગામ :</span>
           <span class="detail-value-line" id="display_village"></span>
@@ -164,6 +187,20 @@
           </tr>
         </tbody>
       </table>
+      <div
+        id="bill_remarks_box"
+        style="
+          display: none;
+          margin-top: 14px;
+          padding: 10px 14px;
+          background: #fffbf0;
+          border: 1.5px dashed #ffe08a;
+          border-radius: 8px;
+          font-size: 11pt;
+          color: #333;
+          page-break-inside: avoid;
+        "
+      ></div>
 
       <h3
         id="display_supply_type"

@@ -64,6 +64,22 @@
         margin-top: 25px;
         margin-bottom: 25px;
 }
+@media print {
+  #bill_remarks_box {
+    display: block !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+}
+/* Amount in words text ko bada aur bold karne ke liye */
+#amount_in_words, 
+.amount-in-words, 
+.container div[style*="Amount in words"] {
+  font-size: 13pt !important;
+  font-weight: bold !important;
+  color: #000000 !important;
+  margin-top: 10px !important;
+}
     </style>
   </head>
   <body>
@@ -204,6 +220,8 @@
           </tr>
         </tbody>
       </table>
+
+      <div id="bill_remarks_box" style="display: none; margin-top: 14px; padding: 10px 14px; background: #fffbf0; border: 1.5px dashed #ffe08a; border-radius: 8px; font-size: 11pt; color: #333; page-break-inside: avoid;"></div>
 
  <h3 id="display_supply_type" style="text-align: center;font-size: 2.5em;font-weight: bolder; color: #000000; margin: 20px 0 0 0 ; "></h3>
 

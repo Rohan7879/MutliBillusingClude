@@ -538,40 +538,19 @@ function renderCompanyHeader() {
 }
 
 function renderRemarks(data) {
-  // Screen version
-  let box = document.getElementById("bill_remarks_box");
-  if (!data["Remarks"] || data["Remarks"].trim() === "") {
-    if (box) box.style.display = "none";
-    const printBox = document.getElementById("bill_remarks_print");
-    if (printBox) printBox.remove();
-    return;
-  }
+  const box = document.getElementById("bill_remarks_box");
+  if (!box) return; // Agar HTML mein box nahi mila toh yahin ruk jao
 
-  // Screen display
-  if (!box) {
-    box = document.createElement("div");
-    box.id = "bill_remarks_box";
-    box.style.cssText =
-      "margin-top:14px;padding:10px 14px;background:#fffbf0;border:1.5px dashed #ffe08a;border-radius:8px;font-size:13px;color:#5a4a00;";
-    const vakalTable = document.querySelector(".final-bill-table");
-    if (vakalTable && vakalTable.parentNode) {
-      vakalTable.parentNode.insertBefore(box, vakalTable.nextSibling);
-    }
-  }
-  box.style.display = "block";
-  box.innerHTML = `<strong>📝 Remarks:</strong> ${data["Remarks"]}`;
+  const remarks = data && data["Remarks"] ? data["Remarks"].trim() : "";
 
-  // Print-only version (shown only in @media print via CSS)
-  let printBox = document.getElementById("bill_remarks_print");
-  if (!printBox) {
-    printBox = document.createElement("div");
-    printBox.id = "bill_remarks_print";
-    const totalsGrid = document.querySelector(".totals-grid");
-    if (totalsGrid) totalsGrid.insertAdjacentElement("beforebegin", printBox);
+  if (!remarks) {
+    box.style.display = "none";
+    box.innerHTML = "";
+  } else {
+    box.style.display = "block";
+    box.innerHTML = `<strong>📝 Remarks:</strong> ${remarks}`;
   }
-  printBox.innerHTML = `<strong>📝 Remarks:</strong> ${data["Remarks"]}`;
 }
-
 function renderExpenses(data) {
   const expensesContainer = document.getElementById("expenses_container");
   if (!expensesContainer) return;
