@@ -45,6 +45,29 @@ async function fetchAllBills() {
         return { id: doc.id, ...data };
       });
 
+    // 📅 Dashboard Client-Side Date Sorting (Newest First)
+    allBillsData.sort((a, b) => {
+      function getTimestamp(dateVal) {
+        if (!dateVal) return 0;
+        if (dateVal.toDate && typeof dateVal.toDate === "function") {
+          return dateVal.toDate().getTime();
+        }
+        if (typeof dateVal === "string" && dateVal.includes("/")) {
+          const parts = dateVal.split("/");
+          if (parts.length === 3) {
+            return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+          }
+        }
+        return new Date(dateVal).getTime() || 0;
+      }
+
+      // Yahan a.data() ki zaroorat nahi hai kyunki upar .map() lag chuka hai
+      const timeA = getTimestamp(a.date || a.billDate || a.createdAt);
+      const timeB = getTimestamp(b.date || b.billDate || b.createdAt);
+
+      return timeB - timeA; // 🚀 Yahan se Latest date sabse upar set ho jayegi
+    });
+
     // --- NEW: Filter for the current month immediately after fetching ---
     const now = new Date();
     const currentYear = now.getFullYear();

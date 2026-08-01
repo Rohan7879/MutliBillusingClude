@@ -282,9 +282,17 @@ function initializeIndexPage() {
   const editId = urlParams.get("editId");
   if (editId) {
     showLoading("Loading bill for editing...");
+    // BUG FIX: iske bina, offline-cache wala purana/pending data mil sakta
+    // tha, jiska "lastUpdatedAt" save ke time transaction se fresh-padhe
+    // gaye server data se match nahi karta — aur system galti se "kisi aur
+    // ne bill change kar diya" (Conflict) ya "Bill not found" jaisa error
+    // de deta tha, jabki asal mein kuch bhi galat nahi hua tha. Ab pehle
+    // seedha server se fresh padhte hain; agar genuinely offline ho tabhi
+    // cache wale purane data par fallback karte hain.
     billsCollection
       .doc(editId)
-      .get()
+      .get({ source: "server" })
+      .catch(() => billsCollection.doc(editId).get())
       .then((doc) => {
         if (doc.exists) {
           populateFormForEdit({ ...doc.data(), id: doc.id });
@@ -319,19 +327,98 @@ function initializeIndexPage() {
 // while this form was open (prevents silently overwriting their edit).
 let editModeLastUpdatedAt = null;
 
+window.cancelEditMode = function () {
+  console.log("Cancel Edit trigger hua! 🚀"); // Debugging ke liye (console mein check karna)
+
+  // 1. Form ko saaf (reset) karo aur Edit ID hatao
+  const form = document.getElementById("estimateForm");
+  if (form) {
+    form.reset();
+    if (form.dataset.editId) {
+      delete form.dataset.editId;
+    }
+  }
+
+  // 2. Orange wala banner screen se hatao
+  const banner = document.getElementById("edit-mode-banner");
+  if (banner) {
+    banner.remove();
+  }
+
+  // 3. Form ke chaaro taraf se orange border (class) hatao
+  const formCard = document.getElementById("bill_creation_form");
+  if (formCard) {
+    formCard.classList.remove("edit-mode-active");
+  }
+
+  // 4. Edit mode ka time reset karo (taaki naya bill ban sake)
+  if (typeof editModeLastUpdatedAt !== "undefined") {
+    editModeLastUpdatedAt = null;
+  }
+
+  // 🔓 5. Cancel karne par Product/Template dropdown ko wapas khol do
+  const templateDropdown = document.querySelector('#product, #productTemplate, #productId, select[name="product"]');
+  if (templateDropdown) {
+    templateDropdown.disabled = false;
+    templateDropdown.title = "";
+  }
+};
+
 function populateFormForEdit(data) {
   const form = document.getElementById("estimateForm");
   form.dataset.editId = data.id;
   editModeLastUpdatedAt = data.lastUpdatedAt || null;
   updateSeriesPreview(); // now that editId is set, this will correctly clear itself
 
-  // Safer way to set values, provides a fallback for missing data
-  document.querySelector('input[name="customer_name"]').value = (data["Customer Name"] || "").toUpperCase();
-  document.querySelector('input[name="vehicle_no"]').value = (data["Vehicle No"] || "").toUpperCase();
-  document.querySelector('input[name="village"]').value = (data["Village"] || "").toUpperCase();
-  document.querySelector('input[name="broker"]').value = (data["Broker"] || "").toUpperCase();
-  document.querySelector('input[name="weighbridge_weight"]').value = data["Weighbridge Weight"] || 0;
-  document.querySelector('input[name="truck_freight"]').value = data["Truck Freight"] || 0;
+  // 🛡️ Safer way to set values: Agar koi field HTML mein missing ho toh crash nahi hoga
+  // 🛡️ Super Safe Way: ID aur Name dono dhoondhega, aur database ki alag-alag spelling bhi check karega
+  const setSafeValue = (selector, val) => {
+    const el = document.querySelector(selector);
+    if (el) el.value = val;
+  };
+
+  // Customer Name
+  let custName = data["Customer Name"] || data.customer_name || data.customerName || "";
+  setSafeValue('#customer_name, [name="customer_name"]', custName.toUpperCase());
+
+  // Vehicle No (Gadi Number)
+  let vehicleNo = data["Vehicle No"] || data.vehicle_no || data.vehicleNo || "";
+  setSafeValue('#vehicle_no, [name="vehicle_no"]', vehicleNo.toUpperCase());
+
+  // Village (Gaam)
+  let village = data["Village"] || data.village || "";
+  setSafeValue('#village, [name="village"]', village.toUpperCase());
+
+  // Broker (Dalal) - Dropdown ke liye Special Code (Case In-sensitive match)
+  let broker = data["Broker"] || data.broker || "";
+  let brokerEl = document.querySelector('#broker, [name="broker"]');
+
+  if (brokerEl && broker) {
+    // Pehle direct set karne ki koshish karo
+    brokerEl.value = broker;
+
+    // Agar direct set nahi hua (spelling/case mismatch), toh ek-ek option check karo
+    if (brokerEl.selectedIndex <= 0) {
+      // 0 matlab 'Select karein...'
+      for (let i = 0; i < brokerEl.options.length; i++) {
+        let optionText = brokerEl.options[i].text.toLowerCase();
+        let optionValue = brokerEl.options[i].value.toLowerCase();
+        let dbBroker = broker.toLowerCase();
+
+        // Agar Text ya Value match kar jaye toh usko select kar do
+        if (optionText === dbBroker || optionValue === dbBroker) {
+          brokerEl.selectedIndex = i;
+          break;
+        }
+      }
+    }
+  }
+  // Weights & Freight
+  setSafeValue(
+    '#weighbridge_weight, [name="weighbridge_weight"]',
+    data["Weighbridge Weight"] || data.weighbridge_weight || 0
+  );
+  setSafeValue('#truck_freight, [name="truck_freight"]', data["Truck Freight"] || data.truck_freight || 0);
 
   // Phase 1: Pre-fill date (convert DD/MM/YYYY -> YYYY-MM-DD for the date input)
   const dateInput = document.getElementById("bill_date_input");
@@ -377,7 +464,6 @@ function populateFormForEdit(data) {
 
   // ── Phase 2: Edit mode visual feedback ──
   // Scroll the form into view and highlight it with an orange border
-  // so the user clearly sees they are editing an existing bill.
   const formCard = document.getElementById("bill_creation_form");
   if (formCard) {
     formCard.scrollIntoView({ behavior: "smooth", block: "start" });
@@ -394,26 +480,21 @@ function populateFormForEdit(data) {
   }
   banner.innerHTML = `✏️ Editing Bill <strong>#${data["Serial No"] || ""}</strong> —
     <button type="button" onclick="cancelEditMode()" class="edit-cancel-btn">Cancel Edit</button>`;
+
+  // 🔒 Edit mode mein Product/Template dropdown ko disable kar do taaki koi change na kar sake
+  const templateDropdown = document.querySelector('#product, #productTemplate, #productId, select[name="product"]');
+  if (templateDropdown) {
+    templateDropdown.disabled = true;
+    templateDropdown.title = "Edit mode mein product template change nahi kar sakte";
+  }
+
+  // --- Yeh sabse last mein daalna hai, function ke khatam hone se pehle ---
+  const loader = document.getElementById("global-loader-ui");
+  if (loader) {
+    loader.style.display = "none";
+  }
 }
 
-/**
- * Cancels edit mode and resets the form back to "New Bill" state.
- */
-function cancelEditMode() {
-  const form = document.getElementById("estimateForm");
-  delete form.dataset.editId;
-  editModeLastUpdatedAt = null;
-  form.reset();
-
-  const formCard = document.getElementById("bill_creation_form");
-  if (formCard) formCard.classList.remove("edit-mode-active");
-
-  const banner = document.getElementById("edit-mode-banner");
-  if (banner) banner.remove();
-
-  document.querySelector('button[type="submit"]').textContent = "🧾 Generate Bill";
-  initializeIndexPage(); // re-apply default date, reset expense rows, etc.
-}
 function updateTotalBags() {
   let total = 0;
   const bagInputs = document.querySelectorAll('#vakal_section input[name$="_katta"]');
@@ -656,8 +737,8 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
   data["Customer Name"] = formData.get("customer_name");
   data["Vehicle No"] = formData.get("vehicle_no");
   data["Village"] = formData.get("village");
-  data["Broker"] = formData.get("broker");
-  const brokerName = formData.get("broker") ? formData.get("broker").trim() : "";
+  data["Broker"] = formData.get("broker_name");
+  const brokerName = formData.get("broker_name") ? formData.get("broker_name").trim() : "";
   data["brokerId"] = brokerName ? brokerName.toUpperCase().replace(/\s+/g, "_") : "";
   data["Net Weight"] = net_vajan;
   data["Total Amount"] = total;
@@ -1145,7 +1226,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   initializeIndexPage(); // 2. Then, set up the rest of the page
 });
 document.addEventListener("DOMContentLoaded", () => {
-  const bInput = document.getElementById("broker_input_field");
+  const bInput = document.getElementById("broker_name");
   const bBox = document.getElementById("broker-suggestions");
 
   if (bInput && bBox) {
@@ -1213,12 +1294,21 @@ document.addEventListener("DOMContentLoaded", () => {
 // Yeh function Broker ka naam aur Commission dono set karega
 window.applyBrokerDetails = function (brokerName, commission) {
   // 1. Naam set karo
-  document.getElementById("broker_input_field").value = brokerName;
+  // BUG FIX: id "broker_input_field" kabhi bana hi nahi — asal input ka id
+  // "broker_name" hai. Galat id se .value set karne ki koshish turant crash
+  // (TypeError) deti thi, isliye niche wala commission auto-fill code kabhi
+  // chal hi nahi paata tha.
+  document.getElementById("broker_name").value = brokerName;
   document.getElementById("broker-suggestions").style.display = "none";
 
   // 2. Commission auto-fill karo (Agar form mein commission input hai)
-  const commInput =
-    document.querySelector('input[name="broker_commission"]') || document.getElementById("broker-commission-input");
+  // BUG FIX: pehle yahan galat name ("broker_commission") aur galat id
+  // ("broker-commission-input" — jo asal mein wrapper <div> ka id hai, us
+  // div ke andar wale <input> ka nahi) dhoondha ja raha tha, isliye rate
+  // field kabhi bharta hi nahi tha — checkbox ON ho jaata tha lekin rate 0
+  // reh jaata, isliye commission kabhi kata hi nahi. Asal field ka naam
+  // "broker_commission_per_bag" hai (bill-create.html se confirm kiya).
+  const commInput = document.querySelector('input[name="broker_commission_per_bag"]');
 
   if (commInput && commission > 0) {
     commInput.value = commission;
@@ -1227,6 +1317,11 @@ window.applyBrokerDetails = function (brokerName, commission) {
     const toggle = document.getElementById("broker-commission-toggle");
     if (toggle && !toggle.checked) {
       toggle.checked = true;
+      // JS se .checked set karne par "change" event khud nahi chalta, isliye
+      // commission-box wrapper (jo us event par show/hide hota hai) visually
+      // chhupa hi reh jaata tha — seedha yahin dikha dete hain.
+      const wrapper = document.getElementById("broker-commission-input");
+      if (wrapper) wrapper.style.display = "block";
       // Agar aapka koi calculation function total_amount wgera calculate karta hai, toh use call kar do
       if (typeof calculateTotals === "function") calculateTotals();
     }

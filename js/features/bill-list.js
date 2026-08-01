@@ -51,7 +51,7 @@ function showBillListView() {
 
   const sortBtnLabel = document.getElementById("sort_direction_btn");
   if (sortBtnLabel) {
-    sortBtnLabel.textContent = billSortDirection === "desc" ? "⬇️ Newest First" : "⬆️ Oldest First";
+    sortBtnLabel.textContent = billSortDirection === "desc" ? "⬆️ Oldest First" : "⬇️ Newest First";
   }
 
   // Detach any previously-active listener before attaching a new one
@@ -61,8 +61,7 @@ function showBillListView() {
   }
 
   unsubscribeBillsListener = billsCollection
-    .orderBy("Serial No", billSortDirection)
-    .limit(200) // Phase 3 (item #15): cap the live list to the 200 most recent/oldest bills
+    .limit(200) // 👈 Sirf limit rakho, orderBy hata do taaki saare bills bina error ke fetch ho jayein
     .onSnapshot((snapshot) => {
       const syncStatus = document.getElementById("sync_status");
       if (syncStatus) {
@@ -77,22 +76,45 @@ function showBillListView() {
         }
       }
 
-      // Exclude soft-deleted bills (backup.js sets deleted:true) — filtered
-      // client-side rather than via a Firestore where() clause so bills
-      // saved before this field existed (deleted === undefined) still show.
       allBillsForList = snapshot.docs.filter((d) => d.data().deleted !== true);
-      currentPageForList = 1;
+      // 📅 Sorting with button direction support (Newest First / Oldest First)
+      allBillsForList.sort((a, b) => {
+        const dataA = a.data();
+        const dataB = b.data();
 
+        function getTimestamp(dateVal) {
+          if (!dateVal) return 0;
+          if (dateVal.toDate && typeof dateVal.toDate === "function") {
+            return dateVal.toDate().getTime();
+          }
+          if (typeof dateVal === "string" && dateVal.includes("/")) {
+            const parts = dateVal.split("/");
+            if (parts.length === 3) {
+              return new Date(parts[2], parts[1] - 1, parts[0]).getTime();
+            }
+          }
+          return new Date(dateVal).getTime() || 0;
+        }
+
+        const timeA = getTimestamp(dataA.date || dataA.billDate || dataA.createdAt);
+        const timeB = getTimestamp(dataB.date || dataB.billDate || dataB.createdAt);
+
+        // 🚀 Button ke direction ke hisab se sort karega (Ascending / Descending)
+        if (typeof billSortDirection !== "undefined" && billSortDirection === "asc") {
+          return timeA - timeB; // Oldest First
+        } else {
+          return timeB - timeA; // Newest First (Default)
+        }
+      });
+      currentPageForList = 1;
       filterAndRenderList();
       hideLoading();
     });
 }
-
 function toggleBillSortDirection() {
   billSortDirection = billSortDirection === "desc" ? "asc" : "desc";
   showBillListView();
 }
-
 function filterAndRenderList(searchTerm = null) {
   let billsToDisplay = allBillsForList;
 
