@@ -551,6 +551,30 @@ function addExpense(name = "", amount = "") {
   // Update the total immediately
   updateExpensesSubtotal();
 }
+// ═══════════════════════════════════════════════════════════════════════
+// CUSTOM DEDUCTION FORMULA EVALUATOR
+// Settings mein "Custom (apna formula)" deduction banate waqt user jo bhi
+// formula type karta hai (e.g. "bags * 2" ya "(amount * 1.5) / 100"), use
+// yahan evaluate karte hain. raw eval() ke bajaye new Function() use kiya
+// hai — isse formula ko sirf wahi variables dikhte hain jo hum explicitly
+// pass karte hain, baaki poore app ke variables/functions tak uski pahunch
+// nahi hoti (thoda zyada surakshit, bilkul foolproof nahi — Settings sirf
+// business-owner khud edit karta hai, is liye ye level kaafi hai).
+function evaluateCustomFormula(formula, vars) {
+  if (!formula || typeof formula !== "string") return 0;
+  try {
+    const keys = Object.keys(vars);
+    const values = Object.values(vars);
+    // eslint-disable-next-line no-new-func
+    const fn = new Function(...keys, `"use strict"; return (${formula});`);
+    const result = fn(...values);
+    return typeof result === "number" && isFinite(result) ? result : 0;
+  } catch (e) {
+    console.error(`Custom formula error in "${formula}":`, e);
+    return 0;
+  }
+}
+
 function calculateBillData(formData) {
   let data = {}; // This object will hold all our results
 
@@ -775,26 +799,66 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
       let extraAmountChange = 0;
       const appliedLog = [];
 
+      // Custom formula ke liye available variables. Ye poori list Settings
+      const totalBags = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
+      // "Bag" type mein har Vakal row ka apna alag bhav ho sakta hai, isliye
+      // ek single "price" nikalne ke liye average rate (₹ per 20kg) nikalte
+      // hain. Loose type mein loose_price seedha use hota hai.
+      const avgPricePer20Kg = isLooseSupply
+        ? Number(formData.get("loose_price")) || 0
+        : net_vajan > 0
+        ? customRound((total / net_vajan) * 20)
+        : 0;
+
+      // Custom formula ke liye MAXIMUM possible relevant variables — dono
+      // stage (weight aur amount) ko poora set milta hai, taaki formula
+      // kisi bhi combination mein likha ja sake (jaise "amount * bags" ya
+      // "weight - kasar"). Ye poori list Settings ke cheat-sheet mein bhi
+      // dikhti hai (product-templates.js). "karda" = isi template mein ab
+      // tak isi stage mein kitna deduction ho chuka hai (Admixture/Kachra
+      // jaisa concept) — loop aage badhte hi ye value update hoti rehti hai.
+      const buildFormulaVars = () => ({
+        bags: totalBags,
+        bags600: data["Bharela 600"] || 0,
+        bags200: data["Bharela 200"] || 0,
+        weight: customRound(data["Net Weight"] - extraWeightCutKg), // is loop ke ab tak ke weight-cuts sameit
+        grossWeight: data["Weighbridge Weight"] || 0,
+        kasar: data["Kasar"] || 0,
+        moisture: data["Weighbridge Moisture Kg"] || 0,
+        amount: customRound(data["Final Total"] + extraAmountChange), // is loop ke ab tak ke amount-cuts sameit
+        price: avgPricePer20Kg,
+        freight: truckFreight || 0,
+        utrai: finalutrai || 0,
+        karda: 0, // niche stage ke hisaab se overwrite hota hai
+      });
+
       templateDeductions.forEach((d) => {
         let impact = 0;
 
         if (d.stage === "weight") {
-          // Weight-based: % of Weight | Fixed/Bag | Fixed/Kg
+          // Weight-based: % of Weight | Fixed/Bag | Fixed/Kg | Custom
           if (d.type === "pct_weight") {
             impact = customRound(data["Weighbridge Weight"] * (d.value / 100));
           } else if (d.type === "fixed_bag") {
-            const totalBags = (data["Bharela 600"] || 0) + (data["Bharela 200"] || 0);
             impact = customRound(totalBags * d.value);
           } else if (d.type === "fixed_kg") {
             impact = customRound(net_vajan * d.value);
+          } else if (d.type === "custom") {
+            impact = customRound(
+              evaluateCustomFormula(d.customFormula, { ...buildFormulaVars(), karda: extraWeightCutKg })
+            );
           }
           extraWeightCutKg += d.applyAs === "add" ? -impact : impact;
         } else {
-          // Amount-based: % of Amount | Fixed Amount
+          // Amount-based: % of Amount | Fixed Amount | Custom
           if (d.type === "pct_amount") {
             impact = customRound(finaltotal * (d.value / 100));
           } else if (d.type === "fixed_amt") {
             impact = d.value;
+          } else if (d.type === "custom") {
+            impact = customRound(
+              evaluateCustomFormula(d.customFormula, { ...buildFormulaVars(), karda: extraAmountChange })
+            );
           }
           extraAmountChange += d.applyAs === "add" ? impact : -impact;
         }

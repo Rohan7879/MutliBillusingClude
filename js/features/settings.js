@@ -27,11 +27,33 @@ const DEDUCTION_TYPES = [
 const deductionsRef = db.collection("settings").doc("deductions");
 const templatesRef = db.collection("settings").doc("productTemplates");
 const versionRef = db.collection("settings").doc("appVersion");
+const savedFormulasRef = db.collection("settings").doc("savedFormulas");
+
+// Formula Builder aur cheat-sheet dono isi list ko use karte hain, taaki
+// kahi bhi naya variable add karna ho to sirf yahi ek jagah badalni pade.
+const FORMULA_VARIABLES = [
+  { value: "bags", label: "bags — total bags" },
+  { value: "weight", label: "weight — Net Weight (kg)" },
+  { value: "grossWeight", label: "grossWeight — Weighbridge Weight (kg)" },
+  { value: "amount", label: "amount — Gross Amount (₹)" },
+  { value: "price", label: "price — average rate (₹/20kg)" },
+  { value: "freight", label: "freight — Truck Freight (₹)" },
+  { value: "utrai", label: "utrai — Utrai amount (₹)" },
+  { value: "kasar", label: "kasar — Kasar cut (kg)" },
+  { value: "moisture", label: "moisture — Moisture cut (kg)" },
+  { value: "karda", label: "karda — pichhle deductions ka total" },
+];
+function formulaVarOptions(selected) {
+  return FORMULA_VARIABLES.map(
+    (v) => `<option value="${v.value}" ${v.value === selected ? "selected" : ""}>${v.label}</option>`
+  ).join("");
+}
 
 // ─── State ─────────────────────────────────────────────────────────────────────
 let currentTemplates = {};
 let activeTemplateId = null;
 let dragSrcIndex = null;
+let savedFormulasList = [];
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // INIT
@@ -42,6 +64,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadDeductionSettings();
   await loadTemplates();
   await loadPrintLayoutSettings();
+  await loadSavedFormulas();
   setupDeductionForm();
   saveVersionToFirestore();
 });
@@ -55,6 +78,13 @@ let printLayoutState = {
   detailsGridOrder: [...DEFAULT_DETAILS_GRID_ORDER],
   totalsGridOrder: [...DEFAULT_TOTALS_GRID_ORDER],
 };
+
+/**
+ * @file settings.js
+ * @description MandiBook Settings — Core deductions + Product Templates manager.
+ * @project MandiBook — Agricultural Purchase Billing System
+ * @version 1.1.0
+ */
 
 async function loadPrintLayoutSettings() {
   try {
@@ -134,6 +164,111 @@ async function savePrintLayoutSettings() {
 }
 window.movePrintLayoutItem = movePrintLayoutItem;
 window.savePrintLayoutSettings = savePrintLayoutSettings;
+
+// ═══════════════════════════════════════════════════════════════════════════════
+// SAVED FORMULAS — Rohan ne jo custom formula ek baar bana ke kaam mein le
+// liya, use naam dekar save kar sakta hai, taaki dobara likhna/yaad na
+// rakhna pade. Sab templates mein, har custom-formula row ke saath ye
+// dikhte hain.
+// ═══════════════════════════════════════════════════════════════════════════════
+
+async function loadSavedFormulas() {
+  try {
+    const doc = await savedFormulasRef.get();
+    savedFormulasList = doc.exists ? doc.data().list || [] : [];
+  } catch (e) {
+    console.error("Error loading saved formulas:", e);
+    savedFormulasList = [];
+  }
+}
+
+async function saveFormulaToLibrary(formula) {
+  if (!formula || !formula.trim()) {
+    showToast("Pehle formula box mein kuch likho ya Builder se banao.", "error");
+    return;
+  }
+  const { value: name } = await Swal.fire({
+    title: "💾 Formula ka naam do",
+    input: "text",
+    inputPlaceholder: "e.g. Wheat ka slab rate",
+    showCancelButton: true,
+    confirmButtonText: "Save",
+    confirmButtonColor: "#005a9e",
+  });
+  if (!name || !name.trim()) return;
+
+  savedFormulasList.push({ name: name.trim(), formula: formula.trim() });
+  try {
+    await savedFormulasRef.set({ list: savedFormulasList });
+    showToast("✅ Formula save ho gaya!");
+    renderAllSavedFormulasLists();
+  } catch (e) {
+    console.error("Error saving formula:", e);
+    savedFormulasList.pop(); // rollback local list agar save fail ho jaye
+    showToast("Save nahi ho paya, dobara try karo.", "error");
+  }
+}
+
+async function deleteSavedFormula(index) {
+  const confirm = await Swal.fire({
+    title: "Delete karein?",
+    text: `"${savedFormulasList[index]?.name}" hamesha ke liye mit jayega.`,
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#e74c3c",
+    confirmButtonText: "Haan, delete karo",
+  });
+  if (!confirm.isConfirmed) return;
+
+  const removed = savedFormulasList.splice(index, 1);
+  try {
+    await savedFormulasRef.set({ list: savedFormulasList });
+    renderAllSavedFormulasLists();
+  } catch (e) {
+    console.error("Error deleting formula:", e);
+    savedFormulasList.splice(index, 0, ...removed); // rollback
+    showToast("Delete nahi ho paya, dobara try karo.", "error");
+  }
+}
+
+// Screen par jitni bhi custom-formula rows abhi khuli hain, sabki saved-list
+// ek saath refresh kar do (naya save/delete hone ke baad).
+function renderAllSavedFormulasLists() {
+  document.querySelectorAll(".ded-row").forEach((row) => renderSavedFormulasInRow(row));
+}
+
+function renderSavedFormulasInRow(row) {
+  const listEl = row.querySelector(".ded-saved-list");
+  if (!listEl) return;
+  const customInput = row.querySelector(".ded-custom-formula");
+
+  if (savedFormulasList.length === 0) {
+    listEl.innerHTML = `<span class="ded-saved-empty">Abhi koi save nahi kiya</span>`;
+    return;
+  }
+  listEl.innerHTML = savedFormulasList
+    .map(
+      (f, i) => `
+      <div class="ded-saved-item">
+        <button type="button" class="ded-saved-use-btn" data-idx="${i}">${f.name}</button>
+        <button type="button" class="ded-saved-del-btn" data-idx="${i}" title="Delete">🗑️</button>
+      </div>`
+    )
+    .join("");
+
+  listEl.querySelectorAll(".ded-saved-use-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const f = savedFormulasList[Number(btn.dataset.idx)];
+      if (f && customInput) {
+        customInput.value = f.formula;
+        customInput.focus();
+      }
+    });
+  });
+  listEl.querySelectorAll(".ded-saved-del-btn").forEach((btn) => {
+    btn.addEventListener("click", () => deleteSavedFormula(Number(btn.dataset.idx)));
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // VERSION
@@ -322,12 +457,137 @@ function addDeductionRow(data = {}) {
       <select class="ded-type">${typeOpts}</select>
       <input type="number" class="ded-value" placeholder="Value" value="${data.value || ""}"
         step="any" min="0" style="${isCustom ? "display:none;" : ""}"/>
-      <input type="text" class="ded-custom-formula" placeholder="e.g. ₹50 per Quintal"
+      <input type="text" class="ded-custom-formula" placeholder="e.g. bags * 2  ya  (amount * 1.5) / 100"
         value="${data.customFormula || ""}" style="${isCustom ? "" : "display:none;"}"/>
+      <button type="button" class="ded-save-formula-btn" style="${
+        isCustom ? "" : "display:none;"
+      }">💾 Isko Save Karo (dobara use karne ke liye)</button>
       <select class="ded-custom-stage" style="${isCustom ? "" : "display:none;"}">
         <option value="weight" ${data.customStage === "weight" ? "selected" : ""}>⚖️ Cuts from Weight</option>
         <option value="amount" ${data.customStage !== "weight" ? "selected" : ""}>💰 Cuts from Amount</option>
       </select>
+      <div class="ded-formula-tools" style="${isCustom ? "" : "display:none;"}">
+
+        <!-- ═══ FORMULA BUILDER — kuch type nahi karna, sirf choose karo ═══ -->
+        <div class="ded-builder-box">
+          <div class="ded-builder-title">🛠️ Formula Builder</div>
+          <div class="ded-builder-mode-tabs">
+            <button type="button" class="ded-mode-btn active" data-mode="simple">Simple</button>
+            <button type="button" class="ded-mode-btn" data-mode="combine">Do Jodo</button>
+            <button type="button" class="ded-mode-btn" data-mode="condition">Agar / Warna</button>
+          </div>
+
+          <div class="ded-builder-mode" data-mode-panel="simple">
+            <select class="db-var">${formulaVarOptions()}</select>
+            <select class="db-op">
+              <option value="*">× guna</option>
+              <option value="/">÷ bhaag</option>
+              <option value="+">+ jodo</option>
+              <option value="-">− ghatao</option>
+            </select>
+            <input type="number" class="db-num" placeholder="number" step="any"/>
+          </div>
+
+          <div class="ded-builder-mode" data-mode-panel="combine" style="display:none">
+            <div class="db-combine-part">
+              <select class="db-var-1">${formulaVarOptions()}</select>
+              <select class="db-op-1">
+                <option value="*">× guna</option><option value="/">÷ bhaag</option>
+                <option value="+">+ jodo</option><option value="-">− ghatao</option>
+              </select>
+              <input type="number" class="db-num-1" placeholder="number" step="any"/>
+            </div>
+            <select class="db-combine-op">
+              <option value="+">+ dono jodo</option>
+              <option value="-">− pehla mein se doosra ghatao</option>
+            </select>
+            <div class="db-combine-part">
+              <select class="db-var-2">${formulaVarOptions()}</select>
+              <select class="db-op-2">
+                <option value="*">× guna</option><option value="/">÷ bhaag</option>
+                <option value="+">+ jodo</option><option value="-">− ghatao</option>
+              </select>
+              <input type="number" class="db-num-2" placeholder="number" step="any"/>
+            </div>
+          </div>
+
+          <div class="ded-builder-mode" data-mode-panel="condition" style="display:none">
+            <div class="db-cond-row">
+              <span>Agar</span>
+              <select class="db-cond-var">${formulaVarOptions()}</select>
+              <select class="db-cond-comp">
+                <option value=">=">&ge; (ya usse zyada)</option>
+                <option value="<=">&le; (ya usse kam)</option>
+                <option value=">">&gt; (zyada)</option>
+                <option value="<">&lt; (kam)</option>
+                <option value="==">== (barabar)</option>
+              </select>
+              <input type="number" class="db-cond-num" placeholder="number" step="any"/>
+            </div>
+            <div class="db-then-row">
+              <span>Tab</span>
+              <select class="db-then-var">${formulaVarOptions()}</select>
+              <select class="db-then-op">
+                <option value="*">× guna</option><option value="/">÷ bhaag</option>
+                <option value="+">+ jodo</option><option value="-">− ghatao</option>
+              </select>
+              <input type="number" class="db-then-num" placeholder="number" step="any"/>
+            </div>
+            <div class="db-else-row">
+              <span>Warna</span>
+              <select class="db-else-var">${formulaVarOptions()}</select>
+              <select class="db-else-op">
+                <option value="*">× guna</option><option value="/">÷ bhaag</option>
+                <option value="+">+ jodo</option><option value="-">− ghatao</option>
+              </select>
+              <input type="number" class="db-else-num" placeholder="number" step="any"/>
+            </div>
+          </div>
+
+          <div class="ded-builder-preview">Banega: <code class="db-preview-text">weight * 1</code></div>
+          <button type="button" class="ded-builder-apply-btn">✅ Ye formula box mein bharo</button>
+        </div>
+
+        <!-- ═══ SAVED FORMULAS — apne pehle bane formulas dobara use karo ═══ -->
+        <div class="ded-saved-formulas">
+          <div class="ded-saved-title">📂 Mere Saved Formulas</div>
+          <div class="ded-saved-list"><span class="ded-saved-empty">Abhi koi save nahi kiya</span></div>
+        </div>
+
+      </div>
+      <details class="ded-formula-cheatsheet" style="${isCustom ? "" : "display:none;"}">
+        <summary>ℹ️ Formula mein kaunse words use kar sakte ho? (hover karke example dekho)</summary>
+        <div class="ded-cheatsheet-body">
+          <div class="ded-quick-templates">
+            <div class="ded-quick-title">👇 Formula khud likhne ki zaroorat nahi — ek pattern choose karo, bas numbers badal do:</div>
+            <button type="button" class="ded-quick-btn" data-formula="bags >= 50 ? bags * 3 : bags * 5">
+              📊 Zyada quantity pe alag rate
+            </button>
+            <button type="button" class="ded-quick-btn" data-formula="(bags * 2) + (amount * 0.01)">
+              ➕ Do charges ek saath jodo
+            </button>
+            <button type="button" class="ded-quick-btn" data-formula="weight * 0.3">
+              ⚖️ Weight ke hisaab se charge
+            </button>
+            <button type="button" class="ded-quick-btn" data-formula="price < 400 ? weight * 0.03 : weight * 0.01">
+              💰 Price kam ho to zyada kasar
+            </button>
+          </div>
+          <div class="ded-var-chip" data-example="bags * 2"><code>bags</code> — total bags (600+200)</div>
+          <div class="ded-var-chip" data-example="weight * 0.5"><code>weight</code> — Net Weight (kg)</div>
+          <div class="ded-var-chip" data-example="grossWeight * 0.01"><code>grossWeight</code> — Weighbridge Weight (kg)</div>
+          <div class="ded-var-chip" data-example="amount * 0.02"><code>amount</code> — Gross Amount (₹)</div>
+          <div class="ded-var-chip" data-example="price * bags"><code>price</code> — average rate (₹ per 20kg)</div>
+          <div class="ded-var-chip" data-example="freight / bags"><code>freight</code> — Truck Freight (₹)</div>
+          <div class="ded-var-chip" data-example="utrai * 0.1"><code>utrai</code> — Utrai amount (₹)</div>
+          <div class="ded-var-chip" data-example="kasar * 2"><code>kasar</code> — Kasar cut (kg)</div>
+          <div class="ded-var-chip" data-example="moisture * 3"><code>moisture</code> — Moisture cut (kg)</div>
+          <div class="ded-var-chip" data-example="karda * 0.05"><code>karda</code> — pichhle deductions ka total, isi list mein</div>
+          <div class="ded-cheatsheet-examples">
+            <b>Example:</b> <code class="ded-example-text">bags * 2</code>
+          </div>
+        </div>
+      </details>
       <select class="ded-apply">
         <option value="minus" ${data.applyAs !== "add" ? "selected" : ""}>➖ Deduct</option>
         <option value="add"   ${data.applyAs === "add" ? "selected" : ""}>➕ Add</option>
@@ -364,9 +624,125 @@ function addDeductionRow(data = {}) {
     valueInput.style.display = custom ? "none" : "";
     customInput.style.display = custom ? "" : "none";
     customStage.style.display = custom ? "" : "none";
+    const cheatsheet = row.querySelector(".ded-formula-cheatsheet");
+    if (cheatsheet) cheatsheet.style.display = custom ? "" : "none";
+    const tools = row.querySelector(".ded-formula-tools");
+    if (tools) tools.style.display = custom ? "" : "none";
+    const saveBtn = row.querySelector(".ded-save-formula-btn");
+    if (saveBtn) saveBtn.style.display = custom ? "" : "none";
     refreshStageBadge();
   });
   customStage.addEventListener("change", refreshStageBadge);
+
+  // ── Cheat-sheet: hover over a variable, its example updates below ──
+  const exampleText = row.querySelector(".ded-example-text");
+  row.querySelectorAll(".ded-var-chip").forEach((chip) => {
+    chip.addEventListener("mouseenter", () => {
+      if (exampleText) exampleText.textContent = chip.dataset.example || "";
+    });
+  });
+
+  // ── Quick Templates: ek click mein poora formula bhar do, taaki user ko
+  // khud syntax likhna na pade — bas numbers dhoondh ke badal de ──
+  row.querySelectorAll(".ded-quick-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      customInput.value = btn.dataset.formula;
+      customInput.focus();
+      // Formula ke andar jitne bhi numbers hain, unhe select kar do —
+      // taaki user ko turant dikhe ki yahi cheezein badalni hain
+      customInput.select();
+    });
+  });
+
+  // ── Formula Builder: dropdown/number bharo, formula khud ban jaye ──
+  const builderBox = row.querySelector(".ded-builder-box");
+  if (builderBox) {
+    const modeBtns = builderBox.querySelectorAll(".ded-mode-btn");
+    const modePanels = builderBox.querySelectorAll(".ded-builder-mode");
+    const previewText = builderBox.querySelector(".db-preview-text");
+    let activeMode = "simple";
+
+    function opSymbol(op) {
+      return { "*": "*", "/": "/", "+": "+", "-": "-" }[op] || "*";
+    }
+    function part(varSel, opSel, numInput) {
+      const v = varSel.value;
+      const n = numInput.value === "" ? "1" : numInput.value;
+      return `${v} ${opSymbol(opSel.value)} ${n}`;
+    }
+
+    function buildPreview() {
+      let formula = "";
+      if (activeMode === "simple") {
+        formula = part(
+          builderBox.querySelector(".db-var"),
+          builderBox.querySelector(".db-op"),
+          builderBox.querySelector(".db-num")
+        );
+      } else if (activeMode === "combine") {
+        const p1 = part(
+          builderBox.querySelector(".db-var-1"),
+          builderBox.querySelector(".db-op-1"),
+          builderBox.querySelector(".db-num-1")
+        );
+        const p2 = part(
+          builderBox.querySelector(".db-var-2"),
+          builderBox.querySelector(".db-op-2"),
+          builderBox.querySelector(".db-num-2")
+        );
+        const combineOp = builderBox.querySelector(".db-combine-op").value;
+        formula = `(${p1}) ${combineOp === "+" ? "+" : "-"} (${p2})`;
+      } else if (activeMode === "condition") {
+        const condVar = builderBox.querySelector(".db-cond-var").value;
+        const condComp = builderBox.querySelector(".db-cond-comp").value;
+        const condNum = builderBox.querySelector(".db-cond-num").value || "0";
+        const thenPart = part(
+          builderBox.querySelector(".db-then-var"),
+          builderBox.querySelector(".db-then-op"),
+          builderBox.querySelector(".db-then-num")
+        );
+        const elsePart = part(
+          builderBox.querySelector(".db-else-var"),
+          builderBox.querySelector(".db-else-op"),
+          builderBox.querySelector(".db-else-num")
+        );
+        formula = `${condVar} ${condComp} ${condNum} ? (${thenPart}) : (${elsePart})`;
+      }
+      if (previewText) previewText.textContent = formula;
+      return formula;
+    }
+
+    modeBtns.forEach((btn) => {
+      btn.addEventListener("click", () => {
+        activeMode = btn.dataset.mode;
+        modeBtns.forEach((b) => b.classList.toggle("active", b === btn));
+        modePanels.forEach((p) => (p.style.display = p.dataset.modePanel === activeMode ? "" : "none"));
+        buildPreview();
+      });
+    });
+
+    builderBox.querySelectorAll("select, input").forEach((el) => {
+      el.addEventListener("input", buildPreview);
+      el.addEventListener("change", buildPreview);
+    });
+
+    builderBox.querySelector(".ded-builder-apply-btn").addEventListener("click", () => {
+      customInput.value = buildPreview();
+      customInput.focus();
+      customInput.select();
+    });
+
+    buildPreview(); // initial preview dikhao
+  }
+
+  // ── Save button: current formula ko naam dekar library mein save karo ──
+  const saveFormulaBtn = row.querySelector(".ded-save-formula-btn");
+  if (saveFormulaBtn) {
+    saveFormulaBtn.addEventListener("click", () => saveFormulaToLibrary(customInput.value));
+  }
+
+  // ── Saved formulas ki list is row mein dikhao (naye row ke liye bhi) ──
+  renderSavedFormulasInRow(row);
 
   // ── Drag & drop reordering ──
   row.addEventListener("dragstart", () => {
