@@ -9,6 +9,7 @@
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
 
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
 
     <script src="js/core/firebase-init.js"></script>
@@ -611,6 +612,216 @@
       }
       .ded-builder-apply-btn:hover {
         background: #1e7e34;
+      }
+
+      /* ── Multi-tier (slab) condition builder ── */
+      .db-tier-list {
+        display: flex;
+        flex-direction: column;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .db-tier {
+        border: 1px solid #b3d4f5;
+        border-radius: 8px;
+        background: #fff;
+        padding: 8px;
+      }
+      .db-tier-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .db-tier-header b {
+        font-size: 12px;
+        color: #005a9e;
+      }
+      .db-remove-tier-btn {
+        background: #f8d7da;
+        border: none;
+        color: #842029;
+        border-radius: 5px;
+        width: 20px;
+        height: 20px;
+        font-size: 11px;
+        cursor: pointer;
+        line-height: 1;
+      }
+      .db-tier-cond,
+      .db-tier-then {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+        margin-bottom: 4px;
+      }
+      .db-tier-then span {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: #495057;
+        min-width: 30px;
+      }
+      .db-add-tier-btn {
+        background: #e7f3ff;
+        border: 1px dashed #005a9e;
+        color: #005a9e;
+        border-radius: 7px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        margin-bottom: 8px;
+      }
+      .db-add-tier-btn:hover {
+        background: #dceafd;
+      }
+      .db-else-row {
+        display: flex;
+        align-items: center;
+        gap: 6px;
+        flex-wrap: wrap;
+      }
+      .db-else-row span {
+        font-size: 12.5px;
+        font-weight: 700;
+        color: #495057;
+      }
+
+      /* ── Warning box ── */
+      .ded-builder-warning {
+        background: #fff3cd;
+        border: 1px solid #e0a800;
+        color: #7a5c00;
+        border-radius: 7px;
+        padding: 7px 10px;
+        font-size: 12px;
+        font-weight: 700;
+        margin-bottom: 8px;
+      }
+
+      /* ── Live test calculator ── */
+      .ded-builder-test-box {
+        background: #fff;
+        border: 1.5px solid #dceafd;
+        border-radius: 9px;
+        padding: 10px 12px;
+        margin-bottom: 8px;
+      }
+      .ded-test-title {
+        font-size: 12.5px;
+        font-weight: 800;
+        color: #005a9e;
+        margin-bottom: 8px;
+      }
+      .ded-test-mode-row {
+        display: flex;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+      .ded-test-manual-btn,
+      .ded-test-real-btn {
+        background: #fff;
+        border: 1px solid #b3d4f5;
+        color: #495057;
+        border-radius: 20px;
+        padding: 5px 12px;
+        font-size: 11.5px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .ded-test-manual-btn.active,
+      .ded-test-real-btn.active {
+        background: #005a9e;
+        border-color: #005a9e;
+        color: #fff;
+      }
+      .ded-test-bill-picker {
+        width: 100%;
+        padding: 7px 8px;
+        border-radius: 6px;
+        border: 1px solid #ced4da;
+        font-size: 12.5px;
+        margin-bottom: 8px;
+      }
+      .ded-test-inputs {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 8px;
+        margin-bottom: 8px;
+      }
+      .ded-test-field {
+        display: flex;
+        flex-direction: column;
+        gap: 3px;
+        font-size: 11px;
+        font-weight: 700;
+        color: #495057;
+      }
+      .ded-test-input {
+        width: 70px;
+        padding: 5px 6px;
+        border-radius: 6px;
+        border: 1px solid #ced4da;
+        font-size: 12px;
+      }
+      .ded-test-input:disabled {
+        background: #f1f3f5;
+        color: #adb5bd;
+      }
+      .ded-test-result {
+        border-top: 1px dashed #b3d4f5;
+        padding-top: 8px;
+        font-size: 13px;
+        font-weight: 700;
+        color: #333;
+      }
+      .ded-test-result-text {
+        background: #d4edda;
+        color: #155724;
+        padding: 2px 8px;
+        border-radius: 5px;
+        font-size: 13px;
+      }
+
+      /* ── Copy-to-template + Export buttons ── */
+      .ded-copy-to-template-btn {
+        flex-basis: 100%;
+        background: #e7f3ff;
+        border: 1.5px solid #005a9e;
+        color: #005a9e;
+        border-radius: 8px;
+        padding: 6px 12px;
+        font-size: 12px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+        align-self: flex-start;
+      }
+      .ded-copy-to-template-btn:hover {
+        background: #dceafd;
+      }
+      .ded-saved-header-row {
+        display: flex;
+        justify-content: space-between;
+        align-items: center;
+        margin-bottom: 6px;
+      }
+      .ded-export-formulas-btn {
+        background: #fff;
+        border: 1px solid #b3d4f5;
+        color: #005a9e;
+        border-radius: 6px;
+        padding: 4px 10px;
+        font-size: 11px;
+        font-weight: 700;
+        font-family: inherit;
+        cursor: pointer;
+      }
+      .ded-export-formulas-btn:hover {
+        background: #e7f3ff;
       }
 
       /* ── Saved Formulas ── */

@@ -5,17 +5,26 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
     <title>Dashboard - MandiBook</title>
+
+    <!-- 1️⃣ 3 Firebase Libraries sath mein, sabse pehle -->
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <!-- 2️⃣ Baki third party libraries -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+
+    <!-- 3️⃣ Aapki custom Javascript files, sabse baad mein -->
     <script src="js/core/firebase-init.js"></script>
     <script src="js/core/utils.js"></script>
     <script src="js/core/core-engine.js"></script>
     <script src="js/features/company-profile.js"></script>
+
+    <!-- Stylesheets -->
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/dashboard.css" />
     <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
@@ -1183,6 +1192,13 @@
         </a>
         <a class="qcard c-set" href="core_settings.html"> <span class="ci">⚙️</span><span>Settings</span> </a>
       </div>
+      <button
+        class="qcard"
+        onclick="logoutUser()"
+        style="background: linear-gradient(135deg, #dc3545, #c82333); color: white"
+      >
+        <span class="ci">🚪</span><span>Logout</span>
+      </button>
     </div>
     <!-- end .pg -->
 

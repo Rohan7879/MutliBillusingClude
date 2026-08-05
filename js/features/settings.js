@@ -49,6 +49,82 @@ function formulaVarOptions(selected) {
   ).join("");
 }
 
+// Settings page ke andar (bill-form.js se alag) formula ko test karne ke
+// liye — ye actual bill calculation mein use NAHI hota, sirf "test karke
+// dekho" aur "risky formula warning" ke liye hai.
+function evaluateFormulaClientSide(formula, vars) {
+  try {
+    const keys = Object.keys(vars);
+    const values = Object.values(vars);
+    // eslint-disable-next-line no-new-func
+    const fn = new Function(...keys, `"use strict"; return (${formula});`);
+    return fn(...values);
+  } catch (e) {
+    return undefined;
+  }
+}
+
+// Test-calculator ke liye ek realistic sample bill jaisa default data
+const DEFAULT_TEST_VALUES = {
+  bags: 45,
+  weight: 2000,
+  grossWeight: 2050,
+  amount: 50000,
+  price: 450,
+  freight: 500,
+  utrai: 200,
+  kasar: 15,
+  moisture: 10,
+  karda: 0,
+};
+
+// "Purane bill se test karo" ke liye — recent bills ki list ek baar fetch
+// karke cache kar lete hain (baar-baar Firestore query na maarni pade).
+let recentBillsForTestCache = null;
+async function populateBillPicker(pickerEl) {
+  if (!recentBillsForTestCache) {
+    try {
+      const snap = await billsCollection.orderBy("Serial No", "desc").limit(30).get();
+      recentBillsForTestCache = snap.docs
+        .filter((d) => d.data().deleted !== true)
+        .map((d) => ({ id: d.id, serialNo: d.data()["Serial No"], name: d.data()["Customer Name"] }));
+    } catch (e) {
+      console.error("Error loading bills for test:", e);
+      recentBillsForTestCache = [];
+    }
+  }
+  pickerEl.innerHTML =
+    `<option value="">-- Bill select karo --</option>` +
+    recentBillsForTestCache.map((b) => `<option value="${b.id}">${b.serialNo} — ${b.name}</option>`).join("");
+}
+
+async function fetchBillForTest(billId) {
+  try {
+    const doc = await billsCollection.doc(billId).get();
+    return doc.exists ? doc.data() : null;
+  } catch (e) {
+    console.error("Error fetching bill for test:", e);
+    return null;
+  }
+}
+
+function mapBillToFormulaVars(b) {
+  const weight = b["Net Weight"] || 0;
+  const amount = b["Total Amount"] || b["Final Total"] || 0;
+  return {
+    bags: (b["Bharela 600"] || 0) + (b["Bharela 200"] || 0),
+    weight,
+    grossWeight: b["Weighbridge Weight"] || 0,
+    amount,
+    price: weight > 0 ? Math.round((amount / weight) * 20 * 100) / 100 : 0,
+    freight: b["Truck Freight"] || 0,
+    utrai: b["Utrāī"] || 0,
+    kasar: b["Kasar"] || 0,
+    moisture: b["Weighbridge Moisture Kg"] || 0,
+    karda: 0,
+  };
+}
+
 // ─── State ─────────────────────────────────────────────────────────────────────
 let currentTemplates = {};
 let activeTemplateId = null;
@@ -187,17 +263,28 @@ async function saveFormulaToLibrary(formula) {
     showToast("Pehle formula box mein kuch likho ya Builder se banao.", "error");
     return;
   }
-  const { value: name } = await Swal.fire({
-    title: "💾 Formula ka naam do",
-    input: "text",
-    inputPlaceholder: "e.g. Wheat ka slab rate",
+  const { value: formValues } = await Swal.fire({
+    title: "💾 Formula Save Karo",
+    html: `
+      <input id="swal-formula-name" class="swal2-input" placeholder="Naam (e.g. Wheat ka slab rate)">
+      <textarea id="swal-formula-note" class="swal2-textarea" placeholder="Note (optional) — jaise 'sirf Dec-Jan mein use karna'"></textarea>
+    `,
+    focusConfirm: false,
     showCancelButton: true,
     confirmButtonText: "Save",
     confirmButtonColor: "#005a9e",
+    preConfirm: () => ({
+      name: document.getElementById("swal-formula-name").value,
+      note: document.getElementById("swal-formula-note").value,
+    }),
   });
-  if (!name || !name.trim()) return;
+  if (!formValues || !formValues.name || !formValues.name.trim()) return;
 
-  savedFormulasList.push({ name: name.trim(), formula: formula.trim() });
+  savedFormulasList.push({
+    name: formValues.name.trim(),
+    formula: formula.trim(),
+    note: (formValues.note || "").trim(),
+  });
   try {
     await savedFormulasRef.set({ list: savedFormulasList });
     showToast("✅ Formula save ho gaya!");
@@ -244,30 +331,53 @@ function renderSavedFormulasInRow(row) {
 
   if (savedFormulasList.length === 0) {
     listEl.innerHTML = `<span class="ded-saved-empty">Abhi koi save nahi kiya</span>`;
-    return;
-  }
-  listEl.innerHTML = savedFormulasList
-    .map(
-      (f, i) => `
-      <div class="ded-saved-item">
-        <button type="button" class="ded-saved-use-btn" data-idx="${i}">${f.name}</button>
-        <button type="button" class="ded-saved-del-btn" data-idx="${i}" title="Delete">🗑️</button>
-      </div>`
-    )
-    .join("");
+  } else {
+    listEl.innerHTML = savedFormulasList
+      .map(
+        (f, i) => `
+        <div class="ded-saved-item">
+          <button type="button" class="ded-saved-use-btn" data-idx="${i}" title="${(f.note || "").replace(
+          /"/g,
+          "&quot;"
+        )}${f.note ? "\n" : ""}Formula: ${f.formula}">${f.name}${f.note ? " 📝" : ""}</button>
+          <button type="button" class="ded-saved-del-btn" data-idx="${i}" title="Delete">🗑️</button>
+        </div>`
+      )
+      .join("");
 
-  listEl.querySelectorAll(".ded-saved-use-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const f = savedFormulasList[Number(btn.dataset.idx)];
-      if (f && customInput) {
-        customInput.value = f.formula;
-        customInput.focus();
-      }
+    listEl.querySelectorAll(".ded-saved-use-btn").forEach((btn) => {
+      btn.addEventListener("click", () => {
+        const f = savedFormulasList[Number(btn.dataset.idx)];
+        if (f && customInput) {
+          customInput.value = f.formula;
+          customInput.focus();
+          customInput.dispatchEvent(new Event("input"));
+        }
+      });
     });
-  });
-  listEl.querySelectorAll(".ded-saved-del-btn").forEach((btn) => {
-    btn.addEventListener("click", () => deleteSavedFormula(Number(btn.dataset.idx)));
-  });
+    listEl.querySelectorAll(".ded-saved-del-btn").forEach((btn) => {
+      btn.addEventListener("click", () => deleteSavedFormula(Number(btn.dataset.idx)));
+    });
+  }
+
+  // ── Export: saari saved formulas ek .json file mein download ──
+  const exportBtn = row.querySelector(".ded-export-formulas-btn");
+  if (exportBtn && !exportBtn.dataset.wired) {
+    exportBtn.dataset.wired = "1";
+    exportBtn.addEventListener("click", () => {
+      if (savedFormulasList.length === 0) {
+        showToast("Export karne ke liye pehle kuch save karo.", "error");
+        return;
+      }
+      const blob = new Blob([JSON.stringify(savedFormulasList, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `mandibook-saved-formulas-${new Date().toISOString().slice(0, 10)}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
 }
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -462,6 +572,9 @@ function addDeductionRow(data = {}) {
       <button type="button" class="ded-save-formula-btn" style="${
         isCustom ? "" : "display:none;"
       }">💾 Isko Save Karo (dobara use karne ke liye)</button>
+      <button type="button" class="ded-copy-to-template-btn" style="${
+        isCustom ? "" : "display:none;"
+      }">📋 Doosre template mein copy karo</button>
       <select class="ded-custom-stage" style="${isCustom ? "" : "display:none;"}">
         <option value="weight" ${data.customStage === "weight" ? "selected" : ""}>⚖️ Cuts from Weight</option>
         <option value="amount" ${data.customStage !== "weight" ? "selected" : ""}>💰 Cuts from Amount</option>
@@ -512,29 +625,36 @@ function addDeductionRow(data = {}) {
           </div>
 
           <div class="ded-builder-mode" data-mode-panel="condition" style="display:none">
-            <div class="db-cond-row">
-              <span>Agar</span>
-              <select class="db-cond-var">${formulaVarOptions()}</select>
-              <select class="db-cond-comp">
-                <option value=">=">&ge; (ya usse zyada)</option>
-                <option value="<=">&le; (ya usse kam)</option>
-                <option value=">">&gt; (zyada)</option>
-                <option value="<">&lt; (kam)</option>
-                <option value="==">== (barabar)</option>
-              </select>
-              <input type="number" class="db-cond-num" placeholder="number" step="any"/>
+            <div class="db-tier-list">
+              <div class="db-tier">
+                <div class="db-tier-header">
+                  <b>Tier 1 — Agar</b>
+                </div>
+                <div class="db-tier-cond">
+                  <select class="db-cond-var">${formulaVarOptions()}</select>
+                  <select class="db-cond-comp">
+                    <option value=">=">&ge; (ya usse zyada)</option>
+                    <option value="<=">&le; (ya usse kam)</option>
+                    <option value=">">&gt; (zyada)</option>
+                    <option value="<">&lt; (kam)</option>
+                    <option value="==">== (barabar)</option>
+                  </select>
+                  <input type="number" class="db-cond-num" placeholder="number" step="any"/>
+                </div>
+                <div class="db-tier-then">
+                  <span>Tab</span>
+                  <select class="db-then-var">${formulaVarOptions()}</select>
+                  <select class="db-then-op">
+                    <option value="*">× guna</option><option value="/">÷ bhaag</option>
+                    <option value="+">+ jodo</option><option value="-">− ghatao</option>
+                  </select>
+                  <input type="number" class="db-then-num" placeholder="number" step="any"/>
+                </div>
+              </div>
             </div>
-            <div class="db-then-row">
-              <span>Tab</span>
-              <select class="db-then-var">${formulaVarOptions()}</select>
-              <select class="db-then-op">
-                <option value="*">× guna</option><option value="/">÷ bhaag</option>
-                <option value="+">+ jodo</option><option value="-">− ghatao</option>
-              </select>
-              <input type="number" class="db-then-num" placeholder="number" step="any"/>
-            </div>
+            <button type="button" class="db-add-tier-btn">➕ Ek aur tier jodo</button>
             <div class="db-else-row">
-              <span>Warna</span>
+              <span>Warna (baaki sab)</span>
               <select class="db-else-var">${formulaVarOptions()}</select>
               <select class="db-else-op">
                 <option value="*">× guna</option><option value="/">÷ bhaag</option>
@@ -545,12 +665,28 @@ function addDeductionRow(data = {}) {
           </div>
 
           <div class="ded-builder-preview">Banega: <code class="db-preview-text">weight * 1</code></div>
+          <div class="ded-builder-warning" style="display:none"></div>
+
+          <div class="ded-builder-test-box">
+            <div class="ded-test-title">🧮 Test karke dekho (save karne se pehle)</div>
+            <div class="ded-test-mode-row">
+              <button type="button" class="ded-test-manual-btn active" data-testmode="manual">✍️ Khud numbers daalo</button>
+              <button type="button" class="ded-test-real-btn" data-testmode="real">📄 Purane bill se test karo</button>
+            </div>
+            <select class="ded-test-bill-picker" style="display:none"><option value="">-- Bill select karo --</option></select>
+            <div class="ded-test-inputs"></div>
+            <div class="ded-test-result">Result: <code class="ded-test-result-text">—</code></div>
+          </div>
+
           <button type="button" class="ded-builder-apply-btn">✅ Ye formula box mein bharo</button>
         </div>
 
         <!-- ═══ SAVED FORMULAS — apne pehle bane formulas dobara use karo ═══ -->
         <div class="ded-saved-formulas">
-          <div class="ded-saved-title">📂 Mere Saved Formulas</div>
+          <div class="ded-saved-header-row">
+            <div class="ded-saved-title">📂 Mere Saved Formulas</div>
+            <button type="button" class="ded-export-formulas-btn">⬇️ Export</button>
+          </div>
           <div class="ded-saved-list"><span class="ded-saved-empty">Abhi koi save nahi kiya</span></div>
         </div>
 
@@ -630,6 +766,8 @@ function addDeductionRow(data = {}) {
     if (tools) tools.style.display = custom ? "" : "none";
     const saveBtn = row.querySelector(".ded-save-formula-btn");
     if (saveBtn) saveBtn.style.display = custom ? "" : "none";
+    const copyBtn = row.querySelector(".ded-copy-to-template-btn");
+    if (copyBtn) copyBtn.style.display = custom ? "" : "none";
     refreshStageBadge();
   });
   customStage.addEventListener("change", refreshStageBadge);
@@ -671,6 +809,77 @@ function addDeductionRow(data = {}) {
       return `${v} ${opSymbol(opSel.value)} ${n}`;
     }
 
+    // ── Multi-tier (slab) rows: "+ Ek aur tier jodo" se jitne bhi tier
+    // add ho jayein, sabko yahan se handle karte hain ──
+    const tierList = builderBox.querySelector(".db-tier-list");
+    const addTierBtn = builderBox.querySelector(".db-add-tier-btn");
+
+    function tierHtml(n) {
+      return `
+        <div class="db-tier">
+          <div class="db-tier-header">
+            <b>Tier ${n} — Agar</b>
+            <button type="button" class="db-remove-tier-btn" title="Ye tier hatao">✕</button>
+          </div>
+          <div class="db-tier-cond">
+            <select class="db-cond-var">${formulaVarOptions()}</select>
+            <select class="db-cond-comp">
+              <option value=">=">&ge; (ya usse zyada)</option>
+              <option value="<=">&le; (ya usse kam)</option>
+              <option value=">">&gt; (zyada)</option>
+              <option value="<">&lt; (kam)</option>
+              <option value="==">== (barabar)</option>
+            </select>
+            <input type="number" class="db-cond-num" placeholder="number" step="any"/>
+          </div>
+          <div class="db-tier-then">
+            <span>Tab</span>
+            <select class="db-then-var">${formulaVarOptions()}</select>
+            <select class="db-then-op">
+              <option value="*">× guna</option><option value="/">÷ bhaag</option>
+              <option value="+">+ jodo</option><option value="-">− ghatao</option>
+            </select>
+            <input type="number" class="db-then-num" placeholder="number" step="any"/>
+          </div>
+        </div>`;
+    }
+
+    function renumberTiers() {
+      tierList.querySelectorAll(".db-tier").forEach((t, i) => {
+        t.querySelector(".db-tier-header b").textContent = `Tier ${i + 1} — Agar`;
+        const removeBtn = t.querySelector(".db-remove-tier-btn");
+        if (removeBtn) removeBtn.style.display = i === 0 ? "none" : "";
+      });
+    }
+
+    function wireTier(tierEl) {
+      tierEl.querySelectorAll("select, input").forEach((el) => {
+        el.addEventListener("input", buildPreview);
+        el.addEventListener("change", buildPreview);
+      });
+      const removeBtn = tierEl.querySelector(".db-remove-tier-btn");
+      if (removeBtn) {
+        removeBtn.addEventListener("click", () => {
+          tierEl.remove();
+          renumberTiers();
+          buildPreview();
+        });
+      }
+    }
+
+    if (addTierBtn) {
+      addTierBtn.addEventListener("click", () => {
+        const wrapper = document.createElement("div");
+        wrapper.innerHTML = tierHtml(tierList.querySelectorAll(".db-tier").length + 1);
+        const newTier = wrapper.firstElementChild;
+        tierList.appendChild(newTier);
+        wireTier(newTier);
+        renumberTiers();
+        buildPreview();
+      });
+    }
+    tierList?.querySelectorAll(".db-tier").forEach(wireTier);
+
     function buildPreview() {
       let formula = "";
       if (activeMode === "simple") {
@@ -693,23 +902,116 @@ function addDeductionRow(data = {}) {
         const combineOp = builderBox.querySelector(".db-combine-op").value;
         formula = `(${p1}) ${combineOp === "+" ? "+" : "-"} (${p2})`;
       } else if (activeMode === "condition") {
-        const condVar = builderBox.querySelector(".db-cond-var").value;
-        const condComp = builderBox.querySelector(".db-cond-comp").value;
-        const condNum = builderBox.querySelector(".db-cond-num").value || "0";
-        const thenPart = part(
-          builderBox.querySelector(".db-then-var"),
-          builderBox.querySelector(".db-then-op"),
-          builderBox.querySelector(".db-then-num")
-        );
+        const tiers = Array.from(tierList.querySelectorAll(".db-tier"));
+        const conditions = tiers.map((t) => {
+          const condVar = t.querySelector(".db-cond-var").value;
+          const condComp = t.querySelector(".db-cond-comp").value;
+          const condNum = t.querySelector(".db-cond-num").value || "0";
+          const thenPart = part(
+            t.querySelector(".db-then-var"),
+            t.querySelector(".db-then-op"),
+            t.querySelector(".db-then-num")
+          );
+          return `${condVar} ${condComp} ${condNum} ? (${thenPart}) : `;
+        });
         const elsePart = part(
           builderBox.querySelector(".db-else-var"),
           builderBox.querySelector(".db-else-op"),
           builderBox.querySelector(".db-else-num")
         );
-        formula = `${condVar} ${condComp} ${condNum} ? (${thenPart}) : (${elsePart})`;
+        formula = conditions.join("") + `(${elsePart})`;
       }
       if (previewText) previewText.textContent = formula;
+      checkFormulaWarning(formula);
       return formula;
+    }
+
+    // ── Risky-formula warning ──
+    const warningBox = builderBox.querySelector(".ded-builder-warning");
+    function customRoundLocal(n) {
+      return Math.round(n * 100) / 100;
+    }
+    function checkFormulaWarning(formula) {
+      if (!warningBox || !formula) return;
+      const result = evaluateFormulaClientSide(formula, DEFAULT_TEST_VALUES);
+      if (result === undefined || Number.isNaN(result) || !Number.isFinite(result)) {
+        warningBox.style.display = "";
+        warningBox.textContent = "⚠️ Ye formula galat result de raha hai (shayad ÷0 ho gaya) — check karo.";
+      } else if (result < 0) {
+        warningBox.style.display = "";
+        warningBox.textContent = `⚠️ Sample data se ye formula negative (-${Math.abs(
+          customRoundLocal(result)
+        )}) result de raha hai — check karo.`;
+      } else {
+        warningBox.style.display = "none";
+      }
+    }
+
+    // ── Live test-calculator: manual numbers YA ek asli purane bill se ──
+    const testInputsBox = builderBox.querySelector(".ded-test-inputs");
+    const testResultText = builderBox.querySelector(".ded-test-result-text");
+    const billPicker = builderBox.querySelector(".ded-test-bill-picker");
+    const testManualBtn = builderBox.querySelector(".ded-test-manual-btn");
+    const testRealBtn = builderBox.querySelector(".ded-test-real-btn");
+    let testMode = "manual";
+
+    if (testInputsBox) {
+      testInputsBox.innerHTML = FORMULA_VARIABLES.map(
+        (v) => `<label class="ded-test-field">${v.value}
+          <input type="number" class="ded-test-input" data-var="${v.value}" value="${
+          DEFAULT_TEST_VALUES[v.value]
+        }" step="any"/>
+        </label>`
+      ).join("");
+
+      function runTest() {
+        const testVars = {};
+        testInputsBox.querySelectorAll(".ded-test-input").forEach((inp) => {
+          testVars[inp.dataset.var] = Number(inp.value) || 0;
+        });
+        const formula = customInput.value;
+        const result = evaluateFormulaClientSide(formula, testVars);
+        if (testResultText) {
+          testResultText.textContent =
+            result === undefined || Number.isNaN(result) || !Number.isFinite(result)
+              ? "❌ Formula mein galti hai"
+              : customRoundLocal(result);
+        }
+      }
+      testInputsBox.querySelectorAll(".ded-test-input").forEach((inp) => inp.addEventListener("input", runTest));
+      customInput.addEventListener("input", runTest);
+      runTest();
+      row._runFormulaTest = runTest; // taaki bill-picker se bhi refresh kar sakein
+
+      // ── Manual / Real-bill mode toggle ──
+      if (testManualBtn && testRealBtn && billPicker) {
+        testManualBtn.addEventListener("click", async () => {
+          testMode = "manual";
+          testManualBtn.classList.add("active");
+          testRealBtn.classList.remove("active");
+          billPicker.style.display = "none";
+          testInputsBox.querySelectorAll(".ded-test-input").forEach((inp) => (inp.disabled = false));
+          runTest();
+        });
+        testRealBtn.addEventListener("click", async () => {
+          testMode = "real";
+          testRealBtn.classList.add("active");
+          testManualBtn.classList.remove("active");
+          billPicker.style.display = "";
+          testInputsBox.querySelectorAll(".ded-test-input").forEach((inp) => (inp.disabled = true));
+          await populateBillPicker(billPicker);
+        });
+        billPicker.addEventListener("change", async () => {
+          if (!billPicker.value) return;
+          const billData = await fetchBillForTest(billPicker.value);
+          if (!billData) return;
+          const mapped = mapBillToFormulaVars(billData);
+          testInputsBox.querySelectorAll(".ded-test-input").forEach((inp) => {
+            if (mapped[inp.dataset.var] !== undefined) inp.value = mapped[inp.dataset.var];
+          });
+          runTest();
+        });
+      }
     }
 
     modeBtns.forEach((btn) => {
@@ -730,6 +1032,7 @@ function addDeductionRow(data = {}) {
       customInput.value = buildPreview();
       customInput.focus();
       customInput.select();
+      customInput.dispatchEvent(new Event("input"));
     });
 
     buildPreview(); // initial preview dikhao
@@ -739,6 +1042,55 @@ function addDeductionRow(data = {}) {
   const saveFormulaBtn = row.querySelector(".ded-save-formula-btn");
   if (saveFormulaBtn) {
     saveFormulaBtn.addEventListener("click", () => saveFormulaToLibrary(customInput.value));
+  }
+
+  // ── Copy to another template: is poore deduction (naam, formula, stage,
+  // add/deduct) ko ek click mein kisi doosre template mein bhej do ──
+  const copyToTemplateBtn = row.querySelector(".ded-copy-to-template-btn");
+  if (copyToTemplateBtn) {
+    copyToTemplateBtn.addEventListener("click", async () => {
+      const otherTemplates = Object.entries(currentTemplates).filter(([id]) => id !== activeTemplateId);
+      if (otherTemplates.length === 0) {
+        showToast("Copy karne ke liye koi doosra template nahi hai.", "error");
+        return;
+      }
+      const options = otherTemplates.map(([id, t]) => `<option value="${id}">${t.name}</option>`).join("");
+      const { value: targetId } = await Swal.fire({
+        title: "📋 Kis template mein copy karein?",
+        input: "select",
+        inputOptions: Object.fromEntries(otherTemplates.map(([id, t]) => [id, t.name])),
+        showCancelButton: true,
+        confirmButtonText: "Copy Karo",
+        confirmButtonColor: "#005a9e",
+      });
+      if (!targetId) return;
+
+      const dedToCopy = {
+        name: row.querySelector(".ded-name").value.trim(),
+        type: typeSelect.value,
+        value: parseFloat(valueInput.value) || 0,
+        customFormula: customInput.value,
+        customStage: customStage.value,
+        applyAs: row.querySelector(".ded-apply").value,
+        optional: row.querySelector(".ded-optional").checked,
+        stage: customStage.value,
+      };
+      if (!dedToCopy.name) {
+        showToast("Pehle deduction ka naam bharo.", "error");
+        return;
+      }
+
+      if (!currentTemplates[targetId].deductions) currentTemplates[targetId].deductions = [];
+      currentTemplates[targetId].deductions.push(dedToCopy);
+      try {
+        await templatesRef.set({ templates: currentTemplates });
+        showToast(`✅ "${currentTemplates[targetId].name}" mein copy ho gaya!`);
+      } catch (e) {
+        console.error("Error copying deduction:", e);
+        currentTemplates[targetId].deductions.pop(); // rollback
+        showToast("Copy nahi ho paya, dobara try karo.", "error");
+      }
+    });
   }
 
   // ── Saved formulas ki list is row mein dikhao (naye row ke liye bhi) ──

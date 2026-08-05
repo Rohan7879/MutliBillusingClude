@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login — MandiBook</title>
+
+    <!-- Firebase Libraries -->
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+
+    <!-- Aapka Init File -->
+    <script src="js/core/firebase-init.js"></script>
+
+    <style>
+      body {
+        font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
+        background: #f0f4f8;
+        height: 100vh;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin: 0;
+      }
+      .login-card {
+        background: #fff;
+        padding: 40px;
+        border-radius: 12px;
+        box-shadow: 0 10px 25px rgba(0, 90, 158, 0.1);
+        width: 100%;
+        max-width: 350px;
+        text-align: center;
+      }
+      .login-card h2 {
+        color: #005a9e;
+        margin-bottom: 25px;
+      }
+      input {
+        width: 100%;
+        padding: 12px;
+        margin-bottom: 15px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font-size: 15px;
+        box-sizing: border-box;
+      }
+      input:focus {
+        border-color: #005a9e;
+        outline: none;
+      }
+      button {
+        width: 100%;
+        padding: 14px;
+        background: #005a9e;
+        color: #fff;
+        border: none;
+        border-radius: 8px;
+        font-size: 16px;
+        font-weight: bold;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      button:hover {
+        background: #003d6e;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="login-card">
+      <h2>MandiBook Secure Login</h2>
+      <input type="email" id="email" placeholder="Email Address" required />
+      <input type="password" id="password" placeholder="Password" required />
+      <button onclick="loginUser()">Login</button>
+    </div>
+
+    <script>
+      function loginUser() {
+        const email = document.getElementById("email").value;
+        const password = document.getElementById("password").value;
+
+        if (!email || !password) {
+          Swal.fire({ icon: "error", title: "Oops...", text: "Email aur Password zaruri hai!" });
+          return;
+        }
+
+        // Firebase Login Function
+        firebase
+          .auth()
+          .signInWithEmailAndPassword(email, password)
+          .then((userCredential) => {
+            Swal.fire({ icon: "success", title: "Login Successful", showConfirmButton: false, timer: 1500 }).then(
+              () => {
+                window.location.href = "index.html"; // Login ke baad Dashboard par bhejo
+              }
+            );
+          })
+          .catch((error) => {
+            Swal.fire({ icon: "error", title: "Login Failed", text: error.message });
+          });
+      }
+    </script>
+  </body>
+</html>

@@ -9,7 +9,7 @@ const firebaseConfig = {
   measurementId: "G-4ZSXCGNRF7",
 };
 
-// Initialize Firebase
+// 1️⃣ Sabse pehle Firebase ko Initialize (Start) karo!
 firebase.initializeApp(firebaseConfig);
 const db = firebase.firestore();
 const billsCollection = db.collection("bills");
@@ -23,3 +23,31 @@ db.enablePersistence().catch((err) => {
     // The current browser does not support all of the features required to enable persistence
   }
 });
+
+// 2️⃣ Ab Security Guard aur baki cheezein lagao
+firebase.auth().onAuthStateChanged((user) => {
+  const currentPage = window.location.pathname;
+  const isLoginPage = currentPage.includes("login.html");
+
+  if (!user) {
+    if (!isLoginPage) {
+      window.location.href = "login.html";
+    }
+  } else {
+    if (isLoginPage) {
+      window.location.href = "index.html";
+    }
+  }
+});
+
+function logoutUser() {
+  firebase
+    .auth()
+    .signOut()
+    .then(() => {
+      window.location.href = "login.html";
+    })
+    .catch((error) => {
+      console.error("Logout error: ", error);
+    });
+}
