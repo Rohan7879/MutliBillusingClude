@@ -1185,6 +1185,13 @@ async function downloadBillAsPDF() {
       useCORS: true,
       backgroundColor: "#ffffff",
       logging: false,
+      // Never let a phone viewport turn the receipt into the mobile
+      // two-column screen layout. The PDF is always rendered at a fixed
+      // desktop print width, then scaled to its A5 paper size.
+      windowWidth: 1024,
+      windowHeight: 1400,
+      scrollX: 0,
+      scrollY: 0,
     });
     const { jsPDF } = window.jspdf;
     const pdf = new jsPDF({ unit: "mm", format: "a5", orientation: "portrait" });
