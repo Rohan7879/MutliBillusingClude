@@ -13,14 +13,15 @@
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js"></script>
 
-    <script src="js/core/firebase-init.js?v=shared-link-v2"></script>
+    <script src="js/core/firebase-init.js?v=shared-link-v3"></script>
     <script src="js/core/utils.js"></script>
     <script src="js/core/core-engine.js"></script>
     <script src="js/features/company-profile.js"></script>
     <script src="js/core/bill-pdf-labels.js"></script>
-    <script src="js/features/bill-view.js?v=shared-link-v2"></script>
+    <script src="js/features/bill-view.js?v=shared-link-v3"></script>
     <link rel="stylesheet" href="css/main.css" />
     <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
+    <link rel="stylesheet" href="css/print.css" media="print" />
     <style>
       /* Styles for bill number and date layout */
       .bill-meta {
@@ -84,30 +85,34 @@
         </div>
       </div>
 
-      <div class="print-only-details container">
+      <div class="print-only-details" style="font-size: 11pt">
         <div class="detail-line">
-          <span class="detail-label-enter">નામ :</span>
+          <span class="detail-label-enter">નામ :- </span>
           <span class="detail-value-line" id="display_customer_name"></span>
-          <span class="detail-label-enter" style="margin-left: 20px">ગાડી નં :</span>
+        </div>
+        <div class="detail-line">
+          <span class="detail-label-enter">ગામ :- </span>
+          <span class="detail-value-line" id="display_village"></span>
+        </div>
+        <div class="detail-line">
+          <span class="detail-label-enter">ગાડી નં :- </span>
           <span class="detail-value-line" id="display_vehicle_no"></span>
         </div>
         <div class="detail-line">
-          <span class="detail-label-enter">ગામ :</span>
-          <span class="detail-value-line" id="display_village"></span>
-          <span class="detail-label-enter" style="margin-left: 20px">દલાલ :</span>
+          <span class="detail-label-enter">દલાલ :- </span>
           <span class="detail-value-line" id="display_broker"></span>
         </div>
       </div>
 
       <div id="total-bags-final-view" style="display: none"></div>
 
-      <div class="details-grid">
+      <div class="details-grid" style="grid-template-columns: repeat(5, 1fr);">
         <div class="detail-item" id="weighbridge_box">
-          <span class="detail-label">વેબ્રીજ વજન</span>
+          <span class="detail-label">વેબ્રીજ</span>
           <span class="detail-value" id="display_weighbridge_weight">0</span>
         </div>
         <div class="detail-item" id="kasar_box">
-          <span class="detail-label">કાંટા કસર (૦.૩%)</span>
+          <span class="detail-label" id="kasar_label">કાં.ક.</span>
           <span class="detail-value" id="display_kasar">0</span>
         </div>
         <div class="detail-item" id="wb_moisture_box" style="display: none">

@@ -1134,25 +1134,75 @@ async function buildBillPDFNative(billData) {
   return doc;
 }
 
-function downloadBillAsPDF() {
+async function downloadBillAsPDF() {
   const billData = JSON.parse(localStorage.getItem("currentBill"));
-  if (!billData) {
+  const billContainer = document.getElementById("finalcontainer");
+  if (!billData || !billContainer) {
     alert("No bill data found to download.");
     return;
   }
-  const billNo = billData["Serial No"];
-  const billName = billData["Customer Name"];
-  showLoading("Preparing PDF...");
 
-  buildBillPDFNative(billData)
-    .then((doc) => {
-      doc.save(`Bill No ${billNo}_${billName}.pdf`);
-      hideLoading();
-    })
-    .catch((err) => {
-      console.error("Native PDF generation failed, falling back to screenshot PDF:", err);
-      downloadBillAsPDF_screenshotFallback(billData);
+  const billNo = billData["Serial No"] || "Bill";
+  const billName = billData["Customer Name"] || "Customer";
+  const originalId = billContainer.id;
+  let printStyles;
+  showLoading("Preparing print-format PDF...");
+
+  try {
+    // The previous PDF used a separate jsPDF design, so it could never be
+    // identical to Print Bill. Load the exact print stylesheet for this
+    // capture and render the same live bill that the browser prints.
+    applyUniversalPrintSettings(billContainer);
+    printStyles = document.createElement("link");
+    printStyles.rel = "stylesheet";
+    printStyles.href = "css/print.css";
+    printStyles.media = "all";
+    printStyles.id = "pdf-print-layout-style";
+    document.head.appendChild(printStyles);
+
+    await new Promise((resolve, reject) => {
+      printStyles.onload = resolve;
+      printStyles.onerror = reject;
     });
+
+    // Same label and receipt layout as the Original print copy.
+    billContainer.id = "container-original";
+    await new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+
+    const canvas = await html2canvas(billContainer, {
+      scale: 2,
+      useCORS: true,
+      backgroundColor: "#ffffff",
+      logging: false,
+    });
+    const { jsPDF } = window.jspdf;
+    const pdf = new jsPDF({ unit: "mm", format: "a5", orientation: "portrait" });
+    const pdfWidth = pdf.internal.pageSize.getWidth();
+    const pdfHeight = pdf.internal.pageSize.getHeight();
+    const imageHeight = (canvas.height * pdfWidth) / canvas.width;
+    const imageData = canvas.toDataURL("image/png");
+
+    // Most bills fit on one A5 sheet. Long bills are split cleanly into
+    // additional A5 pages instead of being shrunk into unreadable text.
+    let remainingHeight = imageHeight;
+    let sourceOffset = 0;
+    while (remainingHeight > 0) {
+      if (sourceOffset > 0) pdf.addPage();
+      const visibleHeight = Math.min(pdfHeight, remainingHeight);
+      pdf.addImage(imageData, "PNG", 0, -sourceOffset, pdfWidth, imageHeight);
+      remainingHeight -= visibleHeight;
+      sourceOffset += pdfHeight;
+    }
+
+    pdf.save(`Bill No ${billNo}_${billName}.pdf`);
+  } catch (err) {
+    console.error("Print-format PDF generation failed:", err);
+    alert("Could not generate PDF. Please try again.");
+  } finally {
+    if (printStyles) printStyles.remove();
+    billContainer.id = originalId;
+    hideLoading();
+  }
 }
 
 // Kept as a safety-net fallback only — used automatically if the native
