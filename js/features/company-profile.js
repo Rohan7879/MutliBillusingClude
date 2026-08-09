@@ -45,13 +45,27 @@ async function saveCompanyProfile(data) {
 
 function generateSecureDownloadUrl(billId) {
   const base  = window.companyProfile.appUrl || "https://ganesh-agri-new.web.app";
-  const token = btoa(`${billId}:${Date.now()}`).replace(/=/g, "");
-  return `${base}/download.html?id=${billId}&t=${token}`;
+  return `${base.replace(/\/$/, "")}/download.html?id=${encodeURIComponent(billId)}`;
+}
+
+async function createPublicBillShare(billId, billData) {
+  const bytes = new Uint8Array(24);
+  crypto.getRandomValues(bytes);
+  const token = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
+  const expiresAt = firebase.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+  await db.collection("sharedBills").doc(token).set({
+    bill: billData,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    expiresAt,
+  });
+  const base = (window.companyProfile.appUrl || "https://ganesh-agri-new.web.app").replace(/\/$/, "");
+  return `${base}/download.html?share=${token}`;
 }
 
 window.loadCompanyProfile        = loadCompanyProfile;
 window.saveCompanyProfile        = saveCompanyProfile;
 window.generateSecureDownloadUrl = generateSecureDownloadUrl;
+window.createPublicBillShare = createPublicBillShare;
 
 // Auto-load on every page
 document.addEventListener("DOMContentLoaded", () => loadCompanyProfile());

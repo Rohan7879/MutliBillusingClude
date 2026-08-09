@@ -1,7 +1,10 @@
 document.addEventListener("DOMContentLoaded", () => {
   const urlParams = new URLSearchParams(window.location.search);
+  const shareToken = urlParams.get("share");
   const billId = urlParams.get("id") || urlParams.get("billId");
-  if (billId) {
+  if (shareToken) {
+    fetchSharedBillAndDisplay(shareToken);
+  } else if (billId) {
     fetchBillAndDisplay(billId);
   }
 
@@ -96,6 +99,21 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
 });
+
+async function fetchSharedBillAndDisplay(shareToken) {
+  try {
+    showLoading("Loading shared bill...");
+    const sharedDoc = await db.collection("sharedBills").doc(shareToken).get();
+    if (!sharedDoc.exists || !sharedDoc.data().bill) throw new Error("Shared bill not found.");
+    displayData(sharedDoc.data().bill);
+    await applyBoxOrder();
+  } catch (error) {
+    console.error("Could not load shared bill:", error);
+    alert("This bill link is invalid or has expired.");
+  } finally {
+    hideLoading();
+  }
+}
 
 async function fetchBillAndDisplay(billId) {
   try {
@@ -604,29 +622,52 @@ async function sendBillViaWhatsApp() {
   // Load company profile for URL + settings
   const profile = window.companyProfile || {};
   const wp = profile.whatsapp || {};
+  let customerPhone = data.phone || data.farmerPhone || "";
+  if (!customerPhone && data.customerId) {
+    try {
+      const partyDoc = await db.collection("parties").doc(data.customerId).get();
+      if (partyDoc.exists) customerPhone = partyDoc.data().phone || "";
+    } catch (e) {
+      console.warn("Could not load customer phone:", e);
+    }
+  }
+  if (!customerPhone) {
+    try {
+      const partySnap = await db.collection("parties").where("name", "==", data["Customer Name"] || "").limit(1).get();
+      if (!partySnap.empty) customerPhone = partySnap.docs[0].data().phone || "";
+    } catch (e) {
+      console.warn("Could not search customer phone:", e);
+    }
+  }
 
   // Secure download link
-  const downloadLink = window.generateSecureDownloadUrl
-    ? window.generateSecureDownloadUrl(billId)
-    : `${profile.appUrl || "https://ganesh-agri-new.web.app"}/download.html?id=${billId}`;
+  let downloadLink;
+  try {
+    downloadLink = window.createPublicBillShare
+      ? await window.createPublicBillShare(billId, data)
+      : `${profile.appUrl || "https://ganesh-agri-new.web.app"}/download.html?id=${billId}`;
+  } catch (e) {
+    alert("Could not create the bill download link.");
+    return;
+  }
 
   // Build message
   const lines = [];
-  lines.push(`🧾 *Bill No:* ${data["Serial No"]}`);
-  lines.push(`📅 *Date:* ${data["Date"]}`);
-  lines.push(`👤 *Name:* ${data["Customer Name"]}`);
-  if (data["Village"]) lines.push(`🏘️ *Village:* ${data["Village"]}`);
-  if (wp.showBroker !== false && data["Broker"]) lines.push(`🤝 *Broker:* ${data["Broker"]}`);
-  if (wp.showProduct !== false && data["ProductTemplate"]) lines.push(`🌾 *Product:* ${data["ProductTemplate"]}`);
+  lines.push(`*Bill No:* ${data["Serial No"]}`);
+  lines.push(`*Date:* ${data["Date"]}`);
+  lines.push(`*Name:* ${data["Customer Name"]}`);
+  if (data["Village"]) lines.push(`*Village:* ${data["Village"]}`);
+  if (wp.showBroker !== false && data["Broker"]) lines.push(`*Broker:* ${data["Broker"]}`);
+  if (wp.showProduct !== false && data["ProductTemplate"]) lines.push(`*Product:* ${data["ProductTemplate"]}`);
   if (wp.showNetWeight !== false)
-    lines.push(`⚖️ *Net Weight:* ${Number(data["Net Weight"]).toLocaleString("en-IN")} kg`);
+    lines.push(`*Net Weight:* ${Number(data["Net Weight"]).toLocaleString("en-IN")} kg`);
 
   // Vakal details
   if (wp.showVakalDetails !== false) {
-    lines.push("\n📦 *Vakal Details:*");
+    lines.push("\n*Vakal Details:*");
     if (data["Bill Type"] === "Loose") {
       lines.push(
-        `  • ${data["Vakal 1 Kilo"]} kg @ ₹${data["Vakal 1 Bhav"]} = ₹${Number(data["Vakal 1 Amount"]).toLocaleString(
+        `- ${data["Vakal 1 Kilo"]} kg @ Rs. ${data["Vakal 1 Bhav"]} = Rs. ${Number(data["Vakal 1 Amount"]).toLocaleString(
           "en-IN"
         )}`
       );
@@ -634,30 +675,34 @@ async function sendBillViaWhatsApp() {
       for (let i = 1; i <= 5; i++) {
         if ((data[`Vakal ${i} Katta`] || 0) > 0) {
           lines.push(
-            `  • વકલ ${i}: ${data[`Vakal ${i} Katta`]} bags, ${data[`Vakal ${i} Kilo`]} kg @ ₹${
+            `- Vakal ${i}: ${data[`Vakal ${i} Katta`]} bags, ${data[`Vakal ${i} Kilo`]} kg @ Rs. ${
               data[`Vakal ${i} Bhav`]
-            } = ₹${Number(data[`Vakal ${i} Amount`]).toLocaleString("en-IN")}`
+            } = Rs. ${Number(data[`Vakal ${i} Amount`]).toLocaleString("en-IN")}`
           );
         }
       }
     }
   }
 
-  lines.push(`\n💰 *Total:* ₹${Number(data["Total Amount"]).toLocaleString("en-IN")}`);
-  lines.push(`📉 *Utrai:* -₹${Number(data["Utrāī"]).toLocaleString("en-IN")}`);
+  lines.push(`\n*Total:* Rs. ${Number(data["Total Amount"]).toLocaleString("en-IN")}`);
+  lines.push(`*Utrai:* -Rs. ${Number(data["Utrāī"]).toLocaleString("en-IN")}`);
   if ((data["Truck Freight"] || 0) > 0)
-    lines.push(`🚛 *Freight:* +₹${Number(data["Truck Freight"]).toLocaleString("en-IN")}`);
-  lines.push(`\n✅ *Final Total: ₹${Number(data["Final Total"]).toLocaleString("en-IN")}*`);
-  if (wp.showRemarks !== false && data["Remarks"]) lines.push(`\n📝 *Remarks:* ${data["Remarks"]}`);
+    lines.push(`*Freight:* +Rs. ${Number(data["Truck Freight"]).toLocaleString("en-IN")}`);
+  lines.push(`\n*Final Total: Rs. ${Number(data["Final Total"]).toLocaleString("en-IN")}*`);
+  if (wp.showRemarks !== false && data["Remarks"]) lines.push(`\n*Remarks:* ${data["Remarks"]}`);
 
   // Company name if set
-  if (profile.name) lines.push(`\n🏢 ${profile.name}`);
-  if (profile.phone) lines.push(`📞 ${profile.phone}`);
+  if (profile.name) lines.push(`\n${profile.name}`);
+  if (profile.phone) lines.push(`Phone: ${profile.phone}`);
 
-  lines.push(`\n🔗 *Bill Download:*\n${downloadLink}`);
+  lines.push(`\n*Bill Download:*\n${downloadLink}`);
 
   const message = lines.join("\n");
-  window.open(`https://wa.me/?text=${encodeURIComponent(message)}`, "_blank");
+  const normalizedPhone = String(customerPhone).replace(/\D/g, "").slice(-10);
+  const whatsappUrl = normalizedPhone
+    ? `https://wa.me/91${normalizedPhone}?text=${encodeURIComponent(message)}`
+    : `https://wa.me/?text=${encodeURIComponent(message)}`;
+  window.open(whatsappUrl, "_blank");
 }
 
 // ═══════════════════════════════════════════════════════════════════════════

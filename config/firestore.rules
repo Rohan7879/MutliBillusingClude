@@ -1,6 +1,15 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // A customer can open only an unguessable, time-limited shared bill link.
+    // Collection listing is never public; staff authentication is required to
+    // create or revoke a link.
+    match /sharedBills/{shareId} {
+      allow get: if resource.data.expiresAt > request.time;
+      allow list: if false;
+      allow create, update, delete: if request.auth != null;
+    }
+
     // Every request must come from a signed-in Firebase user. Client-side
     // redirects are only a UI feature; Firestore rules are the real data
     // boundary. More granular staff roles can be added once user roles are

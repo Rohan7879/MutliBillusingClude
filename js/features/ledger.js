@@ -94,6 +94,7 @@ async function fetchUniqueCustomers() {
     }
 
     const customerMap = new Map();
+    const partyKeyById = new Map();
 
     // 🚀 Safe mapping with deleted !== true filter
     partiesSnapshot.docs.forEach((doc) => {
@@ -108,6 +109,7 @@ async function fetchUniqueCustomers() {
             village: village,
             customerId: doc.id,
           });
+          partyKeyById.set(doc.id, key);
         }
       }
     });
@@ -118,6 +120,20 @@ async function fetchUniqueCustomers() {
       const customerName = data["Customer Name"] || data.customerName;
       if (customerName) {
         const village = data["Village"] || data.customerVillage || "N/A";
+        const canonicalKey = data.customerId ? partyKeyById.get(data.customerId) : null;
+        if (canonicalKey && customerMap.has(canonicalKey)) {
+          const party = customerMap.get(canonicalKey);
+          if ((!party.village || party.village.toUpperCase() === "N/A") && village.toUpperCase() !== "N/A") {
+            party.village = village;
+          }
+          return;
+        }
+        // Legacy bills created before customerId existed are merged only when
+        // Party Master has exactly one active party with that same name.
+        const sameNameParties = Array.from(customerMap.values()).filter(
+          (party) => party.name.trim().toLowerCase() === customerName.trim().toLowerCase()
+        );
+        if (sameNameParties.length === 1) return;
         const key = `${customerName.toLowerCase()}|${village.toLowerCase()}`;
         if (!customerMap.has(key)) {
           customerMap.set(key, {

@@ -1290,6 +1290,8 @@
                   autocomplete="off"
                   oninput="this.value=this.value.toUpperCase()"
                 />
+                <input type="hidden" name="customer_id" id="selected_customer_id" />
+                <button type="button" id="change-customer-btn" style="display:none;margin-top:6px;padding:4px 8px;border:0;border-radius:5px;background:#e7f3ff;color:#005a9e;font-size:11px;font-weight:700;cursor:pointer;">Change Party</button>
                 <datalist id="customer_datalist"></datalist>
                 <div id="autocomplete-container"></div>
               </div>
@@ -1307,6 +1309,7 @@
                 <input
                   type="text"
                   name="village"
+                  readonly
                   oninput="this.value=this.value.toUpperCase()"
                   placeholder="Village..."
                 />

@@ -28,9 +28,10 @@ db.enablePersistence().catch((err) => {
 firebase.auth().onAuthStateChanged((user) => {
   const currentPage = window.location.pathname;
   const isLoginPage = currentPage.includes("login.html");
+  const isPublicSharedBill = currentPage.includes("download.html") && new URLSearchParams(window.location.search).has("share");
 
   if (!user) {
-    if (!isLoginPage) {
+    if (!isLoginPage && !isPublicSharedBill) {
       window.location.href = "login.html";
     }
   } else {

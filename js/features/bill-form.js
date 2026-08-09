@@ -78,6 +78,33 @@ document.addEventListener("DOMContentLoaded", () => {
 
 let uniqueCustomers = []; // To hold our customer list
 let uniqueBrokers = []; // 🚀 YE NAYI LINE ADD KARNI HAI
+function lockSelectedCustomer(customer) {
+  const name = document.querySelector('input[name="customer_name"]');
+  const village = document.querySelector('input[name="village"]');
+  const id = document.getElementById("selected_customer_id");
+  const changeBtn = document.getElementById("change-customer-btn");
+  if (!name || !village || !customer) return;
+  name.value = customer.name || "";
+  village.value = customer.village || customer.address || "";
+  if (id) id.value = customer.id || "";
+  name.readOnly = true;
+  village.readOnly = true;
+  if (changeBtn) changeBtn.style.display = "inline-block";
+}
+
+function unlockCustomerSelection() {
+  const name = document.querySelector('input[name="customer_name"]');
+  const village = document.querySelector('input[name="village"]');
+  const id = document.getElementById("selected_customer_id");
+  const changeBtn = document.getElementById("change-customer-btn");
+  if (name) { name.readOnly = false; name.value = ""; name.focus(); }
+  if (village) { village.readOnly = true; village.value = ""; }
+  if (id) id.value = "";
+  if (changeBtn) changeBtn.style.display = "none";
+}
+document.addEventListener("DOMContentLoaded", () => {
+  document.getElementById("change-customer-btn")?.addEventListener("click", unlockCustomerSelection);
+});
 async function setupAutocomplete() {
   try {
     // 1. Bina kisi strict condition ke saara data fetch karo (Safe approach)
@@ -191,8 +218,7 @@ async function setupAutocomplete() {
       const item = document.createElement("div");
       item.innerHTML = `<strong>${customer.name}</strong> (${customer.village})`;
       item.addEventListener("click", () => {
-        nameInput.value = customer.name;
-        villageInput.value = customer.village;
+        lockSelectedCustomer(customer);
         suggestionsBox.innerHTML = "";
       });
       suggestionsList.appendChild(item);
@@ -1107,7 +1133,7 @@ async function collectData() {
       await updateBrokerCommission(data);
     }
 
-    checkAndSendWhatsApp(data);
+    await checkAndSendWhatsApp(data, docRef.id);
     window.location.href = `final.html?id=${docRef.id}`;
     // ==================== SMART WHATSAPP AUTOMATION (WITH ON-THE-FLY NUMBER PROMPT) ====================
 
@@ -1406,7 +1432,7 @@ window.applyBrokerDetails = function (brokerName, commission) {
   }
 };
 // Jab bill successfully save ho jaye, tab yeh function call karein:
-function checkAndSendWhatsApp(billData) {
+async function checkAndSendWhatsApp(billData, billId) {
   // Check karo ki user ne settings mein toggle ON rakha hai ya nahi
   const isAutoSendOn = localStorage.getItem("whatsapp_auto_send") === "true";
 
@@ -1425,15 +1451,25 @@ function checkAndSendWhatsApp(billData) {
     return;
   }
 
+  let downloadLink = "";
+  if (billId && typeof createPublicBillShare === "function") {
+    try {
+      downloadLink = await createPublicBillShare(billId, billData);
+    } catch (error) {
+      console.warn("Could not create WhatsApp bill share link:", error);
+    }
+  }
+
   // Message format jo kisan ke paas jayega
   let message =
     `Namaste Kisan Ji, ${
       globalSettings && globalSettings.companyName ? globalSettings.companyName : "Hamari Company"
-    } mein aapka swagat hai. 🙏\n\n` +
-    `📋 *Bill No:* ${billData["Serial No"] || "-"}\n` +
-    `🌾 *Item:* ${billData["ProductTemplate"] || "-"}\n` +
-    `⚖️ *Net Weight:* ${billData["Net Weight"] || 0} kg\n` +
-    `💵 *Total Amount:* ₹${billData["Final Total"] || 0}\n\n` +
+    } mein aapka swagat hai.\n\n` +
+    `*Bill No:* ${billData["Serial No"] || "-"}\n` +
+    `*Item:* ${billData["ProductTemplate"] || "-"}\n` +
+    `*Net Weight:* ${billData["Net Weight"] || 0} kg\n` +
+    `*Total Amount:* Rs. ${billData["Final Total"] || 0}\n\n` +
+    (downloadLink ? `*Bill Download:*\n${downloadLink}\n\n` : "") +
     `Aapka maal darj ho chuka hai. Dhanyawad! - ${
       globalSettings && globalSettings.companyName ? globalSettings.companyName : "Company"
     }`;
@@ -1470,13 +1506,13 @@ document.addEventListener("DOMContentLoaded", () => {
         if (nameInput) {
           const enteredName = nameInput.value.trim();
           if (enteredName) {
-            const isPartyValid = window.partiesMasterList.some(
+            const selectedParty = window.partiesMasterList.find(
               (party) =>
                 (party.type === "Farmer" || party.type === "Vepari") &&
                 party.name.toLowerCase() === enteredName.toLowerCase()
             );
 
-            if (!isPartyValid) {
+            if (!selectedParty) {
               e.preventDefault();
               e.stopImmediatePropagation();
               Swal.fire({
@@ -1486,6 +1522,32 @@ document.addEventListener("DOMContentLoaded", () => {
                 confirmButtonColor: "#d33",
               });
               return; // Galti milte hi yahin ruk jao, aage check mat karo
+            }
+
+            const masterVillage = (selectedParty.address || "").trim().toUpperCase();
+            const villageInput = document.querySelector('input[name="village"]');
+            const enteredVillage = (villageInput?.value || "").trim().toUpperCase();
+            if (!masterVillage) {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              Swal.fire({
+                icon: "error",
+                title: "Village Missing! 📍",
+                text: `"${enteredName}" ke Party Master record mein Village / City add karo, phir bill banao.`,
+                confirmButtonColor: "#d33",
+              });
+              return;
+            }
+            if (!enteredVillage || enteredVillage !== masterVillage) {
+              e.preventDefault();
+              e.stopImmediatePropagation();
+              Swal.fire({
+                icon: "error",
+                title: "Village Must Match Party Master",
+                text: `Is bill ke liye Village "${masterVillage}" hona chahiye.`,
+                confirmButtonColor: "#d33",
+              });
+              return;
             }
           }
         }
@@ -1590,8 +1652,7 @@ if (nameInput) {
       const item = document.createElement("div");
       item.innerHTML = `<strong>${customer.name}</strong> (${customer.village})`;
       item.addEventListener("click", () => {
-        nameInput.value = customer.name;
-        villageInput.value = customer.village;
+        lockSelectedCustomer(customer);
         suggestionsBox.innerHTML = "";
       });
       suggestionsList.appendChild(item);

@@ -1,5 +1,6 @@
 let partiesList = [];
 let billsSummaryMap = {}; // Feature 5: Party-wise bill counts
+let ledgerBalanceByPartyId = {};
 let currentFilterType = "All";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -30,8 +31,9 @@ document.addEventListener("DOMContentLoaded", async () => {
 // Feature 5: Calculate bill count and business stats for each party from Firestore
 async function fetchBillsSummary() {
   try {
-    const snap = await db.collection("bills").get();
+    const [snap, paymentsSnap] = await Promise.all([db.collection("bills").get(), db.collection("payments").get()]);
     billsSummaryMap = {};
+    ledgerBalanceByPartyId = {};
     snap.forEach((doc) => {
       const data = doc.data();
       if (data.deleted === true) return;
@@ -41,11 +43,21 @@ async function fetchBillsSummary() {
       if (cust) {
         billsSummaryMap[cust] = (billsSummaryMap[cust] || 0) + 1;
       }
+      if (data.customerId) {
+        ledgerBalanceByPartyId[data.customerId] =
+          (ledgerBalanceByPartyId[data.customerId] || 0) + Number(data["Final Total"] || 0);
+      }
       // Count for broker
       const brk = data["Broker"] || data.broker;
       if (brk) {
         billsSummaryMap[brk] = (billsSummaryMap[brk] || 0) + 1;
       }
+    });
+    paymentsSnap.forEach((doc) => {
+      const payment = doc.data();
+      if (payment.deleted === true || !payment.customerId) return;
+      ledgerBalanceByPartyId[payment.customerId] =
+        (ledgerBalanceByPartyId[payment.customerId] || 0) - Number(payment.totalCredit || 0);
     });
   } catch (e) {
     console.warn("Could not fetch bills summary:", e);
@@ -72,9 +84,13 @@ async function saveParty() {
   const partyPhone = document.getElementById("partyPhone")?.value?.trim() || "";
   const partyAltPhone = document.getElementById("partyAltPhone")?.value?.trim() || "";
   const partyGst = document.getElementById("partyGst")?.value?.trim()?.toUpperCase() || "";
+  const partyVillage = document.getElementById("partyAddress")?.value?.trim()?.toUpperCase() || "";
 
   if (!partyName) {
     return Swal.fire("Error", "Party name is required.", "error");
+  }
+  if (!partyVillage) {
+    return Swal.fire("Village Required", "Party save karne ke liye Village / City mandatory hai.", "error");
   }
 
   // ── Duplicate Checks (Current editing ID ko ignore karega taaki self-duplicate error na aaye) ──
@@ -109,7 +125,7 @@ async function saveParty() {
     munimName: document.getElementById("partyMunim")?.value?.trim()?.toUpperCase() || "",
     phone: partyPhone,
     altPhone: partyAltPhone,
-    address: document.getElementById("partyAddress")?.value?.trim()?.toUpperCase() || "",
+    address: partyVillage,
     gst: partyGst,
     defaultComm: partyType === "Broker" ? parseFloat(document.getElementById("partyComm")?.value) || 0 : 0,
     creditLimit: parseFloat(document.getElementById("partyCreditLimit")?.value) || 0,
@@ -231,9 +247,14 @@ function drawTable(data) {
       let flagTag = p.isBlacklisted
         ? `<span class="px-1.5 py-0.5 ml-2 bg-red-100 text-red-700 text-[10px] font-bold rounded">🚩 DEFAULTER</span>`
         : "";
-      let balColor = p.opBalType === "Dr" ? "text-red-600" : "text-green-600";
-      let balAmount =
-        p.opBal > 0 ? `₹${p.opBal.toLocaleString("en-IN")} <span class="text-[10px]">${p.opBalType}</span>` : "-";
+      const liveBalance = ledgerBalanceByPartyId[rawParty.id];
+      const hasLiveLedgerBalance = rawParty.type === "Farmer" || rawParty.type === "Vepari";
+      const balanceToShow = hasLiveLedgerBalance ? Number(liveBalance || 0) : Number(rawParty.opBal || 0);
+      const balColor = balanceToShow > 0 ? "text-red-600" : "text-green-600";
+      const balAmount =
+        balanceToShow !== 0
+          ? `₹${Math.abs(balanceToShow).toLocaleString("en-IN")} <span class="text-[10px]">${balanceToShow > 0 ? "Dr" : "Cr"}</span>`
+          : "-";
 
       // Feature 5: Business Summary Badge (Total bills linked)
       let totalBills = billsSummaryMap[p.name] || 0;
