@@ -1407,15 +1407,15 @@
 
         <div class="tmodal-field">
           <label>Product Name *</label>
-          <input type="text" id="modal-template-name" placeholder="e.g. ઘઉં, મગફળી, મગ (ya English mein bhi)" />
-          <small style="display: block; margin-top: 4px; color: #6c757d; font-size: 11px">
-            💡 Yeh naam bill pe dikhega — Gujarati ya English, jo chaho likho
+          <input type="text" id="modal-template-name" oninput="this.value=this.value.toUpperCase()" style="text-transform: uppercase;" placeholder="e.g. ઘઉં, મગફળી, મગ (ya English mein bhi)" />
+          <small style="display: block; margin-top: 4px; color: #6c757d; font-size: 11px;">
+              💡 Yeh naam bill pe dikhega — Gujarati ya English, jo chaho likho
           </small>
-        </div>
-        <div class="tmodal-field">
+      </div>
+      <divclass="tmodal-field">
           <label>Bill Series Prefix</label>
-          <input type="text" id="modal-series-prefix" placeholder="e.g. GN, WH, MG" maxlength="5" />
-        </div>
+          <input type="text" id="modal-series-prefix" oninput="this.value=this.value.toUpperCase()" style="text-transform: uppercase;" placeholder="e.g. GN, WH, MG" maxlength="5" />
+      </divclass=>
         <div class="tmodal-field">
           <label>Price Unit</label>
           <select id="modal-price-unit">

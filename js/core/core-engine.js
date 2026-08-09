@@ -543,6 +543,13 @@ function renderNavbar() {
        </button>`
       : "";
 
+  // Har page pe logout ka option — pehle sirf index.html (Dashboard) pe
+  // tha, isliye kisi doosre page se seedha logout nahi ho pata tha.
+  const logoutHtml =
+    typeof logoutUser === "function"
+      ? `<a class="nav-link" href="#" onclick="logoutUser(); return false;">🚪 <span>Logout</span></a>`
+      : "";
+
   // Navbar CSS now lives ONLY in css/main.css — this used to ALSO inject
   // its own <style> block here with old values (fixed height, nowrap),
   // and because it's added to the DOM via JS (after main.css already
@@ -555,7 +562,7 @@ function renderNavbar() {
         <span>MandiBook</span>
       </a>
       <button class="navbar-toggle" id="navbar-toggle" aria-label="Menu" type="button">☰</button>
-      <div class="navbar-links" id="navbar-links">${linksHtml}${connHtml}</div>
+      <div class="navbar-links" id="navbar-links">${linksHtml}${connHtml}${logoutHtml}</div>
     </nav>`;
 
   // Hamburger toggle — chhoti screen par links ek dropdown ke peeche chhup

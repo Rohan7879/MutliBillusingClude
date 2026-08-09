@@ -242,60 +242,60 @@ function drawTable(data) {
       }
 
       return `
-        <tr class="border-b hover:bg-slate-50 transition ${p.isBlacklisted ? "bg-red-50/30" : ""}">
-            <td class="p-3">
-                <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded bg-blue-50 text-blue-600 mb-1">${
-                  p.type
-                }</span>
-                <div class="font-bold text-slate-900 flex items-center">${p.name} ${flagTag}</div>
-                ${
-                  p.munimName
-                    ? `<div class="text-[11px] text-slate-500 font-medium">👤 Munim: ${p.munimName}</div>`
-                    : ""
-                }
-                <div class="text-xs text-slate-500 font-medium mt-0.5">📍 ${p.address || "No Village"}</div>
-                ${p.gst ? `<div class="text-[11px] text-slate-400 mt-0.5">GST: ${p.gst}</div>` : ""}
-            </td>
-            <td class="p-3">
-                <div class="font-medium text-slate-700 text-sm mb-1 flex items-center gap-2">
-                   📞 ${p.phone}
-                   <a href="https://wa.me/91${
-                     p.phone
-                   }" target="_blank" class="text-green-600 hover:text-green-700 text-xs font-bold bg-green-50 px-1.5 py-0.5 rounded">💬 WA</a>
-                </div>
-                ${p.altPhone ? `<div class="text-xs text-slate-500 mb-1">📞 Alt: ${p.altPhone}</div>` : ""}
-                ${p.bankAcc ? `<div class="text-[11px] text-slate-500">🏦 A/c: ${p.bankAcc}</div>` : ""}
-            </td>
-            <td class="p-3">
-                <div class="font-bold text-sm ${balColor}">Bal: ${balAmount}</div>
-                <div class="mt-1">${summaryBadge}</div>
-                ${
-                  p.type === "Broker" && p.defaultComm
-                    ? `<div class="text-[11px] text-blue-600 font-semibold mt-0.5">Comm: ₹${p.defaultComm}/bag</div>`
-                    : ""
-                }
-                ${
-                  p.creditLimit
-                    ? `<div class="text-[11px] text-orange-600 mt-0.5">Limit: ₹${p.creditLimit.toLocaleString(
-                        "en-IN"
-                      )}</div>`
-                    : ""
-                }
-            </td>
-            <td class="p-3 text-center">
-                <!-- Direct Ledger/Broker Shortcut Link -->
-                ${actionLink}
-                <div class="flex justify-center gap-1 mt-1">
-                    <button onclick="editParty('${
-                      p.id
-                    }')" class="text-blue-600 hover:text-blue-800 p-1 font-bold text-xs bg-blue-50 rounded px-2">Edit</button>
-                    <button onclick="deleteParty('${
-                      p.id
-                    }')" class="text-red-500 hover:text-red-700 p-1 font-bold text-xs bg-red-50 rounded px-2">Delete</button>
-                </div>
-            </td>
-        </tr>
-    `;
+      <tr class="border-b hover:bg-blue-50/60 transition cursor-pointer ${
+        p.isBlacklisted ? "bg-red-50/30" : ""
+      }" onclick="if(event.target.tagName !== 'BUTTON' && event.target.tagName !== 'A' && event.target.tagName !== 'I') { showPartyDetailsModal('${
+        p.id
+      }') }">
+          <td class="p-3">
+              <span class="inline-block px-2 py-0.5 text-xs font-semibold rounded bg-blue-50 text-blue-600 mb-1">${
+                p.type
+              }</span>
+              <div class="font-bold text-slate-900 flex items-center">${p.name} ${flagTag}</div>
+              ${p.munimName ? `<div class="text-[11px] text-slate-500 font-medium">👤 Munim: ${p.munimName}</div>` : ""}
+              <div class="text-xs text-slate-500 font-medium mt-0.5">📍 ${p.address || "No Village"}</div>
+              ${p.gst ? `<div class="text-[11px] text-slate-400 mt-0.5">GST: ${p.gst}</div>` : ""}
+          </td>
+          <td class="p-3">
+              <div class="font-medium text-slate-700 text-sm mb-1 flex items-center gap-2">
+                 📞 ${p.phone}
+                 <a href="https://wa.me/91${
+                   p.phone
+                 }" target="_blank" class="text-green-600 hover:text-green-700 text-xs font-bold bg-green-50 px-1.5 py-0.5 rounded">💬 WA</a>
+              </div>
+              ${p.altPhone ? `<div class="text-xs text-slate-500 mb-1">📞 Alt: ${p.altPhone}</div>` : ""}
+              ${p.bankAcc ? `<div class="text-[11px] text-slate-500">🏦 A/c: ${p.bankAcc}</div>` : ""}
+          </td>
+          <td class="p-3">
+              <div class="font-bold text-sm ${balColor}">Bal: ${balAmount}</div>
+              <div class="mt-1">${summaryBadge}</div>
+              ${
+                p.type === "Broker" && p.defaultComm
+                  ? `<div class="text-[11px] text-blue-600 font-semibold mt-0.5">Comm: ₹${p.defaultComm}/bag</div>`
+                  : ""
+              }
+              ${
+                p.creditLimit
+                  ? `<div class="text-[11px] text-orange-600 mt-0.5">Limit: ₹${p.creditLimit.toLocaleString(
+                      "en-IN"
+                    )}</div>`
+                  : ""
+              }
+          </td>
+          <td class="p-3 text-center">
+              <!-- Direct Ledger/Broker Shortcut Link -->
+              ${actionLink}
+              <div class="flex justify-center gap-1 mt-1">
+                  <button onclick="editParty('${
+                    p.id
+                  }')" class="text-blue-600 hover:text-blue-800 p-1 font-bold text-xs bg-blue-50 rounded px-2">Edit</button>
+                  <button onclick="deleteParty('${
+                    p.id
+                  }')" class="text-red-500 hover:text-red-700 p-1 font-bold text-xs bg-red-50 rounded px-2">Delete</button>
+              </div>
+          </td>
+      </tr>
+  `;
     })
     .join("");
 }
@@ -623,3 +623,75 @@ async function handleDeleteParty(partyId, partyName) {
     alert("Delete karne mein error aaya. Console check karein.");
   }
 }
+// 🌟 1. Party Row Click karne par Popup Modal dikhane ka function
+window.showPartyDetailsModal = function (id) {
+  const p = partiesList.find((x) => x.id === id);
+  if (!p) return;
+
+  const balanceType = p.opBalType || "Cr";
+  const balColorClass = balanceType === "Dr" ? "text-red-600" : "text-green-600";
+
+  Swal.fire({
+    title: `<span class="text-slate-800 text-lg font-bold">👤 ${p.name}</span>`,
+    html: `
+      <div class="text-left bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm space-y-2.5">
+        <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Type:</span> <span class="font-bold text-blue-600">${
+          p.type
+        }</span></div>
+        <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Mobile:</span> <span class="font-bold">${
+          p.phone
+        } ${p.altPhone ? "/ " + p.altPhone : ""}</span></div>
+        <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Village / Address:</span> <span class="font-bold">${
+          p.address || "N/A"
+        }</span></div>
+        <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Munim Name:</span> <span class="font-bold">${
+          p.munimName || "N/A"
+        }</span></div>
+        <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Opening Balance:</span> <span class="font-bold ${balColorClass}">₹${
+      p.opBal || 0
+    } (${balanceType})</span></div>
+        <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Credit Limit:</span> <span class="font-bold text-orange-600">₹${
+          p.creditLimit || 0
+        }</span></div>
+        <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Bank A/C Number:</span> <span class="font-bold">${
+          p.bankAcc || "N/A"
+        }</span></div>
+        <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">IFSC Code:</span> <span class="font-bold uppercase">${
+          p.ifsc || "N/A"
+        }</span></div>
+        <div class="flex justify-between"><span class="text-slate-500 font-medium">GSTIN:</span> <span class="font-bold uppercase">${
+          p.gst || "N/A"
+        }</span></div>
+      </div>
+    `,
+    showCancelButton: true,
+    confirmButtonText: "💬 Share via WhatsApp",
+    confirmButtonColor: "#16a34a", // Green WhatsApp color
+    cancelButtonText: "Close",
+    cancelButtonColor: "#64748b",
+    width: "450px",
+  }).then((result) => {
+    if (result.isConfirmed) {
+      sharePartyDetails(p);
+    }
+  });
+};
+
+// 💬 2. WhatsApp par formatted text bhejne ka function
+window.sharePartyDetails = function (p) {
+  const balanceType = p.opBalType || "Cr";
+  const text = `📋 *Party Details - MandiBook*
+----------------------------------
+*Name:* ${p.name}
+*Village:* ${p.address || "N/A"}
+*Mobile:* ${p.phone}
+*Type:* ${p.type}
+*Balance:* ₹${p.opBal || 0} (${balanceType})
+*Bank A/C:* ${p.bankAcc || "N/A"} (${p.ifsc || "N/A"})
+----------------------------------
+*Ganesh Agri Industries*`;
+
+  const encodedText = encodeURIComponent(text);
+  const whatsappUrl = `https://wa.me/91${p.phone}?text=${encodedText}`;
+  window.open(whatsappUrl, "_blank");
+};
