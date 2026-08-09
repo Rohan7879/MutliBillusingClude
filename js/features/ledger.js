@@ -532,19 +532,9 @@ function closePaymentModal() {
 async function updateCustomerMasterBalance(customer, delta) {
   if (!customer || !customer.customerId) return;
   try {
-    const masterRef = db.collection("parties").doc(customer.customerId);
-
-    await db.runTransaction(async (transaction) => {
-      const masterDoc = await transaction.get(masterRef);
-      if (!masterDoc.exists) return;
-      const prevBalance = masterDoc.data().currentBalance || 0;
-      transaction.update(masterRef, {
-        currentBalance: prevBalance + delta,
-        lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-    });
+    await adjustPartyBalance(customer.customerId, delta);
   } catch (e) {
-    console.error("Master balance update error:", e);
+    console.error("Party Master balance update error:", e);
   }
 }
 
@@ -565,6 +555,21 @@ async function savePayment() {
   if (deductionAmount > 0 && !deductionReason) {
     Swal.fire("Invalid Input", "Please provide a reason for the deduction.", "error");
     return;
+  }
+
+  if (selectedCheckboxes.length > 0) {
+    const selectedDue = Array.from(selectedCheckboxes).reduce(
+      (sum, checkbox) => sum + Math.max(0, Number(checkbox.dataset.amount || 0)),
+      0
+    );
+    if (totalCredit > selectedDue + 0.01) {
+      Swal.fire(
+        "Payment exceeds pending amount",
+        `Selected bills have ₹${selectedDue.toFixed(2)} pending. Record any extra amount as a separate advance payment.`,
+        "error"
+      );
+      return;
+    }
   }
 
   // 🛡️ SAFETY LOCK: Double-click / Duplicate entries se bachne ke liye button disable karo

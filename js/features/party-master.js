@@ -214,7 +214,20 @@ function drawTable(data) {
   }
 
   tbody.innerHTML = data
-    .map((p) => {
+    .map((rawParty) => {
+      // Table cells are built with a template string, so escape every
+      // user-controlled display field before inserting it into HTML.
+      const p = {
+        ...rawParty,
+        type: escapeHtml(rawParty.type),
+        name: escapeHtml(rawParty.name),
+        munimName: escapeHtml(rawParty.munimName),
+        address: escapeHtml(rawParty.address),
+        gst: escapeHtml(rawParty.gst),
+        phone: escapeHtml(rawParty.phone),
+        altPhone: escapeHtml(rawParty.altPhone),
+        bankAcc: escapeHtml(rawParty.bankAcc),
+      };
       let flagTag = p.isBlacklisted
         ? `<span class="px-1.5 py-0.5 ml-2 bg-red-100 text-red-700 text-[10px] font-bold rounded">🚩 DEFAULTER</span>`
         : "";
@@ -233,11 +246,11 @@ function drawTable(data) {
       let actionLink = "";
       if (p.type === "Broker") {
         actionLink = `<a href="broker-ledger.html?name=${encodeURIComponent(
-          p.name
+          rawParty.name || ""
         )}" class="inline-block text-blue-600 hover:text-blue-800 p-1 font-bold text-xs bg-blue-50 rounded px-2 mb-1">🤝 Broker Khata</a>`;
       } else {
         actionLink = `<a href="ledger.html?id=${p.id || p.customerId || ""}&name=${encodeURIComponent(
-          p.name
+          rawParty.name || ""
         )}" class="inline-block text-purple-600 hover:text-purple-800 p-1 font-bold text-xs bg-purple-50 rounded px-2 mb-1">📒 Ledger</a>`;
       }
 
@@ -628,24 +641,36 @@ window.showPartyDetailsModal = function (id) {
   const p = partiesList.find((x) => x.id === id);
   if (!p) return;
 
+  const safe = {
+    name: escapeHtml(p.name),
+    type: escapeHtml(p.type),
+    phone: escapeHtml(p.phone),
+    altPhone: escapeHtml(p.altPhone),
+    address: escapeHtml(p.address),
+    munimName: escapeHtml(p.munimName),
+    bankAcc: escapeHtml(p.bankAcc),
+    ifsc: escapeHtml(p.ifsc),
+    gst: escapeHtml(p.gst),
+  };
+
   const balanceType = p.opBalType || "Cr";
   const balColorClass = balanceType === "Dr" ? "text-red-600" : "text-green-600";
 
   Swal.fire({
-    title: `<span class="text-slate-800 text-lg font-bold">👤 ${p.name}</span>`,
+    title: `<span class="text-slate-800 text-lg font-bold">👤 ${safe.name}</span>`,
     html: `
       <div class="text-left bg-slate-50 p-4 rounded-xl border border-slate-200 text-sm space-y-2.5">
         <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Type:</span> <span class="font-bold text-blue-600">${
-          p.type
+          safe.type
         }</span></div>
         <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Mobile:</span> <span class="font-bold">${
-          p.phone
-        } ${p.altPhone ? "/ " + p.altPhone : ""}</span></div>
+          safe.phone
+        } ${p.altPhone ? "/ " + safe.altPhone : ""}</span></div>
         <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Village / Address:</span> <span class="font-bold">${
-          p.address || "N/A"
+          safe.address || "N/A"
         }</span></div>
         <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Munim Name:</span> <span class="font-bold">${
-          p.munimName || "N/A"
+          safe.munimName || "N/A"
         }</span></div>
         <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Opening Balance:</span> <span class="font-bold ${balColorClass}">₹${
       p.opBal || 0
@@ -654,13 +679,13 @@ window.showPartyDetailsModal = function (id) {
           p.creditLimit || 0
         }</span></div>
         <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">Bank A/C Number:</span> <span class="font-bold">${
-          p.bankAcc || "N/A"
+          safe.bankAcc || "N/A"
         }</span></div>
         <div class="flex justify-between border-b pb-1.5"><span class="text-slate-500 font-medium">IFSC Code:</span> <span class="font-bold uppercase">${
-          p.ifsc || "N/A"
+          safe.ifsc || "N/A"
         }</span></div>
         <div class="flex justify-between"><span class="text-slate-500 font-medium">GSTIN:</span> <span class="font-bold uppercase">${
-          p.gst || "N/A"
+          safe.gst || "N/A"
         }</span></div>
       </div>
     `,

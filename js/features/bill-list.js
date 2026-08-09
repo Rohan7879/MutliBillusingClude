@@ -225,18 +225,22 @@ function renderBillList(docs) {
   docs.forEach((doc) => {
     const bill = doc.data();
     const row = document.createElement("tr");
+    const serialNo = escapeHtml(bill["Serial No"]);
+    const billDate = escapeHtml(bill["Date"]);
+    const customerName = escapeHtml(bill["Customer Name"]);
+    const billType = escapeHtml(bill["Bill Type"]);
     row.innerHTML = `
      <td><input type="checkbox" class="bill-checkbox" value="${doc.id}" onchange="updateSelectionSummary()"></td>
-      <td>${bill["Serial No"]}</td>
-      <td>${bill["Date"]}</td>
-      <td>${bill["Customer Name"]}</td>
+      <td>${serialNo}</td>
+      <td>${billDate}</td>
+      <td>${customerName}</td>
       <td>${getStatusHtml(bill)}</td>
-      <td>${bill["Bill Type"]}</td>
+      <td>${billType}</td>
       <td>${formatNumber(bill["Final Total"])}</td>
       <td class="action-buttons">
           <button class="view-btn" data-id="${doc.id}">View</button>
           <button class="edit-btn" data-id="${doc.id}" ${bill.paymentStatus === "Paid" ? "disabled" : ""}>Edit</button>
-          <button class="delete-btn" data-id="${doc.id}" data-serial="${bill["Serial No"]}">Delete</button>
+          <button class="delete-btn" data-id="${doc.id}" data-serial="${serialNo}">Delete</button>
       </td>
     `;
     row.querySelector(".view-btn").addEventListener("click", (event) => viewBill(event.target.dataset.id));

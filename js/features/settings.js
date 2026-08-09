@@ -142,8 +142,29 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadPrintLayoutSettings();
   await loadSavedFormulas();
   setupDeductionForm();
+  setupWhatsAppAutoSendSetting();
   saveVersionToFirestore();
 });
+
+function setupWhatsAppAutoSendSetting() {
+  const toggle = document.getElementById("whatsapp-auto-send-toggle");
+  const status = document.getElementById("whatsapp-auto-send-status");
+  if (!toggle || !status) return;
+
+  const updateStatus = () => {
+    const enabled = toggle.checked;
+    status.textContent = enabled ? "ON" : "OFF";
+    status.style.color = enabled ? "#28a745" : "#6c757d";
+  };
+
+  toggle.checked = localStorage.getItem("whatsapp_auto_send") === "true";
+  updateStatus();
+  toggle.addEventListener("change", () => {
+    localStorage.setItem("whatsapp_auto_send", String(toggle.checked));
+    updateStatus();
+    showToast(`WhatsApp auto-send ${toggle.checked ? "ON" : "OFF"}.`, "success");
+  });
+}
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PRINT LAYOUT ORDER — lets Rohan reorder which box appears where on the

@@ -65,6 +65,35 @@ function roundCurrency(val) {
   return Math.round((Number(val) + Number.EPSILON) * 100) / 100;
 }
 
+/** Render user-entered values as text when a template string is unavoidable. */
+function escapeHtml(value) {
+  return String(value ?? "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+/**
+ * Updates the single balance cache used by Party Master. Ledger calculations
+ * remain the source of truth, but all bill and payment flows now update the
+ * same document through a transaction.
+ */
+async function adjustPartyBalance(customerId, delta) {
+  if (!customerId || !Number.isFinite(Number(delta)) || Number(delta) === 0) return;
+  const partyRef = db.collection("parties").doc(customerId);
+  await db.runTransaction(async (transaction) => {
+    const partyDoc = await transaction.get(partyRef);
+    if (!partyDoc.exists) return;
+    const currentBalance = Number(partyDoc.data().currentBalance || 0);
+    transaction.update(partyRef, {
+      currentBalance: roundCurrency(currentBalance + Number(delta)),
+      lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    });
+  });
+}
+
 // ═══════════════════════════════════════════════════════════════════════════
 // SETTINGS (deduction defaults)
 // ═══════════════════════════════════════════════════════════════════════════
@@ -104,6 +133,7 @@ function getStatusHtml(bill) {
   switch (status) {
     case "Paid":
       return `<span class="status-dot ${dotClass}"></span> Paid`;
+    case "Partial":
     case "Partially Paid":
       return `<span class="status-dot ${dotClass}"></span> Partial<br><small>(${formattedAmountPaid} / ${formattedFinalTotal})</small>`;
     case "Unpaid":

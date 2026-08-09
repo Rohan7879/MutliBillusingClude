@@ -49,10 +49,16 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const billData = billDoc.data();
-        const currentAmountPaid = billData.amountPaid || 0;
-        const finalTotal = billData["Final Total"] || 0;
+        const currentAmountPaid = Number(billData.amountPaid || 0);
+        const finalTotal = Number(billData["Final Total"] || 0);
+        const amountDue = Math.max(0, finalTotal - currentAmountPaid);
+        if (cashAmount > amountDue + 0.01) {
+          hideLoading();
+          alert(`Payment cannot exceed the pending amount (₹${amountDue.toFixed(2)}).`);
+          return;
+        }
         const newAmountPaid = currentAmountPaid + cashAmount;
-        const newAmountDue = finalTotal - newAmountPaid;
+        const newAmountDue = Math.max(0, finalTotal - newAmountPaid);
         const newStatus = newAmountDue <= 0.01 ? "Paid" : "Partially Paid";
 
         // 1. Bill update karo
@@ -76,17 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         // 3. Party Master ka balance update karo
-        if (billData.customerId) {
-          const masterRef = db.collection("parties").doc(billData.customerId);
-          const masterDoc = await masterRef.get();
-          if (masterDoc.exists) {
-            const prevBalance = masterDoc.data().currentBalance || 0;
-            await masterRef.update({
-              currentBalance: prevBalance - cashAmount,
-              lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            });
-          }
-        }
+        if (billData.customerId) await adjustPartyBalance(billData.customerId, -cashAmount);
 
         hideLoading();
         alert("Payment saved successfully!");
@@ -548,7 +544,7 @@ function renderRemarks(data) {
     box.innerHTML = "";
   } else {
     box.style.display = "block";
-    box.innerHTML = `<strong>📝 Remarks:</strong> ${remarks}`;
+    box.textContent = `📝 Remarks: ${remarks}`;
   }
 }
 function renderExpenses(data) {
@@ -562,7 +558,13 @@ function renderExpenses(data) {
         expenses.forEach((exp) => {
           const expenseBox = document.createElement("div");
           expenseBox.classList.add("detail-item");
-          expenseBox.innerHTML = `<span class="detail-label">${exp.name}</span><span class="detail-value">-${exp.amount}</span>`;
+          const name = document.createElement("span");
+          name.className = "detail-label";
+          name.textContent = String(exp.name || "");
+          const amount = document.createElement("span");
+          amount.className = "detail-value";
+          amount.textContent = `-${Number(exp.amount || 0)}`;
+          expenseBox.append(name, amount);
           expensesContainer.appendChild(expenseBox);
         });
         expensesContainer.style.display = "contents";

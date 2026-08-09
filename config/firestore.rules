@@ -1,10 +1,12 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Every request must come from a signed-in Firebase user. Client-side
+    // redirects are only a UI feature; Firestore rules are the real data
+    // boundary. More granular staff roles can be added once user roles are
+    // stored in authenticated custom claims or a protected users collection.
     match /{document=**} {
-      // WARNING: This allows anyone to read and write to your database.
-      // This is okay for testing, but you should secure it later.
-      allow read, write: if true;
+      allow read, write: if request.auth != null;
     }
   }
 }

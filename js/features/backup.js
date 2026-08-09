@@ -5,21 +5,16 @@
 
 // ── SOFT DELETE ───────────────────────────────────────────────────────────────
 async function softDeleteBill(docId) {
-  const result = await Swal.fire({
-    icon: "warning",
-    title: "Delete Bill?",
-    text: "Bill 30 din tak restore ho sakta hai.",
-    showCancelButton: true,
-    confirmButtonColor: "#dc3545",
-    cancelButtonColor: "#6c757d",
-    confirmButtonText: "Haan, Delete Karo",
-  });
-  if (!result.isConfirmed) return;
   try {
-    await billsCollection.doc(docId).update({
+    const billRef = billsCollection.doc(docId);
+    const billDoc = await billRef.get();
+    if (!billDoc.exists || billDoc.data().deleted === true) return false;
+    const bill = billDoc.data();
+    await billRef.update({
       deleted: true,
       deletedAt: Date.now(),
     });
+    if (bill.customerId) await adjustPartyBalance(bill.customerId, -Number(bill["Final Total"] || 0));
     Swal.fire({
       icon: "success",
       title: "Bill deleted!",
@@ -45,7 +40,12 @@ async function softDeleteBill(docId) {
 
 async function restoreBill(docId) {
   try {
-    await billsCollection.doc(docId).update({ deleted: false, deletedAt: null });
+    const billRef = billsCollection.doc(docId);
+    const billDoc = await billRef.get();
+    if (!billDoc.exists || billDoc.data().deleted !== true) return false;
+    const bill = billDoc.data();
+    await billRef.update({ deleted: false, deletedAt: null });
+    if (bill.customerId) await adjustPartyBalance(bill.customerId, Number(bill["Final Total"] || 0));
     Swal.fire({
       icon: "success",
       title: "✅ Bill Restored!",

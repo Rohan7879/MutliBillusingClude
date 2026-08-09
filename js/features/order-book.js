@@ -1476,7 +1476,7 @@ function getOrderPaymentStatus(orderData, supplierName) {
 
   if (billNos.length === 0) {
     const safeName = (supplierName || "").replace(/'/g, "\\'");
-    return `<span onclick="openCustomerLedger('${safeName}')" style="background: #28a745; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer;">Paid -> Ledger</span>`;
+    return `<span onclick="openCustomerLedger('${safeName}')" style="background: #6c757d; color: #fff; padding: 3px 8px; font-size: 11px; border-radius: 4px; cursor: pointer;" title="No bill has been linked to this order yet">🧾 No Bill Yet → Ledger</span>`;
   }
 
   const globalBills = window.allBills || [];

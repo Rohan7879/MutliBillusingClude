@@ -84,7 +84,9 @@ async function setupAutocomplete() {
     const snapshot = await db.collection("parties").get();
 
     // 2. JS mein filter karo taaki agar 'deleted' field na bhi ho toh error na aaye
-    window.partiesMasterList = snapshot.docs.map((doc) => doc.data()).filter((p) => p.deleted !== true);
+    window.partiesMasterList = snapshot.docs
+      .map((doc) => ({ id: doc.id, ...doc.data() }))
+      .filter((p) => p.deleted !== true);
 
     // 3. Filter and Map (Spelling/Small-Capitalization ki galti handle karne ke liye)
     uniqueCustomers = window.partiesMasterList
@@ -1016,9 +1018,17 @@ async function collectData() {
     let data = calculateBillData(formData);
 
     // 📍 Yahin par (calculateBillData ke turant baad) ye 3 line daal deni hain:
-    const customerId = formData.get("customer_id") || data.customerId || "";
-    const customerName = formData.get("Customer Name") || data["Customer Name"] || "";
-    const customerVillage = formData.get("Village") || data["Village"] || "N/A";
+    const matchedCustomer = (window.partiesMasterList || []).find((party) => {
+      const type = (party.type || "").toLowerCase();
+      return (
+        ["farmer", "vepari", "kisan", "customer"].includes(type) &&
+        (party.name || "").trim().toLowerCase() === (data["Customer Name"] || "").trim().toLowerCase()
+      );
+    });
+    const customerId = formData.get("customer_id") || data.customerId || (matchedCustomer && matchedCustomer.id) || "";
+    const customerName = formData.get("customer_name") || data["Customer Name"] || "";
+    const customerVillage = formData.get("village") || data["Village"] || "N/A";
+    data.customerId = customerId;
 
     // Save or update the customer in the 'customers' collection
 
@@ -1067,41 +1077,18 @@ async function collectData() {
         .collection("orders")
         .doc(data["LinkedOrderId"])
         .update({
-          status: "Completed",
           linkedBillNos: firebase.firestore.FieldValue.arrayUnion(data["Serial No"]), // Array mein save hoga
           updatedAt: Date.now(),
         });
     }
 
-    // ═══════════════════════════════════════════════════════════════════
-    // PHASE 2 (item #10) — Master Ledger Balance
-    // Keep a running currentBalance on customers_master/{customerId} via a
-    // Transaction, so a customer's outstanding balance can be looked up in
-    // one read instead of scanning every bill/payment. This is a best-effort
-    // CACHE, not the source of truth — ledger.js still computes the real
-    // balance live from bills+payments, so if this update ever fails it
-    // does NOT affect the actual bill save or ledger accuracy.
-    // ═══════════════════════════════════════════════════════════════════
+    // Keep Party Master cache in sync with new bills. All payment flows use
+    // this same helper/collection, so one party has one cached balance.
     if (customerId) {
       try {
-        const masterRef = db.collection("customers_master").doc(customerId);
-        await db.runTransaction(async (transaction) => {
-          const masterDoc = await transaction.get(masterRef);
-          const prevBalance = masterDoc.exists ? masterDoc.data().currentBalance || 0 : 0;
-          const newBalance = prevBalance + (data["Final Total"] || 0);
-          transaction.set(
-            masterRef,
-            {
-              name: customerName,
-              village: customerVillage,
-              currentBalance: newBalance,
-              lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-            },
-            { merge: true }
-          );
-        });
+        await adjustPartyBalance(customerId, Number(data["Final Total"] || 0));
       } catch (masterErr) {
-        console.warn("customers_master balance update failed (non-critical — bill was still saved):", masterErr);
+        console.warn("Party Master balance update failed (bill was still saved):", masterErr);
       }
     }
 
@@ -1120,6 +1107,7 @@ async function collectData() {
       await updateBrokerCommission(data);
     }
 
+    checkAndSendWhatsApp(data);
     window.location.href = `final.html?id=${docRef.id}`;
     // ==================== SMART WHATSAPP AUTOMATION (WITH ON-THE-FLY NUMBER PROMPT) ====================
 
@@ -1169,7 +1157,7 @@ async function collectData() {
         `Namaste Kisan Ji, ${
           globalSettings && globalSettings.companyName ? globalSettings.companyName : "Hamari Company"
         } mein aapka swagat hai. 🙏\n\n` +
-        +`📋 *Bill No:* ${billData.billNo}\n` +
+        `📋 *Bill No:* ${billData["Serial No"] || "-"}\n` +
         `🌾 *Item:* ${billData.itemName}\n` +
         `⚖️ *Weight / Bori:* ${billData.bags} Bori (${billData.weight} Quintal)\n` +
         `💰 *Rate:* ₹${billData.rate} / Quintal\n` +
@@ -1206,6 +1194,14 @@ async function updateData(docId) {
   try {
     const formData = new FormData(form);
     let newData = calculateBillData(formData);
+    const matchedCustomer = (window.partiesMasterList || []).find((party) => {
+      const type = (party.type || "").toLowerCase();
+      return (
+        ["farmer", "vepari", "kisan", "customer"].includes(type) &&
+        (party.name || "").trim().toLowerCase() === (newData["Customer Name"] || "").trim().toLowerCase()
+      );
+    });
+    newData.customerId = formData.get("customer_id") || (matchedCustomer && matchedCustomer.id) || "";
     newData["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
 
     let originalData; // captured inside the transaction for the bags-count logic below
@@ -1242,6 +1238,24 @@ async function updateData(docId) {
 
       transaction.update(billRef, newData);
     });
+
+    // Reconcile the Party Master cache after every edit. If the customer was
+    // changed, remove the original amount from the old party and add the new
+    // amount to the newly selected party.
+    try {
+      const oldCustomerId = originalData.customerId || "";
+      const newCustomerId = newData.customerId || oldCustomerId;
+      const oldTotal = Number(originalData["Final Total"] || 0);
+      const newTotal = Number(newData["Final Total"] || 0);
+      if (oldCustomerId && oldCustomerId === newCustomerId) {
+        await adjustPartyBalance(oldCustomerId, newTotal - oldTotal);
+      } else {
+        await adjustPartyBalance(oldCustomerId, -oldTotal);
+        await adjustPartyBalance(newCustomerId, newTotal);
+      }
+    } catch (balanceError) {
+      console.warn("Party Master balance reconciliation failed after bill edit:", balanceError);
+    }
 
     // Calculate bags in the original bill
     let bagsInOriginalBill = 0;
@@ -1402,7 +1416,10 @@ function checkAndSendWhatsApp(billData) {
   }
 
   // Kisan ka phone number aur details uthao
-  let phone = billData.farmerPhone; // Jaise "9876543210"
+  const matchedParty = (window.partiesMasterList || []).find(
+    (party) => (party.name || "").trim().toLowerCase() === (billData["Customer Name"] || "").trim().toLowerCase()
+  );
+  let phone = billData.farmerPhone || billData.phone || (matchedParty && matchedParty.phone);
   if (!phone) {
     alert("Kisan ka phone number nahi mila!");
     return;
@@ -1413,11 +1430,10 @@ function checkAndSendWhatsApp(billData) {
     `Namaste Kisan Ji, ${
       globalSettings && globalSettings.companyName ? globalSettings.companyName : "Hamari Company"
     } mein aapka swagat hai. 🙏\n\n` +
-    +`📋 *Bill No:* ${billData.billNo}\n` +
-    `🌾 *Item:* ${billData.itemName}\n` +
-    `⚖️ *Weight / Bori:* ${billData.bags} Bori (${billData.weight} Quintal)\n` +
-    `💰 *Rate:* ₹${billData.rate} / Quintal\n` +
-    `💵 *Total Amount:* ₹${billData.totalAmount}\n\n` +
+    `📋 *Bill No:* ${billData["Serial No"] || "-"}\n` +
+    `🌾 *Item:* ${billData["ProductTemplate"] || "-"}\n` +
+    `⚖️ *Net Weight:* ${billData["Net Weight"] || 0} kg\n` +
+    `💵 *Total Amount:* ₹${billData["Final Total"] || 0}\n\n` +
     `Aapka maal darj ho chuka hai. Dhanyawad! - ${
       globalSettings && globalSettings.companyName ? globalSettings.companyName : "Company"
     }`;
