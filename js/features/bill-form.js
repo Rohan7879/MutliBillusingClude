@@ -1460,19 +1460,36 @@ async function checkAndSendWhatsApp(billData, billId) {
     }
   }
 
-  // Message format jo kisan ke paas jayega
-  let message =
-    `Namaste Kisan Ji, ${
-      globalSettings && globalSettings.companyName ? globalSettings.companyName : "Hamari Company"
-    } mein aapka swagat hai.\n\n` +
-    `*Bill No:* ${billData["Serial No"] || "-"}\n` +
-    `*Item:* ${billData["ProductTemplate"] || "-"}\n` +
-    `*Net Weight:* ${billData["Net Weight"] || 0} kg\n` +
-    `*Total Amount:* Rs. ${billData["Final Total"] || 0}\n\n` +
-    (downloadLink ? `*Bill Download:*\n${downloadLink}\n\n` : "") +
-    `Aapka maal darj ho chuka hai. Dhanyawad! - ${
-      globalSettings && globalSettings.companyName ? globalSettings.companyName : "Company"
-    }`;
+  const companyName = window.companyProfile?.name || globalSettings?.companyName || "MandiBook";
+  const activeVakals = Array.from({ length: 5 }, (_, index) => Number(billData[`Vakal ${index + 1} Katta`] || 0)).filter(
+    (katta) => katta > 0
+  );
+  const totalKatta = activeVakals.reduce((total, katta) => total + katta, 0);
+  const vakalLine = totalKatta > 0 ? `Total Katta   : ${totalKatta} Katta (${activeVakals.length} Vakal)` : "";
+  const finalAmount = Number(billData["Final Total"] || 0).toLocaleString("en-IN");
+
+  const message = [
+    `Dear ${billData["Customer Name"] || "Customer"},`,
+    "",
+    "--------------------------------",
+    "BILL RECEIPT",
+    "--------------------------------",
+    `Bill No.       : ${billData["Serial No"] || "-"}`,
+    `Date           : ${billData["Date"] || "-"}`,
+    `Product        : ${billData["ProductTemplate"] || "-"}`,
+    vakalLine,
+    `Net Weight     : ${billData["Net Weight"] || 0} kg`,
+    "--------------------------------",
+    `FINAL AMOUNT   : Rs. ${finalAmount}`,
+    "--------------------------------",
+    "",
+    downloadLink ? `View / Download Bill:\n${downloadLink}` : "",
+    "",
+    "Regards,",
+    companyName,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
 
   // URL encode karke WhatsApp Web ya API open kar do
   let encodedMessage = encodeURIComponent(message);
