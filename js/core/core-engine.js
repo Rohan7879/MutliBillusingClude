@@ -991,6 +991,53 @@ window.demoAndSaveLoader = function (themeId) {
     window.hideLoader();
   }, 3000);
 };
+
+// ═══════════════════════════════════════════════════════════════════════════
+// CAPITAL TEXT POLICY
+// Every business-facing text value (party name, village, broker, product,
+// vehicle, remarks, order notes, etc.) is converted while the user types.
+// This keeps screen data and saved Firestore data consistent. Technical fields
+// such as email, password and URLs are deliberately excluded because changing
+// their case would make login or links invalid.
+// ═══════════════════════════════════════════════════════════════════════════
+(function enableCapitalTextPolicy() {
+  function shouldUppercase(field) {
+    if (!field || field.disabled || field.readOnly || field.dataset.preserveCase !== undefined) return false;
+    if (!(field instanceof HTMLInputElement || field instanceof HTMLTextAreaElement)) return false;
+
+    const type = (field.type || "text").toLowerCase();
+    if (!["text", "search", "textarea"].includes(type)) return false;
+
+    const identity = `${field.id || ""} ${field.name || ""} ${field.autocomplete || ""}`.toLowerCase();
+    return !/(email|password|url|website|link|token|api[_-]?key)/.test(identity);
+  }
+
+  function uppercaseField(field) {
+    if (!shouldUppercase(field) || typeof field.value !== "string") return;
+    const upperValue = field.value.toUpperCase();
+    if (upperValue === field.value) return;
+
+    const start = field.selectionStart;
+    const end = field.selectionEnd;
+    field.value = upperValue;
+    if (typeof start === "number" && typeof end === "number") field.setSelectionRange(start, end);
+  }
+
+  // Capture phase runs before each page's form/listener logic, so the feature
+  // receives capital text and saves the exact same capital value.
+  document.addEventListener("input", (event) => uppercaseField(event.target), true);
+  document.addEventListener(
+    "submit",
+    (event) => {
+      event.target.querySelectorAll("input, textarea").forEach(uppercaseField);
+    },
+    true
+  );
+
+  window.normalizeCapitalTextFields = function (container = document) {
+    container.querySelectorAll("input, textarea").forEach(uppercaseField);
+  };
+})();
 // ==================== GLOBAL FUNCTIONS & OLD SYSTEM BRIDGE ====================
 
 window.loaderTimeout = null; // Failsafe Timer Variable

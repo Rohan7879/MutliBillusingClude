@@ -105,7 +105,11 @@ async function fetchSharedBillAndDisplay(shareToken) {
     showLoading("Loading shared bill...");
     const sharedDoc = await db.collection("sharedBills").doc(shareToken).get();
     if (!sharedDoc.exists || !sharedDoc.data().bill) throw new Error("Shared bill not found.");
-    displayData(sharedDoc.data().bill);
+    const billData = sharedDoc.data().bill;
+    // Public links do not have the owner's localStorage. Keep this loaded
+    // snapshot in memory so Download PDF and Print work on any mobile.
+    window.currentBillData = billData;
+    displayData(billData);
     await applyBoxOrder();
   } catch (error) {
     console.error("Could not load shared bill:", error);
@@ -123,6 +127,7 @@ async function fetchBillAndDisplay(billId) {
     const doc = await billsCollection.doc(billId).get();
     if (doc.exists) {
       const billData = { ...doc.data(), id: doc.id };
+      window.currentBillData = billData;
       localStorage.setItem("currentBill", JSON.stringify(billData));
       displayData(billData);
       await applyBoxOrder();
@@ -1135,7 +1140,13 @@ async function buildBillPDFNative(billData) {
 }
 
 async function downloadBillAsPDF() {
-  const billData = JSON.parse(localStorage.getItem("currentBill"));
+  let savedBillData = null;
+  try {
+    savedBillData = JSON.parse(localStorage.getItem("currentBill"));
+  } catch (e) {
+    console.warn("Could not read saved bill data:", e);
+  }
+  const billData = window.currentBillData || savedBillData;
   const billContainer = document.getElementById("finalcontainer");
   if (!billData || !billContainer) {
     alert("No bill data found to download.");
@@ -1152,7 +1163,7 @@ async function downloadBillAsPDF() {
     // The previous PDF used a separate jsPDF design, so it could never be
     // identical to Print Bill. Load the exact print stylesheet for this
     // capture and render the same live bill that the browser prints.
-    applyUniversalPrintSettings(billContainer);
+    applyUniversalPrintSettings(billContainer, billData);
     printStyles = document.createElement("link");
     printStyles.rel = "stylesheet";
     printStyles.href = "css/print.css";
@@ -1251,12 +1262,14 @@ function downloadBillAsPDF_screenshotFallback(billData) {
  *      print.css's default A5 unless overridden here)
  *   2. An "Amount in words" line at the bottom of the bill (legal requirement)
  */
-function applyUniversalPrintSettings(container) {
-  let billData = {};
-  try {
-    billData = JSON.parse(localStorage.getItem("currentBill")) || {};
-  } catch (e) {
-    console.warn("applyUniversalPrintSettings: could not read currentBill from localStorage", e);
+function applyUniversalPrintSettings(container, suppliedBillData) {
+  let billData = suppliedBillData || window.currentBillData || {};
+  if (!suppliedBillData && !window.currentBillData) {
+    try {
+      billData = JSON.parse(localStorage.getItem("currentBill")) || {};
+    } catch (e) {
+      console.warn("applyUniversalPrintSettings: could not read currentBill from localStorage", e);
+    }
   }
 
   // ═══════════════════════════════════════════════════════════════════════
