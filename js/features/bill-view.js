@@ -651,53 +651,36 @@ async function sendBillViaWhatsApp() {
     return;
   }
 
-  // Build message
-  const lines = [];
-  lines.push(`*Bill No:* ${data["Serial No"]}`);
-  lines.push(`*Date:* ${data["Date"]}`);
-  lines.push(`*Name:* ${data["Customer Name"]}`);
-  if (data["Village"]) lines.push(`*Village:* ${data["Village"]}`);
-  if (wp.showBroker !== false && data["Broker"]) lines.push(`*Broker:* ${data["Broker"]}`);
-  if (wp.showProduct !== false && data["ProductTemplate"]) lines.push(`*Product:* ${data["ProductTemplate"]}`);
-  if (wp.showNetWeight !== false)
-    lines.push(`*Net Weight:* ${Number(data["Net Weight"]).toLocaleString("en-IN")} kg`);
-
-  // Vakal details
-  if (wp.showVakalDetails !== false) {
-    lines.push("\n*Vakal Details:*");
-    if (data["Bill Type"] === "Loose") {
-      lines.push(
-        `- ${data["Vakal 1 Kilo"]} kg @ Rs. ${data["Vakal 1 Bhav"]} = Rs. ${Number(data["Vakal 1 Amount"]).toLocaleString(
-          "en-IN"
-        )}`
-      );
-    } else {
-      for (let i = 1; i <= 5; i++) {
-        if ((data[`Vakal ${i} Katta`] || 0) > 0) {
-          lines.push(
-            `- Vakal ${i}: ${data[`Vakal ${i} Katta`]} bags, ${data[`Vakal ${i} Kilo`]} kg @ Rs. ${
-              data[`Vakal ${i} Bhav`]
-            } = Rs. ${Number(data[`Vakal ${i} Amount`]).toLocaleString("en-IN")}`
-          );
-        }
-      }
-    }
-  }
-
-  lines.push(`\n*Total:* Rs. ${Number(data["Total Amount"]).toLocaleString("en-IN")}`);
-  lines.push(`*Utrai:* -Rs. ${Number(data["Utrāī"]).toLocaleString("en-IN")}`);
-  if ((data["Truck Freight"] || 0) > 0)
-    lines.push(`*Freight:* +Rs. ${Number(data["Truck Freight"]).toLocaleString("en-IN")}`);
-  lines.push(`\n*Final Total: Rs. ${Number(data["Final Total"]).toLocaleString("en-IN")}*`);
-  if (wp.showRemarks !== false && data["Remarks"]) lines.push(`\n*Remarks:* ${data["Remarks"]}`);
-
-  // Company name if set
-  if (profile.name) lines.push(`\n${profile.name}`);
-  if (profile.phone) lines.push(`Phone: ${profile.phone}`);
-
-  lines.push(`\n*Bill Download:*\n${downloadLink}`);
-
-  const message = lines.join("\n");
+  // Use the same clean receipt format for manual sharing as for auto-send.
+  const activeVakals = Array.from({ length: 5 }, (_, index) => Number(data[`Vakal ${index + 1} Katta`] || 0)).filter(
+    (katta) => katta > 0
+  );
+  const totalKatta = activeVakals.reduce((total, katta) => total + katta, 0);
+  const vakalLine = totalKatta > 0 ? `Total Katta   : ${totalKatta} Katta (${activeVakals.length} Vakal)` : "";
+  const finalAmount = Number(data["Final Total"] || 0).toLocaleString("en-IN");
+  const companyName = profile.name || "MandiBook";
+  const message = [
+    `Dear ${data["Customer Name"] || "Customer"}`,
+    "",
+    "--------------------------------",
+    "BILL RECEIPT",
+    "--------------------------------",
+    `Bill No.       : ${data["Serial No"] || "-"}`,
+    `Date           : ${data["Date"] || "-"}`,
+    `Product        : ${data["ProductTemplate"] || "-"}`,
+    vakalLine,
+    `Net Weight     : ${Number(data["Net Weight"] || 0).toLocaleString("en-IN")} kg`,
+    "--------------------------------",
+    `FINAL AMOUNT   : Rs. ${finalAmount}`,
+    "--------------------------------",
+    "",
+    `View / Download Bill:\n${downloadLink}`,
+    "",
+    "Regards,",
+    companyName,
+  ]
+    .filter((line) => line !== "")
+    .join("\n");
   const normalizedPhone = String(customerPhone).replace(/\D/g, "").slice(-10);
   const whatsappUrl = normalizedPhone
     ? `https://wa.me/91${normalizedPhone}?text=${encodeURIComponent(message)}`
