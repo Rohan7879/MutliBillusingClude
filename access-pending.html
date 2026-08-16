@@ -1,0 +1,22 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Access Pending — MandiBook</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="js/core/firebase-init.js"></script>
+    <link rel="stylesheet" href="css/main.css" />
+    <style>body{min-height:100vh;display:grid;place-items:center;margin:0;background:#f4f7fb}.card{max-width:470px;margin:24px;padding:32px;border-radius:14px;background:#fff;box-shadow:0 8px 25px #003d6e1a;text-align:center}.card h1{color:#005a9e}.card button{border:0;border-radius:7px;background:#005a9e;color:white;padding:11px 18px;font-weight:700;cursor:pointer}</style>
+  </head>
+  <body>
+    <main class="card">
+      <h1>Access pending</h1>
+      <p>Your account is signed in, but an Admin must approve it before company data is available.</p>
+      <p>Please contact the MandiBook owner. You will be redirected automatically once approved.</p>
+      <button onclick="logoutUser()">Logout</button>
+    </main>
+  </body>
+</html>

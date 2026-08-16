@@ -1,0 +1,46 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Audit History — MandiBook</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/utils.js"></script>
+    <script src="js/core/core-engine.js"></script>
+    <link rel="stylesheet" href="css/main.css" />
+    <style>
+      .audit-wrap{max-width:1250px;margin:28px auto;padding:0 18px}.audit-card{background:#fff;border:1px solid #d9e2ef;border-radius:12px;padding:20px;box-shadow:0 2px 8px #003d6e0d}.audit-filters{display:flex;flex-wrap:wrap;gap:10px;margin:16px 0}.audit-filters input,.audit-filters select{padding:9px;border:1px solid #b9c9db;border-radius:6px}.audit-table{width:100%;border-collapse:collapse}.audit-table th,.audit-table td{padding:10px 8px;border-bottom:1px solid #e8edf3;text-align:left;vertical-align:top}.audit-action{font-weight:700;color:#005a9e}.audit-change{font-size:.85rem;color:#4b5563;max-width:360px;white-space:normal;word-break:break-word}@media(max-width:700px){.audit-card{padding:12px}.audit-table{font-size:.82rem}.audit-table th:nth-child(4),.audit-table td:nth-child(4){display:none}}</style>
+  </head>
+  <body>
+    <div id="navbar-root"></div>
+    <main class="audit-wrap"><section class="audit-card"><h1>🛡️ Audit History</h1><p>Append-only record of important financial and billing actions.</p><div class="audit-filters"><input id="audit-search" placeholder="Bill no., user, action…" /><select id="audit-action"><option value="">All actions</option><option value="bill">Bills</option><option value="payment">Payments</option></select><input id="audit-date" type="date" /></div><div id="audit-results">Loading audit history…</div></section></main>
+    <script>
+      let allAuditEntries = [], unsubscribeAudit = null;
+      const escapeAuditHtml = value => String(value || "").replace(/[&<>\"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[char]));
+      const formatAuditDate = timestamp => timestamp && timestamp.toDate ? timestamp.toDate().toLocaleString("en-IN") : "Syncing…";
+      const dateKey = timestamp => timestamp && timestamp.toDate ? timestamp.toDate().toISOString().slice(0, 10) : "";
+      function auditSummary(entry) { const before = entry.before || {}; const after = entry.after || {}; const serial = after.serialNo || before.serialNo || ""; const total = after.finalTotal ?? before.finalTotal; return [serial && `Bill ${serial}`, total !== undefined && `₹${Number(total).toLocaleString("en-IN")}`, entry.reason].filter(Boolean).join(" · ") || "—"; }
+      function renderAudit() {
+        const search = document.getElementById("audit-search").value.trim().toLowerCase();
+        const actionType = document.getElementById("audit-action").value;
+        const selectedDate = document.getElementById("audit-date").value;
+        const rows = allAuditEntries.filter(({data}) => {
+          const haystack = `${data.action || ""} ${data.actor?.email || ""} ${auditSummary(data)}`.toLowerCase();
+          return (!search || haystack.includes(search)) && (!actionType || String(data.action || "").startsWith(actionType + ".")) && (!selectedDate || dateKey(data.createdAt) === selectedDate);
+        });
+        const target = document.getElementById("audit-results");
+        if (!rows.length) { target.textContent = "No audit entries match these filters."; return; }
+        target.innerHTML = `<table class="audit-table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Record</th><th>Change</th></tr></thead><tbody>${rows.map(({data}) => `<tr><td>${escapeAuditHtml(formatAuditDate(data.createdAt))}</td><td class="audit-action">${escapeAuditHtml(data.action)}</td><td>${escapeAuditHtml(data.actor?.email)}<br><small>${escapeAuditHtml(data.actor?.role)}</small></td><td>${escapeAuditHtml(data.entityType)}<br><small>${escapeAuditHtml(data.entityId)}</small></td><td class="audit-change">${escapeAuditHtml(auditSummary(data))}</td></tr>`).join("")}</tbody></table>`;
+      }
+      window.addEventListener("mandibook:access-ready", ({detail}) => {
+        if (!detail || detail.role !== "admin" || unsubscribeAudit) return;
+        unsubscribeAudit = db.collection("auditLogs").orderBy("createdAt", "desc").limit(200).onSnapshot(snapshot => { allAuditEntries = snapshot.docs.map(doc => ({id:doc.id,data:doc.data()})); renderAudit(); }, error => { document.getElementById("audit-results").textContent = `Could not load audit history: ${error.message}`; });
+      });
+      ["audit-search","audit-action","audit-date"].forEach(id => document.getElementById(id).addEventListener("input", renderAudit));
+      window.addEventListener("pagehide", () => { if (unsubscribeAudit) unsubscribeAudit(); });
+    </script>
+  </body>
+</html>

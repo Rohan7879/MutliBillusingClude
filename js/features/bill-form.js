@@ -1088,6 +1088,8 @@ async function collectData() {
     // Save linked order reference if any
     data["LinkedOrderId"] = formData.get("linked_order_id") || "";
     data["LinkedSupplierIdx"] = formData.get("linked_supplier_idx") || "";
+    data.workflowStatus = "draft";
+    data.locked = false;
     // Note: Date and Remarks are already set inside calculateBillData() above.
     // Phase 2 (item #11): server-side timestamp for reliable chronological
     // sorting in the ledger — the "Date" field above is a display string
@@ -1096,6 +1098,7 @@ async function collectData() {
     data["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
 
     const docRef = await billsCollection.add(data);
+    await recordAudit("bill.created", "bill", docRef.id, { after: billAuditSnapshot(data) });
 
     // --- 🔗 Order Link Update ---
     if (data["LinkedOrderId"]) {
@@ -1243,6 +1246,9 @@ async function updateData(docId) {
       const freshDoc = await transaction.get(billRef);
       if (!freshDoc.exists) throw new Error("NOT_FOUND: Original bill not found!");
       originalData = freshDoc.data();
+      if (originalData.locked === true || originalData.workflowStatus === "locked") {
+        throw new Error("LOCKED: This bill is locked. Create a correction instead of editing the original bill.");
+      }
 
       const currentTimestamp = originalData.lastUpdatedAt || null;
       const capturedTimestamp = editModeLastUpdatedAt || null;
@@ -1263,6 +1269,10 @@ async function updateData(docId) {
       // no longer force-overwrite Date here — only Serial No stays fixed.
 
       transaction.update(billRef, newData);
+    });
+    await recordAudit("bill.updated", "bill", docId, {
+      before: billAuditSnapshot(originalData),
+      after: billAuditSnapshot({ ...originalData, ...newData }),
     });
 
     // Reconcile the Party Master cache after every edit. If the customer was
@@ -1312,6 +1322,13 @@ async function updateData(docId) {
         icon: "error",
         title: "Bill Not Found",
         text: "This bill may have been deleted.",
+        confirmButtonColor: "#005a9e",
+      });
+    } else if (message.startsWith("LOCKED:")) {
+      Swal.fire({
+        icon: "warning",
+        title: "Bill Locked",
+        text: message.replace("LOCKED: ", ""),
         confirmButtonColor: "#005a9e",
       });
     } else {

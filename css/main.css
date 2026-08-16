@@ -1057,10 +1057,10 @@ button[type="submit"]:hover {
     padding-bottom: 4px;
     margin-bottom: 5px;
   }
-  .bill-no,
-  .bill-date {
-    font-size: 14pt;
+  .bill-meta .meta-item .bill-order {
+    font-size: 12pt;
     font-weight: 800;
+    white-space: nowrap;
   }
   .details-grid,
   .totals-grid {

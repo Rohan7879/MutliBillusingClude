@@ -138,6 +138,10 @@ function filterAndRenderList(searchTerm = null) {
 }
 
 async function markSelectedBillsAsPaid() {
+  if (!hasRole("admin", "accountant")) {
+    Swal.fire("Not allowed", "Only an Admin or Accountant can mark payments as paid.", "error");
+    return;
+  }
   const selectedCheckboxes = document.querySelectorAll("#bill_list_view .bill-checkbox:checked");
 
   if (selectedCheckboxes.length === 0) {
@@ -150,6 +154,10 @@ async function markSelectedBillsAsPaid() {
     text: `You are about to mark ${selectedCheckboxes.length} bill(s) as Paid with today's date.`,
     icon: "question",
     showCancelButton: true,
+    input: "text",
+    inputLabel: "Payment reason / reference",
+    inputPlaceholder: "Example: Cash received at counter",
+    inputValidator: (value) => !value.trim() && "Payment reason is required.",
     confirmButtonColor: "#28a745",
     confirmButtonText: "Yes, mark as Paid!",
   });
@@ -174,7 +182,7 @@ async function markSelectedBillsAsPaid() {
         });
 
         // 2. 🚀 NAYA: Payments collection mein AAJ KI DATE ke sath entry save karo
-        await db.collection("payments").add({
+        const paymentRef = await db.collection("payments").add({
           customerName: billData["Customer Name"] || "",
           customerVillage: billData["Village"] || "N/A",
           customerId: billData.customerId || null,
@@ -183,7 +191,20 @@ async function markSelectedBillsAsPaid() {
           totalCredit: totalAmount,
           paymentDate: firebase.firestore.Timestamp.fromDate(new Date()), // 👈 Aaj ki date save hogi
           appliedToBills: [billId],
+          reason: result.value.trim(),
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        await recordAudit("payment.created", "payment", paymentRef.id, {
+          before: billAuditSnapshot(billData),
+          after: {
+            billId,
+            serialNo: billData["Serial No"] || "",
+            cashAmount: totalAmount,
+            amountPaid: totalAmount,
+            amountDue: 0,
+            paymentStatus: "Paid",
+          },
+          reason: result.value.trim(),
         });
       }
 
@@ -239,8 +260,8 @@ function renderBillList(docs) {
       <td>${formatNumber(bill["Final Total"])}</td>
       <td class="action-buttons">
           <button class="view-btn" data-id="${doc.id}">View</button>
-          <button class="edit-btn" data-id="${doc.id}" ${bill.paymentStatus === "Paid" ? "disabled" : ""}>Edit</button>
-          <button class="delete-btn" data-id="${doc.id}" data-serial="${serialNo}">Delete</button>
+          <button class="edit-btn" data-id="${doc.id}" ${bill.paymentStatus === "Paid" || bill.locked === true ? "disabled" : ""}>Edit</button>
+          <button class="delete-btn" data-id="${doc.id}" data-serial="${serialNo}" ${bill.locked === true ? "disabled" : ""}>Delete</button>
       </td>
     `;
     row.querySelector(".view-btn").addEventListener("click", (event) => viewBill(event.target.dataset.id));

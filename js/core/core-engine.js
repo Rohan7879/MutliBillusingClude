@@ -529,17 +529,31 @@ async function applyPrintLayoutOrder() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const NAV_ITEMS = [
-  { href: "bill-create.html", icon: "🧾", label: "New Bill" },
+  { href: "bill-create.html", icon: "🧾", label: "New Bill", roles: ["admin", "manager", "biller"] },
   { href: "bills.html", icon: "📋", label: "Bills" },
   { href: "dashboard.html", icon: "📊", label: "Dashboard" },
   { href: "reports.html", icon: "📈", label: "Reports" },
-  { href: "broker-ledger.html", icon: "🤝", label: "Brokers" },
-  { href: "ledger.html", icon: "📒", label: "Ledger" },
-  { href: "order-book.html", icon: "📦", label: "Orders" },
-  // 👉 Yahan Party Master jod dijiye:
-  { href: "party-master.html", icon: "📖", label: "Party Master" },
-  { href: "core_settings.html", icon: "⚙️", label: "Settings" },
+  { href: "broker-ledger.html", icon: "🤝", label: "Brokers", roles: ["admin", "manager", "accountant"] },
+  { href: "ledger.html", icon: "📒", label: "Ledger", roles: ["admin", "manager", "accountant"] },
+  { href: "daily-closing.html", icon: "📅", label: "Daily Close", roles: ["admin", "accountant"] },
+  { href: "order-book.html", icon: "📦", label: "Orders", roles: ["admin", "manager", "biller"] },
+  { href: "party-master.html", icon: "📖", label: "Party Master", roles: ["admin", "manager", "biller"] },
+  { href: "audit-log.html", icon: "🛡️", label: "Audit", roles: ["admin"] },
+  { href: "staff-access.html", icon: "👥", label: "Staff", roles: ["admin"] },
+  { href: "core_settings.html", icon: "⚙️", label: "Settings", roles: ["admin"] },
 ];
+
+const PAGE_ROLE_REQUIREMENTS = {
+  "bill-create.html": ["admin", "manager", "biller"],
+  "broker-ledger.html": ["admin", "manager", "accountant"],
+  "ledger.html": ["admin", "manager", "accountant"],
+  "daily-closing.html": ["admin", "accountant"],
+  "order-book.html": ["admin", "manager", "biller"],
+  "party-master.html": ["admin", "manager", "biller"],
+  "audit-log.html": ["admin"],
+  "staff-access.html": ["admin"],
+  "core_settings.html": ["admin"],
+};
 
 /**
  * Renders the top navbar into #navbar-root (add this empty div at the top
@@ -558,7 +572,8 @@ function renderNavbar() {
 
   const currentFile = window.location.pathname.split("/").pop() || "index.html";
 
-  const linksHtml = NAV_ITEMS.map((item) => {
+  const role = window.currentUserProfile && window.currentUserProfile.role;
+  const linksHtml = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role)).map((item) => {
     const isActive = item.href === currentFile;
     return `<a class="nav-link${isActive ? " active" : ""}" href="${item.href}">${item.icon} <span>${
       item.label
@@ -610,6 +625,20 @@ function renderNavbar() {
     });
   }
 }
+
+function enforceCurrentPageRole(profile) {
+  if (!profile) return;
+  const currentFile = window.location.pathname.split("/").pop() || "index.html";
+  const allowedRoles = PAGE_ROLE_REQUIREMENTS[currentFile];
+  if (allowedRoles && !allowedRoles.includes(profile.role)) {
+    window.location.replace("index.html");
+  }
+}
+
+window.addEventListener("mandibook:access-ready", ({ detail }) => {
+  if (document.getElementById("navbar-root")) renderNavbar();
+  enforceCurrentPageRole(detail);
+});
 
 // ═══════════════════════════════════════════════════════════════════════════
 // PHASE 1 — AMOUNT IN WORDS (legal requirement on printed bills)

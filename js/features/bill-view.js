@@ -25,11 +25,21 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if (savePaymentBtn) {
     savePaymentBtn.addEventListener("click", async () => {
+      if (!hasRole("admin", "accountant")) {
+        alert("Only an Admin or Accountant can record payments.");
+        return;
+      }
       const paymentInput = document.getElementById("payment-amount-input"); // ya jo bhi aapke input ka ID ho
       const cashAmount = Number(paymentInput ? paymentInput.value : 0) || 0;
+      const reasonInput = document.getElementById("payment-reason-input");
+      const paymentReason = reasonInput ? reasonInput.value.trim() : "";
 
       if (cashAmount <= 0) {
         alert("Please enter a valid amount.");
+        return;
+      }
+      if (!paymentReason) {
+        alert("Please enter a payment reason or reference.");
         return;
       }
 
@@ -72,7 +82,7 @@ document.addEventListener("DOMContentLoaded", () => {
         });
 
         // 2. Payments collection mein entry daalo
-        await db.collection("payments").add({
+        const paymentRef = await db.collection("payments").add({
           customerName: billData["Customer Name"] || billData.customerName,
           customerVillage: billData["Village"] || billData.customerVillage || "N/A",
           customerId: billData.customerId || null,
@@ -81,7 +91,21 @@ document.addEventListener("DOMContentLoaded", () => {
           totalCredit: cashAmount,
           paymentDate: firebase.firestore.Timestamp.fromDate(new Date()),
           appliedToBills: [billId],
+          reason: paymentReason,
           createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+
+        await recordAudit("payment.created", "payment", paymentRef.id, {
+          before: billAuditSnapshot(billData),
+          after: {
+            billId,
+            serialNo: billData["Serial No"] || "",
+            cashAmount,
+            amountPaid: newAmountPaid,
+            amountDue: newAmountDue,
+            paymentStatus: newStatus,
+          },
+          reason: paymentReason,
         });
 
         // 3. Party Master ka balance update karo
@@ -119,6 +143,12 @@ async function fetchSharedBillAndDisplay(shareToken) {
   }
 }
 
+function updatePaymentAccess() {
+  const recordPaymentButton = document.getElementById("record_payment_btn");
+  if (!recordPaymentButton) return;
+  recordPaymentButton.style.display = hasRole("admin", "accountant") ? "" : "none";
+}
+
 async function fetchBillAndDisplay(billId) {
   try {
     showLoading("Loading bill details...");
@@ -130,6 +160,7 @@ async function fetchBillAndDisplay(billId) {
       window.currentBillData = billData;
       localStorage.setItem("currentBill", JSON.stringify(billData));
       displayData(billData);
+      renderBillWorkflowControls(billId, billData);
       await applyBoxOrder();
     } else {
       alert("Error: Bill not found in database.");
@@ -141,6 +172,92 @@ async function fetchBillAndDisplay(billId) {
     hideLoading();
   }
 }
+
+function renderBillWorkflowControls(billId, billData) {
+  const container = document.querySelector(".button-container");
+  if (!container) return;
+  container.querySelectorAll(".workflow-control, .workflow-status").forEach((element) => element.remove());
+
+  const status = billData.workflowStatus || (billData.locked ? "locked" : "draft");
+  const statusBadge = document.createElement("span");
+  statusBadge.className = "workflow-status";
+  statusBadge.textContent = `Workflow: ${status.charAt(0).toUpperCase()}${status.slice(1)}`;
+  statusBadge.style.cssText = "align-self:center;font-weight:700;color:#005a9e;padding:8px 4px;";
+  container.appendChild(statusBadge);
+
+  const role = window.currentUserProfile && window.currentUserProfile.role;
+  if (status === "draft" && ["admin", "manager"].includes(role)) {
+    const approveButton = document.createElement("button");
+    approveButton.className = "button workflow-control";
+    approveButton.style.backgroundColor = "#6f42c1";
+    approveButton.textContent = "Approve Bill";
+    approveButton.addEventListener("click", () => changeBillWorkflow(billId, "approved"));
+    container.appendChild(approveButton);
+  }
+  if (status === "approved" && role === "admin") {
+    const lockButton = document.createElement("button");
+    lockButton.className = "button workflow-control";
+    lockButton.style.backgroundColor = "#343a40";
+    lockButton.textContent = "Lock Bill";
+    lockButton.addEventListener("click", () => changeBillWorkflow(billId, "locked"));
+    container.appendChild(lockButton);
+  }
+}
+
+async function changeBillWorkflow(billId, nextStatus) {
+  const actionLabel = nextStatus === "approved" ? "approve" : "lock";
+  const confirmation = await Swal.fire({
+    icon: "warning",
+    title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} this bill?`,
+    text: nextStatus === "locked" ? "A locked bill cannot be edited or deleted from MandiBook." : "Approval records that the bill has been reviewed.",
+    showCancelButton: true,
+    confirmButtonText: `Yes, ${actionLabel}`,
+    confirmButtonColor: nextStatus === "locked" ? "#343a40" : "#6f42c1",
+  });
+  if (!confirmation.isConfirmed) return;
+
+  const billRef = billsCollection.doc(billId);
+  try {
+    const beforeDoc = await billRef.get();
+    if (!beforeDoc.exists) throw new Error("Bill not found.");
+    const before = beforeDoc.data();
+    const role = window.currentUserProfile && window.currentUserProfile.role;
+    if (nextStatus === "approved" && !["admin", "manager"].includes(role)) throw new Error("Only an Admin or Manager can approve bills.");
+    if (nextStatus === "locked" && role !== "admin") throw new Error("Only an Admin can lock bills.");
+    if (before.locked === true || before.workflowStatus === "locked") throw new Error("This bill is already locked.");
+    if (nextStatus === "locked" && before.workflowStatus !== "approved") throw new Error("Approve the bill before locking it.");
+
+    const update = {
+      workflowStatus: nextStatus,
+      lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    };
+    if (nextStatus === "approved") {
+      update.approvedAt = firebase.firestore.FieldValue.serverTimestamp();
+      update.approvedBy = firebase.auth().currentUser.uid;
+    }
+    if (nextStatus === "locked") {
+      update.locked = true;
+      update.lockedAt = firebase.firestore.FieldValue.serverTimestamp();
+      update.lockedBy = firebase.auth().currentUser.uid;
+    }
+    await billRef.update(update);
+    await recordAudit(`bill.${nextStatus}`, "bill", billId, {
+      before: billAuditSnapshot(before),
+      after: billAuditSnapshot({ ...before, ...update, workflowStatus: nextStatus, locked: nextStatus === "locked" }),
+      reason: `Bill ${nextStatus}`,
+    });
+    await fetchBillAndDisplay(billId);
+  } catch (error) {
+    Swal.fire({ icon: "error", title: "Workflow update failed", text: error.message || String(error) });
+  }
+}
+
+window.addEventListener("mandibook:access-ready", () => {
+  updatePaymentAccess();
+  const params = new URLSearchParams(window.location.search);
+  const billId = params.get("id") || params.get("billId");
+  if (billId && window.currentBillData) renderBillWorkflowControls(billId, window.currentBillData);
+});
 
 /**
  * Reorders the weight-side detail boxes (Kasar, Bardan, Moisture, Template

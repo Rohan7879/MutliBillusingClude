@@ -152,6 +152,11 @@
           <span class="meta-value bill-no" id="display_serial_no"></span>
         </div>
         <div class="meta-item">
+          <span class="meta-value bill-order" id="print_ref_order_container" style="display: none">
+            Ref Order No: <span id="print_ref_order_no"></span>
+          </span>
+        </div>
+        <div class="meta-item">
           <span class="meta-value bill-date" id="display_date"></span>
         </div>
       </div>
@@ -177,7 +182,7 @@
 
       <div id="total-bags-final-view" style="display: none"></div>
 
-      <div class="details-grid" style="grid-template-columns: repeat(5, 1fr);">
+      <div class="details-grid" style="grid-template-columns: repeat(5, 1fr)">
         <div class="detail-item" id="weighbridge_box">
           <span class="detail-label">વેબ્રીજ</span>
           <span class="detail-value" id="display_weighbridge_weight">0</span>

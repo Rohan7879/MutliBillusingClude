@@ -1,21 +1,127 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    function signedIn() {
+      return request.auth != null;
+    }
+
+    function ownerEmail() {
+      return signedIn() && request.auth.token.email == 'rohanvasoya2013@gmail.com';
+    }
+
+    function profile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid));
+    }
+
+    function active() {
+      return signedIn() && exists(/databases/$(database)/documents/users/$(request.auth.uid))
+        && profile().data.status == 'active';
+    }
+
+    function roleIs(role) {
+      return active() && profile().data.role == role;
+    }
+
+    function admin() {
+      return ownerEmail() || roleIs('admin');
+    }
+
+    function anyRole(roles) {
+      return active() && profile().data.role in roles;
+    }
+
+    function openBill() {
+      return resource.data.get('locked', false) != true
+        && resource.data.get('workflowStatus', 'draft') != 'locked';
+    }
+
+    function billEditor() {
+      return anyRole(['admin', 'manager', 'biller']) && openBill()
+        && request.resource.data.get('locked', false) == resource.data.get('locked', false)
+        && request.resource.data.get('workflowStatus', 'draft') == resource.data.get('workflowStatus', 'draft');
+    }
+
+    function billApprover() {
+      return anyRole(['admin', 'manager']) && openBill()
+        && resource.data.get('workflowStatus', 'draft') == 'draft'
+        && request.resource.data.get('workflowStatus', 'draft') == 'approved'
+        && request.resource.data.get('locked', false) == false
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['workflowStatus', 'approvedAt', 'approvedBy', 'lastUpdatedAt']);
+    }
+
+    function billLocker() {
+      return admin() && openBill()
+        && resource.data.get('workflowStatus', 'draft') == 'approved'
+        && request.resource.data.get('workflowStatus', 'draft') == 'locked'
+        && request.resource.data.get('locked', false) == true
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['workflowStatus', 'locked', 'lockedAt', 'lockedBy', 'lastUpdatedAt']);
+    }
+
+    function billPaymentUpdater() {
+      return anyRole(['admin', 'accountant'])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['amountPaid', 'amountDue', 'paymentStatus', 'lastUpdatedAt']);
+    }
+
+    // The configured owner can bootstrap only their own admin record. Every
+    // other new account may create only a pending viewer request for itself.
+    match /users/{uid} {
+      allow get: if signedIn() && (request.auth.uid == uid || admin());
+      allow list: if admin();
+      allow create: if ownerEmail() && request.auth.uid == uid
+          || (signedIn() && request.auth.uid == uid
+              && request.resource.data.status == 'pending'
+              && request.resource.data.role == 'viewer');
+      allow update, delete: if admin();
+    }
+
     // A customer can open only an unguessable, time-limited shared bill link.
-    // Collection listing is never public; staff authentication is required to
-    // create or revoke a link.
+    // Collection listing is never public.
     match /sharedBills/{shareId} {
       allow get: if resource.data.expiresAt > request.time;
       allow list: if false;
-      allow create, update, delete: if request.auth != null;
+      allow create, update, delete: if anyRole(['admin', 'manager', 'biller']);
     }
 
-    // Every request must come from a signed-in Firebase user. Client-side
-    // redirects are only a UI feature; Firestore rules are the real data
-    // boundary. More granular staff roles can be added once user roles are
-    // stored in authenticated custom claims or a protected users collection.
-    match /{document=**} {
-      allow read, write: if request.auth != null;
+    // Audit evidence is append-only. Only an Admin may review it; each
+    // creator record must identify the same Firebase user making the request.
+    match /auditLogs/{auditId} {
+      allow read: if admin();
+      allow create: if active() && request.resource.data.actor.uid == request.auth.uid;
+      allow update, delete: if false;
+    }
+
+    match /bills/{billId} {
+      allow read: if active();
+      allow create: if anyRole(['admin', 'manager', 'biller'])
+        && request.resource.data.get('locked', false) == false
+        && request.resource.data.get('workflowStatus', 'draft') == 'draft';
+      allow update: if billEditor() || billApprover() || billLocker() || billPaymentUpdater();
+      allow delete: if admin();
+    }
+
+    match /orders/{orderId} {
+      allow read: if active();
+      allow create, update: if anyRole(['admin', 'manager', 'biller']);
+      allow delete: if admin();
+    }
+
+    match /parties/{partyId} {
+      allow read: if active();
+      allow create, update: if anyRole(['admin', 'manager', 'biller']);
+      allow delete: if admin();
+    }
+
+    match /{collection}/{document} {
+      allow read: if collection != 'auditLogs' && active();
+      allow create, update: if collection in ['products', 'varieties', 'customers', 'counters', 'brokers']
+          && anyRole(['admin', 'manager', 'biller']);
+      allow create, update, delete: if collection in ['payments', 'broker_payments']
+          && anyRole(['admin', 'accountant']);
+      allow write: if collection == 'settings' && admin();
+      allow delete: if collection in ['products', 'varieties', 'customers', 'counters', 'brokers'] && admin();
     }
   }
 }

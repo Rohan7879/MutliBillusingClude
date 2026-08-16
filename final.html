@@ -94,14 +94,12 @@
       <div class="bill-meta" style="margin-bottom: 10px;">
         <div class="meta-item">
           <span class="meta-value bill-no" id="display_serial_no" style="margin-right: 15px;"></span>
-  
-          <!-- Original Inline Reference Order No -->
-         
         </div>
- <span id="print_ref_order_container" style="display: none; ">
+        <div class="meta-item">
+          <span class="meta-value bill-order" id="print_ref_order_container" style="display: none; ">
             Ref Order No: <span id="print_ref_order_no"></span>
           </span>
-       
+        </div>
         <div class="meta-item">
           <span class="meta-value bill-date" id="display_date"></span>
         </div>
@@ -279,6 +277,7 @@
         <h2>Record a Payment</h2>
         <p>Enter the amount the customer has paid for this bill.</p>
         <input type="number" id="payment-amount-input" placeholder="Enter amount" step="any" style="width: 100%; margin-bottom: 15px;">
+        <input type="text" id="payment-reason-input" placeholder="Payment reason / reference" maxlength="200" style="width: 100%; margin-bottom: 15px;">
         <div class="modal-button-container">
           <button id="save-payment-btn" class="button">Save Payment</button>
           <button id="close-payment-modal-btn" class="button close-modal-btn">Cancel</button>

@@ -14,6 +14,11 @@ async function softDeleteBill(docId) {
       deleted: true,
       deletedAt: Date.now(),
     });
+    await recordAudit("bill.deleted", "bill", docId, {
+      before: billAuditSnapshot(bill),
+      after: billAuditSnapshot({ ...bill, deleted: true }),
+      reason: "Soft delete",
+    });
     if (bill.customerId) await adjustPartyBalance(bill.customerId, -Number(bill["Final Total"] || 0));
     Swal.fire({
       icon: "success",
@@ -45,6 +50,11 @@ async function restoreBill(docId) {
     if (!billDoc.exists || billDoc.data().deleted !== true) return false;
     const bill = billDoc.data();
     await billRef.update({ deleted: false, deletedAt: null });
+    await recordAudit("bill.restored", "bill", docId, {
+      before: billAuditSnapshot(bill),
+      after: billAuditSnapshot({ ...bill, deleted: false }),
+      reason: "Restore from archive",
+    });
     if (bill.customerId) await adjustPartyBalance(bill.customerId, Number(bill["Final Total"] || 0));
     Swal.fire({
       icon: "success",

@@ -68,12 +68,12 @@
     </style>
   </head>
   <body>
-    <div class="login-card">
+    <form class="login-card" id="login-form">
       <h2>MandiBook Secure Login</h2>
-      <input type="email" id="email" placeholder="Email Address" required />
-      <input type="password" id="password" placeholder="Password" required />
-      <button onclick="loginUser()">Login</button>
-    </div>
+      <input type="email" id="email" placeholder="Email Address" autocomplete="email" required />
+      <input type="password" id="password" placeholder="Password" autocomplete="current-password" required />
+      <button type="submit">Login</button>
+    </form>
 
     <script>
       function loginUser() {
@@ -97,9 +97,22 @@
             );
           })
           .catch((error) => {
-            Swal.fire({ icon: "error", title: "Login Failed", text: error.message });
+            const invalidCredentials = ["auth/wrong-password", "auth/user-not-found", "auth/invalid-credential"].includes(error.code)
+              || String(error.message || "").includes("INVALID_LOGIN_CREDENTIALS");
+            Swal.fire({
+              icon: "error",
+              title: "Login Failed",
+              text: invalidCredentials
+                ? "Email/password galat hai, ya is email ka Firebase account abhi bana nahi hai."
+                : error.message,
+            });
           });
       }
+
+      document.getElementById("login-form").addEventListener("submit", (event) => {
+        event.preventDefault();
+        loginUser();
+      });
     </script>
   </body>
 </html>

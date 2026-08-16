@@ -2,15 +2,15 @@
  * @file settings.js
  * @description MandiBook Settings — Core deductions + Product Templates manager.
  * @project MandiBook — Agricultural Purchase Billing System
- * @version 1.1.0
+ * @version 1.2.0
  */
 
 // ─── App Version ───────────────────────────────────────────────────────────────
 const APP_VERSION = {
-  number: "1.1.0",
+  number: "1.2.0",
   phase: "Phase 1",
-  label: "Product Templates + Flexible Deductions",
-  date: "28 June 2026",
+  label: "Security & Staff Access Control",
+  date: "12 August 2026",
 };
 
 // ─── Deduction Types ───────────────────────────────────────────────────────────
@@ -180,7 +180,7 @@ let printLayoutState = {
  * @file settings.js
  * @description MandiBook Settings — Core deductions + Product Templates manager.
  * @project MandiBook — Agricultural Purchase Billing System
- * @version 1.1.0
+ * @version 1.2.0
  */
 
 async function loadPrintLayoutSettings() {

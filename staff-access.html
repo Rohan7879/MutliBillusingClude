@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Staff Access — MandiBook</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/utils.js"></script>
+    <script src="js/core/core-engine.js"></script>
+    <link rel="stylesheet" href="css/main.css" />
+    <style>.staff-wrap{max-width:1100px;margin:28px auto;padding:0 18px}.staff-card{background:#fff;border:1px solid #d9e2ef;border-radius:12px;padding:20px;box-shadow:0 2px 8px #003d6e0d}.staff-table{width:100%;border-collapse:collapse}.staff-table th,.staff-table td{padding:12px 8px;border-bottom:1px solid #e8edf3;text-align:left}.staff-table select,.staff-table button{padding:7px;border-radius:6px;border:1px solid #b9c9db}.staff-table button{background:#005a9e;color:#fff;border:0;font-weight:700;cursor:pointer}.status-pending{color:#a66a00;font-weight:700}.status-active{color:#138a45;font-weight:700}.status-suspended,.status-revoked{color:#b42318;font-weight:700}</style>
+  </head>
+  <body>
+    <div id="navbar-root"></div>
+    <main class="staff-wrap"><div class="staff-card"><h1>👥 Staff Access</h1><p>Approve pending accounts and assign only the role needed for their work.</p><div id="staff-list">Loading staff profiles…</div></div></main>
+    <script>
+      const ROLES = ["admin", "manager", "biller", "accountant", "viewer"];
+      const STATUSES = ["active", "pending", "suspended", "revoked"];
+      let unsubscribeStaff = null;
+      function esc(value) { return String(value || "").replace(/[&<>\"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c])); }
+      function options(values, selected) { return values.map(v => `<option value="${v}" ${v === selected ? "selected" : ""}>${v}</option>`).join(""); }
+      function renderStaff(rows) {
+        const target = document.getElementById("staff-list");
+        if (!rows.length) { target.textContent = "No staff profiles yet."; return; }
+        target.innerHTML = `<table class="staff-table"><thead><tr><th>Email</th><th>Name</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(({id, data}) => `<tr><td>${esc(data.email)}</td><td>${esc(data.displayName || "—")}</td><td><select id="role-${id}">${options(ROLES, data.role || "viewer")}</select></td><td><select id="status-${id}">${options(STATUSES, data.status || "pending")}</select></td><td><button onclick="saveStaff('${id}')">Save</button></td></tr>`).join("")}</tbody></table>`;
+      }
+      async function saveStaff(uid) {
+        const role = document.getElementById(`role-${uid}`).value;
+        const status = document.getElementById(`status-${uid}`).value;
+        try {
+          await db.collection("users").doc(uid).update({ role, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
+          Swal.fire({icon:"success",title:"Staff access updated",timer:1200,showConfirmButton:false});
+        } catch (error) { Swal.fire({icon:"error",title:"Could not update staff",text:error.message}); }
+      }
+      window.saveStaff = saveStaff;
+      window.addEventListener("mandibook:access-ready", ({detail}) => {
+        if (!detail || detail.role !== "admin" || unsubscribeStaff) return;
+        unsubscribeStaff = db.collection("users").onSnapshot(snapshot => renderStaff(snapshot.docs.map(doc => ({id:doc.id, data:doc.data()}))));
+      });
+      window.addEventListener("pagehide", () => { if (unsubscribeStaff) unsubscribeStaff(); });
+    </script>
+  </body>
+</html>
