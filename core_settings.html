@@ -1276,6 +1276,37 @@
       <!-- Product Templates -->
       <div class="section-card">
         <div class="section-card-title">
+          <span>🔐 Secure Share Links</span>
+          <button type="button" class="btn-save" onclick="loadSecureShareLinks()" style="font-size:13px;padding:8px 16px;">↻ Refresh</button>
+        </div>
+        <p style="margin:0 0 14px;color:#5f6b78;line-height:1.55;">Active WhatsApp/download links expire after 30 days. Revoke a link immediately if it was sent to the wrong person.</p>
+        <div id="secure-share-links" style="overflow-x:auto;color:#64748b;">Loading secure links...</div>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-title"><span>🖨️ Bill Print Approval</span></div>
+        <p style="margin:0 0 14px;color:#5f6b78;line-height:1.55;">Choose whether a draft bill can be physically printed. PDF and WhatsApp sharing remain available for review.</p>
+        <div class="settings-row" style="align-items:center;">
+          <label for="print-policy-select">Print policy</label>
+          <select id="print-policy-select" style="max-width:300px;">
+            <option value="allow_draft">Allow print for draft bills</option>
+            <option value="approved_only">Only approved / locked bills</option>
+          </select>
+          <button type="button" class="btn-save" onclick="saveBillWorkflowSettings()">Save print policy</button>
+        </div>
+        <div class="settings-row" style="align-items:center;margin-top:12px;">
+          <label for="item-label-mode-select">Bill item label</label>
+          <select id="item-label-mode-select" style="max-width:300px;">
+            <option value="vakal">Show Vakal 1, Vakal 2 (default)</option>
+            <option value="variety">Show Vakal + Variety name</option>
+          </select>
+          <button type="button" class="btn-save" onclick="saveBillWorkflowSettings()">Save item label</button>
+        </div>
+        <small id="print-policy-status" style="display:block;margin-top:10px;color:#5f6b78;"></small>
+      </div>
+
+      <div class="section-card">
+        <div class="section-card-title">
           <span>🌾 Product Templates</span>
           <button class="btn-save" onclick="openNewTemplateModal()" style="font-size: 13px; padding: 8px 16px">
             ➕ New Template

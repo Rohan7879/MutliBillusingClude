@@ -23,6 +23,7 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadProductTemplatesForBillForm();
   renderProductDropdown();
   attachProductChangeListener();
+  document.dispatchEvent(new CustomEvent("mandibook:product-templates-ready"));
 });
 
 // ═══════════════════════════════════════════════════════════════════════════════
@@ -91,12 +92,36 @@ function attachProductChangeListener() {
     if (e.target?.id !== "product-template-select") return;
 
     const selectedId = e.target.value;
-    window.activeTemplate = selectedId ? allProductTemplates[selectedId] : null;
+    window.activeTemplate = selectedId ? { ...allProductTemplates[selectedId], id: selectedId } : null;
 
     renderTemplateDeductionsInForm();
     updateSeriesPreview();
   });
 }
+
+/**
+ * Select a bill template from a saved template id or product/template name.
+ * Order Book products and templates are separate master lists, so name matching
+ * is deliberately used only as a fallback. If there is no unambiguous match,
+ * the manual selection remains untouched instead of applying a wrong series.
+ */
+window.selectProductTemplateForBill = function ({ id = "", name = "" } = {}) {
+  const normalise = (value) => String(value || "").trim().toLocaleLowerCase();
+  let templateId = id && allProductTemplates[id] ? id : "";
+  if (!templateId && name) {
+    const matches = Object.entries(allProductTemplates).filter(([, template]) => normalise(template.name) === normalise(name));
+    if (matches.length === 1) templateId = matches[0][0];
+  }
+  if (!templateId) return false;
+
+  const select = document.getElementById("product-template-select");
+  if (!select) return false;
+  select.value = templateId;
+  window.activeTemplate = { ...allProductTemplates[templateId], id: templateId };
+  renderTemplateDeductionsInForm();
+  updateSeriesPreview();
+  return true;
+};
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // RENDER TEMPLATE DEDUCTIONS INTO THE BILL FORM

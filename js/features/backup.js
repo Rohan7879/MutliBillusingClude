@@ -10,6 +10,24 @@ async function softDeleteBill(docId) {
     const billDoc = await billRef.get();
     if (!billDoc.exists || billDoc.data().deleted === true) return false;
     const bill = billDoc.data();
+    const hasRecordedPayment =
+      Number(bill.amountPaid || 0) > 0 || ["Paid", "Partial", "Partially Paid"].includes(bill.paymentStatus);
+    if (bill.locked === true || bill.workflowStatus === "locked") {
+      Swal.fire({
+        icon: "warning",
+        title: "Delete blocked",
+        text: "This bill is locked as a final accounting record. Create a correction bill if a change is needed.",
+      });
+      return false;
+    }
+    if (hasRecordedPayment) {
+      Swal.fire({
+        icon: "warning",
+        title: "Delete blocked",
+        text: "A partially or fully paid bill cannot be deleted because it has payment and audit records.",
+      });
+      return false;
+    }
     await billRef.update({
       deleted: true,
       deletedAt: Date.now(),
@@ -45,6 +63,14 @@ async function softDeleteBill(docId) {
 
 async function restoreBill(docId) {
   try {
+    if (typeof hasRole === "function" && !hasRole("admin")) {
+      Swal.fire({
+        icon: "info",
+        title: "Admin approval required",
+        text: "Only an Admin can restore an archived bill because it changes accounting records.",
+      });
+      return false;
+    }
     const billRef = billsCollection.doc(docId);
     const billDoc = await billRef.get();
     if (!billDoc.exists || billDoc.data().deleted !== true) return false;

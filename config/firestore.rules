@@ -30,6 +30,22 @@ service cloud.firestore {
       return active() && profile().data.role in roles;
     }
 
+    function billHasPayment() {
+      return resource.data.get('amountPaid', 0) > 0
+        || resource.data.get('paymentStatus', 'Unpaid') in ['Paid', 'Partial', 'Partially Paid'];
+    }
+
+    function approvalRequired() {
+      return exists(/databases/$(database)/documents/settings/billWorkflow)
+        && get(/databases/$(database)/documents/settings/billWorkflow).data.printPolicy == 'approved_only';
+    }
+
+    function billApprovedForRelease() {
+      return !approvalRequired()
+        || resource.data.get('workflowStatus', 'draft') in ['approved', 'locked']
+        || resource.data.get('locked', false) == true;
+    }
+
     function openBill() {
       return resource.data.get('locked', false) != true
         && resource.data.get('workflowStatus', 'draft') != 'locked';
@@ -37,8 +53,20 @@ service cloud.firestore {
 
     function billEditor() {
       return anyRole(['admin', 'manager', 'biller']) && openBill()
+        && resource.data.get('deleted', false) == false
         && request.resource.data.get('locked', false) == resource.data.get('locked', false)
-        && request.resource.data.get('workflowStatus', 'draft') == resource.data.get('workflowStatus', 'draft');
+        && request.resource.data.get('workflowStatus', 'draft') == resource.data.get('workflowStatus', 'draft')
+        && !(request.resource.data.get('deleted', false) == true && billHasPayment());
+    }
+
+    // Archived bills are accounting evidence. Only an Admin can restore one,
+    // and the restore operation may change only its archive flags.
+    function billRestorer() {
+      return admin()
+        && resource.data.get('deleted', false) == true
+        && request.resource.data.get('deleted', false) == false
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['deleted', 'deletedAt']);
     }
 
     function billApprover() {
@@ -61,6 +89,7 @@ service cloud.firestore {
 
     function billPaymentUpdater() {
       return anyRole(['admin', 'accountant'])
+        && billApprovedForRelease()
         && request.resource.data.diff(resource.data).affectedKeys()
           .hasOnly(['amountPaid', 'amountDue', 'paymentStatus', 'lastUpdatedAt']);
     }
@@ -74,15 +103,41 @@ service cloud.firestore {
           || (signedIn() && request.auth.uid == uid
               && request.resource.data.status == 'pending'
               && request.resource.data.role == 'viewer');
-      allow update, delete: if admin();
+      // A user may refresh only their own contact/sign-in metadata. Role,
+      // status and company scope remain Admin-controlled.
+      allow update: if admin()
+          || (signedIn() && request.auth.uid == uid
+              && request.resource.data.diff(resource.data).affectedKeys()
+                .hasOnly(['displayName', 'mobileNumber', 'mobileKey', 'providerIds', 'lastSignInAt', 'updatedAt'])
+              && (request.resource.data.get('mobileKey', '') == resource.data.get('mobileKey', '')
+                || (request.resource.data.get('mobileKey', '').size() == 12
+                  && existsAfter(/databases/$(database)/documents/mobileDirectory/$(request.resource.data.mobileKey))
+                  && getAfter(/databases/$(database)/documents/mobileDirectory/$(request.resource.data.mobileKey)).data.uid == uid)));
+      allow delete: if admin();
+    }
+
+    // The document ID is the normalised +91 mobile key. It makes a mobile
+    // number globally unique without trusting a browser-only duplicate check.
+    match /mobileDirectory/{mobileKey} {
+      allow create: if signedIn()
+          && request.resource.data.uid == request.auth.uid
+          && request.resource.data.mobileKey == mobileKey
+          && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.mobileKey == mobileKey;
+      allow delete: if signedIn()
+          && resource.data.uid == request.auth.uid
+          && getAfter(/databases/$(database)/documents/users/$(request.auth.uid)).data.get('mobileKey', '') != mobileKey;
+      allow read, update: if admin();
     }
 
     // A customer can open only an unguessable, time-limited shared bill link.
     // Collection listing is never public.
     match /sharedBills/{shareId} {
-      allow get: if resource.data.expiresAt > request.time;
-      allow list: if false;
-      allow create, update, delete: if anyRole(['admin', 'manager', 'biller']);
+      allow get: if admin()
+        || (resource.data.expiresAt > request.time && resource.data.get('revoked', false) == false);
+      allow list: if admin();
+      allow create: if anyRole(['admin', 'manager', 'biller'])
+        && (!approvalRequired() || request.resource.data.bill.workflowStatus in ['approved', 'locked']);
+      allow update, delete: if admin();
     }
 
     // Audit evidence is append-only. Only an Admin may review it; each
@@ -98,8 +153,8 @@ service cloud.firestore {
       allow create: if anyRole(['admin', 'manager', 'biller'])
         && request.resource.data.get('locked', false) == false
         && request.resource.data.get('workflowStatus', 'draft') == 'draft';
-      allow update: if billEditor() || billApprover() || billLocker() || billPaymentUpdater();
-      allow delete: if admin();
+      allow update: if billEditor() || billRestorer() || billApprover() || billLocker() || billPaymentUpdater();
+      allow delete: if admin() && !billHasPayment();
     }
 
     match /orders/{orderId} {

@@ -15,6 +15,10 @@ document.addEventListener("DOMContentLoaded", () => {
   const savePaymentBtn = document.getElementById("save-payment-btn");
   if (recordPaymentBtn) {
     recordPaymentBtn.addEventListener("click", () => {
+      if (approvalRequiredFor(window.currentBillData)) {
+        showApprovalRequired("record a payment");
+        return;
+      }
       if (paymentModal) paymentModal.style.display = "flex";
     });
   }
@@ -62,6 +66,11 @@ document.addEventListener("DOMContentLoaded", () => {
         }
 
         const billData = billDoc.data();
+        if (approvalRequiredFor(billData)) {
+          hideLoading();
+          showApprovalRequired("record a payment");
+          return;
+        }
         const currentAmountPaid = Number(billData.amountPaid || 0);
         const finalTotal = Number(billData["Final Total"] || 0);
         const amountDue = Math.max(0, finalTotal - currentAmountPaid);
@@ -129,10 +138,13 @@ async function fetchSharedBillAndDisplay(shareToken) {
     showLoading("Loading shared bill...");
     const sharedDoc = await db.collection("sharedBills").doc(shareToken).get();
     if (!sharedDoc.exists || !sharedDoc.data().bill) throw new Error("Shared bill not found.");
-    const billData = sharedDoc.data().bill;
+    const sharedData = sharedDoc.data();
+    const billData = sharedData.bill;
     // Public links do not have the owner's localStorage. Keep this loaded
     // snapshot in memory so Download PDF and Print work on any mobile.
     window.currentBillData = billData;
+    window.billPrintPolicy = sharedData.printPolicy === "approved_only" ? "approved_only" : "allow_draft";
+    window.billItemLabelMode = sharedData.itemLabelMode === "variety" ? "variety" : "vakal";
     displayData(billData);
     await applyBoxOrder();
   } catch (error) {
@@ -153,6 +165,7 @@ async function fetchBillAndDisplay(billId) {
   try {
     showLoading("Loading bill details...");
     await fetchSettings();
+    await loadBillPrintPolicy();
 
     const doc = await billsCollection.doc(billId).get();
     if (doc.exists) {
@@ -170,6 +183,33 @@ async function fetchBillAndDisplay(billId) {
     alert("Could not load bill details.");
   } finally {
     hideLoading();
+  }
+}
+
+window.billPrintPolicy = "allow_draft";
+window.billItemLabelMode = "vakal";
+function approvalRequiredFor(bill) {
+  const status = bill?.workflowStatus || (bill?.locked ? "locked" : "draft");
+  return window.billPrintPolicy === "approved_only" && !["approved", "locked"].includes(status);
+}
+
+function showApprovalRequired(action) {
+  Swal.fire({
+    icon: "info",
+    title: "Approval required",
+    text: `This bill is still Draft. Approve it before you ${action}.`,
+    confirmButtonColor: "#005a9e",
+  });
+}
+async function loadBillPrintPolicy() {
+  try {
+    const doc = await db.collection("settings").doc("billWorkflow").get();
+    window.billPrintPolicy = doc.exists && doc.data().printPolicy === "approved_only" ? "approved_only" : "allow_draft";
+    window.billItemLabelMode = doc.exists && doc.data().itemLabelMode === "variety" ? "variety" : "vakal";
+  } catch (error) {
+    console.warn("Could not load print policy; allowing current print behavior.", error);
+    window.billPrintPolicy = "allow_draft";
+    window.billItemLabelMode = "vakal";
   }
 }
 
@@ -201,6 +241,17 @@ function renderBillWorkflowControls(billId, billData) {
     lockButton.textContent = "Lock Bill";
     lockButton.addEventListener("click", () => changeBillWorkflow(billId, "locked"));
     container.appendChild(lockButton);
+  }
+  if (status === "locked" || billData.locked === true) {
+    const correctionButton = document.createElement("button");
+    correctionButton.className = "button workflow-control";
+    correctionButton.style.backgroundColor = "#b45309";
+    correctionButton.textContent = "Create Correction";
+    correctionButton.title = "Creates a new bill linked to this locked original";
+    correctionButton.addEventListener("click", () => {
+      window.location.href = `bill-create.html?correctionOf=${encodeURIComponent(billId)}`;
+    });
+    container.appendChild(correctionButton);
   }
 }
 
@@ -458,6 +509,11 @@ function displayData(data) {
       // Now, apply visibility and set data for the row
       if (showRow) {
         vakalRow.style.display = "table-row";
+        const label = document.getElementById(`display_vakal_${i}_label`);
+        if (label) {
+          const variety = String(data[`Vakal ${i} Variety`] || "").trim();
+          label.textContent = window.billItemLabelMode === "variety" && variety ? `વકલ ${i} — ${variety}` : `વકલ ${i}`;
+        }
         setValue(`display_vakal_${i}_katta`, katta);
 
         const moisturePct = data[`Vakal ${i} Moisture %`] || 0;
@@ -736,6 +792,10 @@ async function sendBillViaWhatsApp() {
       return;
     }
     data = doc.data();
+    if (approvalRequiredFor(data)) {
+      showApprovalRequired("share it on WhatsApp");
+      return;
+    }
   } catch (e) {
     alert("Could not load bill data.");
     return;
@@ -1269,6 +1329,10 @@ async function downloadBillAsPDF() {
     alert("No bill data found to download.");
     return;
   }
+  if (approvalRequiredFor(billData)) {
+    showApprovalRequired("download its PDF");
+    return;
+  }
 
   const billNo = billData["Serial No"] || "Bill";
   const billName = billData["Customer Name"] || "Customer";
@@ -1490,6 +1554,11 @@ document.addEventListener("click", (e) => {
  * @param {string} copyType - "original" | "duplicate" | "both" (default)
  */
 function prepareAndPrint(copyType = "both") {
+  const bill = window.currentBillData || {};
+  if (approvalRequiredFor(bill)) {
+    showApprovalRequired("print it");
+    return;
+  }
   const menu = document.getElementById("print-menu");
   if (menu) menu.style.display = "none";
 

@@ -120,7 +120,7 @@ async function setupAutocomplete() {
       .filter((p) => {
         // Type ko lowercase karke check karenge taaki small/capital ka lafda na rahe
         const type = (p.type || "").toLowerCase();
-        return type === "farmer" || type === "vepari" || type === "kisan" || type === "customer";
+        return ["farmer", "vepari", "kisan", "customer", "buyer", "supplier"].includes(type);
       })
       .map((p) => ({
         ...p,
@@ -308,8 +308,11 @@ function initializeIndexPage() {
   // no risk of showing a stale cached copy from an earlier visit/tab.
   const urlParams = new URLSearchParams(window.location.search);
   const editId = urlParams.get("editId");
-  if (editId) {
-    showLoading("Loading bill for editing...");
+  const correctionOf = urlParams.get("correctionOf");
+  if (editId || correctionOf) {
+    const sourceBillId = editId || correctionOf;
+    const loadingMessage = editId ? "Loading bill for editing..." : "Loading bill to create a correction...";
+    showLoading(loadingMessage);
     // BUG FIX: iske bina, offline-cache wala purana/pending data mil sakta
     // tha, jiska "lastUpdatedAt" save ke time transaction se fresh-padhe
     // gaye server data se match nahi karta — aur system galti se "kisi aur
@@ -318,12 +321,12 @@ function initializeIndexPage() {
     // seedha server se fresh padhte hain; agar genuinely offline ho tabhi
     // cache wale purane data par fallback karte hain.
     billsCollection
-      .doc(editId)
+      .doc(sourceBillId)
       .get({ source: "server" })
-      .catch(() => billsCollection.doc(editId).get())
+      .catch(() => billsCollection.doc(sourceBillId).get())
       .then((doc) => {
         if (doc.exists) {
-          populateFormForEdit({ ...doc.data(), id: doc.id });
+          populateFormForEdit({ ...doc.data(), id: doc.id }, { correction: Boolean(correctionOf) });
         } else {
           Swal.fire({
             icon: "error",
@@ -365,6 +368,9 @@ window.cancelEditMode = function () {
     if (form.dataset.editId) {
       delete form.dataset.editId;
     }
+    if (form.dataset.correctionOf) {
+      delete form.dataset.correctionOf;
+    }
   }
 
   // 2. Orange wala banner screen se hatao
@@ -392,11 +398,23 @@ window.cancelEditMode = function () {
   }
 };
 
-function populateFormForEdit(data) {
+function populateFormForEdit(data, options = {}) {
   const form = document.getElementById("estimateForm");
-  form.dataset.editId = data.id;
-  editModeLastUpdatedAt = data.lastUpdatedAt || null;
-  updateSeriesPreview(); // now that editId is set, this will correctly clear itself
+  const isCorrection = options.correction === true;
+  if (isCorrection) {
+    form.dataset.correctionOf = data.id;
+    delete form.dataset.editId;
+  } else {
+    form.dataset.editId = data.id;
+    editModeLastUpdatedAt = data.lastUpdatedAt || null;
+  }
+  updateSeriesPreview();
+  const selectSavedTemplate = () =>
+    typeof window.selectProductTemplateForBill === "function" &&
+    window.selectProductTemplateForBill({ id: data.ProductTemplateId || "", name: data["ProductTemplate"] || "" });
+  if (!selectSavedTemplate()) {
+    document.addEventListener("mandibook:product-templates-ready", selectSavedTemplate, { once: true });
+  }
 
   // 🛡️ Safer way to set values: Agar koi field HTML mein missing ho toh crash nahi hoga
   // 🛡️ Super Safe Way: ID aur Name dono dhoondhega, aur database ki alag-alag spelling bhi check karega
@@ -470,6 +488,8 @@ function populateFormForEdit(data) {
     for (let i = 1; i <= 5; i++) {
       document.querySelector(`input[name="vakal_${i}_katta"]`).value = data[`Vakal ${i} Katta`] || "";
       document.querySelector(`input[name="vakal_${i}_bhav"]`).value = data[`Vakal ${i} Bhav`] || "";
+      const varietyInput = document.querySelector(`input[name="vakal_${i}_variety"]`);
+      if (varietyInput) varietyInput.value = data[`Vakal ${i} Variety`] || "";
     }
   }
 
@@ -488,7 +508,7 @@ function populateFormForEdit(data) {
     }
   }
 
-  document.querySelector('button[type="submit"]').textContent = "✏️ Update Bill";
+  document.querySelector('button[type="submit"]').textContent = isCorrection ? "📝 Create Correction Bill" : "✏️ Update Bill";
 
   // ── Phase 2: Edit mode visual feedback ──
   // Scroll the form into view and highlight it with an orange border
@@ -506,12 +526,15 @@ function populateFormForEdit(data) {
     banner.className = "edit-mode-banner";
     formCard.prepend(banner);
   }
-  banner.innerHTML = `✏️ Editing Bill <strong>#${data["Serial No"] || ""}</strong> —
-    <button type="button" onclick="cancelEditMode()" class="edit-cancel-btn">Cancel Edit</button>`;
+  banner.innerHTML = isCorrection
+    ? `📝 Correction for locked Bill <strong>#${data["Serial No"] || ""}</strong> — a new bill number will be created.
+      <button type="button" onclick="cancelEditMode()" class="edit-cancel-btn">Cancel Correction</button>`
+    : `✏️ Editing Bill <strong>#${data["Serial No"] || ""}</strong> —
+      <button type="button" onclick="cancelEditMode()" class="edit-cancel-btn">Cancel Edit</button>`;
 
   // 🔒 Edit mode mein Product/Template dropdown ko disable kar do taaki koi change na kar sake
   const templateDropdown = document.querySelector('#product, #productTemplate, #productId, select[name="product"]');
-  if (templateDropdown) {
+  if (templateDropdown && !isCorrection) {
     templateDropdown.disabled = true;
     templateDropdown.title = "Edit mode mein product template change nahi kar sakte";
   }
@@ -714,11 +737,11 @@ function calculateBillData(formData) {
     data["Bardan Weight"] = Bardan;
 
     const vakals = [
-      { katta: Number(formData.get("vakal_1_katta")) || 0, bhav: Number(formData.get("vakal_1_bhav")) || 0 },
-      { katta: Number(formData.get("vakal_2_katta")) || 0, bhav: Number(formData.get("vakal_2_bhav")) || 0 },
-      { katta: Number(formData.get("vakal_3_katta")) || 0, bhav: Number(formData.get("vakal_3_bhav")) || 0 },
-      { katta: Number(formData.get("vakal_4_katta")) || 0, bhav: Number(formData.get("vakal_4_bhav")) || 0 },
-      { katta: Number(formData.get("vakal_5_katta")) || 0, bhav: Number(formData.get("vakal_5_bhav")) || 0 },
+      { katta: Number(formData.get("vakal_1_katta")) || 0, bhav: Number(formData.get("vakal_1_bhav")) || 0, variety: formData.get("vakal_1_variety") || "" },
+      { katta: Number(formData.get("vakal_2_katta")) || 0, bhav: Number(formData.get("vakal_2_bhav")) || 0, variety: formData.get("vakal_2_variety") || "" },
+      { katta: Number(formData.get("vakal_3_katta")) || 0, bhav: Number(formData.get("vakal_3_bhav")) || 0, variety: formData.get("vakal_3_variety") || "" },
+      { katta: Number(formData.get("vakal_4_katta")) || 0, bhav: Number(formData.get("vakal_4_bhav")) || 0, variety: formData.get("vakal_4_variety") || "" },
+      { katta: Number(formData.get("vakal_5_katta")) || 0, bhav: Number(formData.get("vakal_5_bhav")) || 0, variety: formData.get("vakal_5_variety") || "" },
     ];
 
     // ── VALIDATION: Vakal bags cannot exceed total bharela bags ──
@@ -746,6 +769,7 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
         }
       }
       data[`Vakal ${i + 1} Katta`] = vakals[i].katta;
+      data[`Vakal ${i + 1} Variety`] = vakals[i].variety.trim();
       // Per vakal moisture
       const vakalMoisturePct = deductVakalMoisture ? Number(formData.get(`vakal_${i + 1}_moisture`)) || 0 : 0;
       const vakalMoistureKg = vakals[i].katta > 0 ? customRound(kilo * (vakalMoisturePct / 100)) : 0;
@@ -817,6 +841,8 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
   // ═══════════════════════════════════════════════════════════════════════
   if (window.activeTemplate) {
     data["ProductTemplate"] = window.activeTemplate.name || "";
+    data.ProductTemplateId = window.activeTemplate.id || "";
+    data.ProductTemplatePrefix = window.activeTemplate.seriesPrefix || "";
   }
 
   if (typeof getActiveTemplateDeductionValues === "function") {
@@ -1042,12 +1068,22 @@ async function collectData() {
 
     const formData = new FormData(form);
     let data = calculateBillData(formData);
+    const correctionOf = form.dataset.correctionOf || "";
+    let correctionSource = null;
+    if (correctionOf) {
+      const sourceBill = await billsCollection.doc(correctionOf).get({ source: "server" }).catch(() => billsCollection.doc(correctionOf).get());
+      if (!sourceBill.exists) throw new Error("VALIDATION_ERROR: Original bill for this correction was not found.");
+      correctionSource = sourceBill.data();
+      if (correctionSource.locked !== true && correctionSource.workflowStatus !== "locked") {
+        throw new Error("VALIDATION_ERROR: Corrections can only be created from a locked bill.");
+      }
+    }
 
     // 📍 Yahin par (calculateBillData ke turant baad) ye 3 line daal deni hain:
     const matchedCustomer = (window.partiesMasterList || []).find((party) => {
       const type = (party.type || "").toLowerCase();
       return (
-        ["farmer", "vepari", "kisan", "customer"].includes(type) &&
+        ["farmer", "vepari", "kisan", "customer", "buyer", "supplier"].includes(type) &&
         (party.name || "").trim().toLowerCase() === (data["Customer Name"] || "").trim().toLowerCase()
       );
     });
@@ -1088,6 +1124,15 @@ async function collectData() {
     // Save linked order reference if any
     data["LinkedOrderId"] = formData.get("linked_order_id") || "";
     data["LinkedSupplierIdx"] = formData.get("linked_supplier_idx") || "";
+    try {
+      data.OrderSupplierLinks = JSON.parse(formData.get("linked_order_supplier_links") || "[]");
+    } catch (_) {
+      data.OrderSupplierLinks = [];
+    }
+    if (correctionOf) {
+      data.correctsBillId = correctionOf;
+      data["Corrects Bill No"] = correctionSource["Serial No"] || "";
+    }
     data.workflowStatus = "draft";
     data.locked = false;
     // Note: Date and Remarks are already set inside calculateBillData() above.
@@ -1098,7 +1143,10 @@ async function collectData() {
     data["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
 
     const docRef = await billsCollection.add(data);
-    await recordAudit("bill.created", "bill", docRef.id, { after: billAuditSnapshot(data) });
+    await recordAudit(correctionOf ? "bill.correction_created" : "bill.created", "bill", docRef.id, {
+      after: billAuditSnapshot(data),
+      reason: correctionOf ? `Correction of bill ${data["Corrects Bill No"] || correctionOf}` : "",
+    });
 
     // --- 🔗 Order Link Update ---
     if (data["LinkedOrderId"]) {
@@ -1226,7 +1274,7 @@ async function updateData(docId) {
     const matchedCustomer = (window.partiesMasterList || []).find((party) => {
       const type = (party.type || "").toLowerCase();
       return (
-        ["farmer", "vepari", "kisan", "customer"].includes(type) &&
+        ["farmer", "vepari", "kisan", "customer", "buyer", "supplier"].includes(type) &&
         (party.name || "").trim().toLowerCase() === (newData["Customer Name"] || "").trim().toLowerCase()
       );
     });
@@ -1542,8 +1590,8 @@ document.addEventListener("DOMContentLoaded", () => {
           if (enteredName) {
             const selectedParty = window.partiesMasterList.find(
               (party) =>
-                (party.type === "Farmer" || party.type === "Vepari") &&
-                party.name.toLowerCase() === enteredName.toLowerCase()
+                ["farmer", "vepari", "kisan", "customer", "buyer", "supplier"].includes((party.type || "").toLowerCase()) &&
+                (party.name || "").toLowerCase() === enteredName.toLowerCase()
             );
 
             if (!selectedParty) {

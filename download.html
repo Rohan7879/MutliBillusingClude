@@ -313,11 +313,7 @@
 
       <div class="button-container">
         <button onclick="downloadBillAsPDF()" class="button" style="background-color: #dc3545">Download PDF</button>
-        <button
-          onclick="applyUniversalPrintSettings(document.getElementById('finalcontainer')); window.print();"
-          class="button"
-          id="printButton"
-        >
+        <button onclick="prepareAndPrint('original')" class="button" id="printButton">
           Print Bill
         </button>
       </div>

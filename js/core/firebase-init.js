@@ -16,6 +16,8 @@ const OWNER_EMAIL = "rohanvasoya2013@gmail.com";
 
 let globalSettings = {};
 let unsubscribeUserAccess = null;
+let idleSessionTimer = null;
+const IDLE_SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 window.currentUserProfile = null;
 
 db.enablePersistence().catch((err) => {
@@ -32,10 +34,55 @@ function isOwner(user) {
   return normaliseEmail(user && user.email) === OWNER_EMAIL;
 }
 
+function signInMetadata(user) {
+  const providerIds = (user.providerData || []).map((provider) => provider.providerId).filter(Boolean);
+  return {
+    providerIds,
+    lastSignInAt: firebase.firestore.FieldValue.serverTimestamp(),
+    updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+  };
+}
+
+function newProfileFields(user) {
+  return {
+    email: normaliseEmail(user.email),
+    displayName: user.displayName || "",
+    mobileNumber: user.phoneNumber || "",
+    mobileKey: String(user.phoneNumber || "").replace(/\D/g, ""),
+    ...signInMetadata(user),
+  };
+}
+
 function redirectTo(path) {
   const current = window.location.pathname.split("/").pop() || "index.html";
   if (current !== path) window.location.replace(path);
 }
+
+function stopIdleSessionTimer() {
+  if (idleSessionTimer) clearTimeout(idleSessionTimer);
+  idleSessionTimer = null;
+}
+
+function startIdleSessionTimer() {
+  const currentPage = window.location.pathname.split("/").pop() || "index.html";
+  const isPublicSharedBill = currentPage === "download.html" && new URLSearchParams(window.location.search).has("share");
+  if (currentPage === "login.html" || currentPage === "access-pending.html" || isPublicSharedBill) return;
+  stopIdleSessionTimer();
+  idleSessionTimer = setTimeout(async () => {
+    try {
+      await firebase.auth().signOut();
+    } finally {
+      if (window.Swal) Swal.fire({ icon: "info", title: "Session expired", text: "30 minutes inactivity ke baad security ke liye logout kar diya gaya." });
+      else alert("Session expired. Please login again.");
+    }
+  }, IDLE_SESSION_TIMEOUT_MS);
+}
+
+["pointerdown", "keydown", "touchstart", "scroll"].forEach((eventName) => {
+  window.addEventListener(eventName, () => {
+    if (window.currentUserProfile) startIdleSessionTimer();
+  }, { passive: eventName !== "keydown" });
+});
 
 async function ensureUserProfile(user) {
   const profileRef = db.collection("users").doc(user.uid);
@@ -49,15 +96,19 @@ async function ensureUserProfile(user) {
         { merge: true }
       );
     }
+    // Keep the staff directory current after every successful Firebase sign-in.
+    // Google supplies name/email, while a phone-linked provider may supply mobile.
+    await profileRef.set(signInMetadata(user), { merge: true });
     return;
   }
 
   const now = firebase.firestore.FieldValue.serverTimestamp();
+  const authFields = newProfileFields(user);
   if (isOwner(user)) {
     // Firestore rules permit this one-time owner bootstrap only for the
     // configured owner email and their own UID.
     await profileRef.set({
-      email: normaliseEmail(user.email),
+      ...authFields,
       displayName: user.displayName || "Owner",
       role: "admin",
       status: "active",
@@ -71,8 +122,7 @@ async function ensureUserProfile(user) {
   // A new account can create only its own pending, read-only request.
   // It cannot assign itself a privileged role.
   await profileRef.set({
-    email: normaliseEmail(user.email),
-    displayName: user.displayName || "",
+    ...authFields,
     role: "viewer",
     status: "pending",
     companyId: "ganesh-agri",
@@ -91,9 +141,12 @@ function applyAccessProfile(user, profile) {
   window.dispatchEvent(new CustomEvent("mandibook:access-ready", { detail: window.currentUserProfile }));
 
   if (!active) {
+    stopIdleSessionTimer();
     if (!isPendingPage) redirectTo("access-pending.html");
     return;
   }
+
+  startIdleSessionTimer();
 
   if (isLoginPage || isPendingPage) redirectTo("index.html");
 }
@@ -111,6 +164,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
   if (!user) {
     window.currentUserProfile = null;
+    stopIdleSessionTimer();
     if (!isLoginPage && !isPublicSharedBill) redirectTo("login.html");
     return;
   }

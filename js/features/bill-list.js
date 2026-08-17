@@ -239,29 +239,33 @@ function renderBillList(docs) {
   const tableBody = document.getElementById("bill_list_body");
   tableBody.innerHTML = "";
   if (docs.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="8" style="text-align:center;">No bills found.</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="9" style="text-align:center;">No bills found.</td></tr>';
     return;
   }
 
   docs.forEach((doc) => {
     const bill = doc.data();
+    const hasRecordedPayment =
+      Number(bill.amountPaid || 0) > 0 || ["Paid", "Partial", "Partially Paid"].includes(bill.paymentStatus);
     const row = document.createElement("tr");
     const serialNo = escapeHtml(bill["Serial No"]);
     const billDate = escapeHtml(bill["Date"]);
     const customerName = escapeHtml(bill["Customer Name"]);
     const billType = escapeHtml(bill["Bill Type"]);
+    const workflow = bill.locked === true || bill.workflowStatus === "locked" ? "🔒 Locked" : bill.workflowStatus === "approved" ? "✓ Approved" : "✎ Draft";
     row.innerHTML = `
      <td><input type="checkbox" class="bill-checkbox" value="${doc.id}" onchange="updateSelectionSummary()"></td>
       <td>${serialNo}</td>
       <td>${billDate}</td>
       <td>${customerName}</td>
       <td>${getStatusHtml(bill)}</td>
+      <td><strong style="color:${workflow.includes("Locked") ? "#343a40" : workflow.includes("Approved") ? "#6f42c1" : "#6c757d"};">${workflow}</strong></td>
       <td>${billType}</td>
       <td>${formatNumber(bill["Final Total"])}</td>
       <td class="action-buttons">
           <button class="view-btn" data-id="${doc.id}">View</button>
           <button class="edit-btn" data-id="${doc.id}" ${bill.paymentStatus === "Paid" || bill.locked === true ? "disabled" : ""}>Edit</button>
-          <button class="delete-btn" data-id="${doc.id}" data-serial="${serialNo}" ${bill.locked === true ? "disabled" : ""}>Delete</button>
+          <button class="delete-btn" data-id="${doc.id}" data-serial="${serialNo}">Delete</button>
       </td>
     `;
     row.querySelector(".view-btn").addEventListener("click", (event) => viewBill(event.target.dataset.id));
@@ -312,6 +316,23 @@ function editBill(docId) {
   window.location.href = `bill-create.html?editId=${docId}`;
 }
 async function deleteBill(docId, serialNo) {
+  try {
+    const billDoc = await billsCollection.doc(docId).get();
+    const bill = billDoc.exists ? billDoc.data() : null;
+    const hasRecordedPayment =
+      bill && (Number(bill.amountPaid || 0) > 0 || ["Paid", "Partial", "Partially Paid"].includes(bill.paymentStatus));
+    if (bill && (bill.locked === true || bill.workflowStatus === "locked")) {
+      Swal.fire("Delete blocked", "This bill is locked as a final accounting record. Create a correction bill if a change is needed.", "warning");
+      return;
+    }
+    if (hasRecordedPayment) {
+      Swal.fire("Delete blocked", "A partially or fully paid bill cannot be deleted. Keep it for payment and audit records.", "warning");
+      return;
+    }
+  } catch (error) {
+    Swal.fire("Could not verify bill", "Please try again when the connection is available.", "error");
+    return;
+  }
   const result = await Swal.fire({
     title: "Are you sure?",
     text: `You are about to delete Bill No. ${serialNo}. This cannot be undone.`,

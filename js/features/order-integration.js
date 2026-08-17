@@ -6,6 +6,7 @@
 
 let selectedOrderId = null;
 let selectedSupplierId = null;
+let selectedSupplierIds = [];
 
 // ── LOAD ORDERS INTO DROPDOWN ─────────────────────────────────────────────────
 async function loadPendingOrdersIntoDropdown() {
@@ -54,31 +55,45 @@ async function loadOrderIntoForm() {
     }
     // -------------------------------------------------------------
 
-    // If multiple suppliers — let user pick which one
+    // One truck can carry several varieties. Let the biller select up to the
+    // five Vakal rows available on the bill instead of forcing one supplier.
     if (order.suppliers && order.suppliers.length > 1) {
       const options = order.suppliers
         .map(
           (s, i) =>
-            `<option value="${i}">${s.supplierName || s.variety || "Item"} — ${s.product} (${s.quantity} ${s.unit} @ ₹${
-              s.price
-            }/${s.priceUnit})</option>`
+            `<label style="display:flex;gap:10px;align-items:center;text-align:left;padding:9px;border-bottom:1px solid #edf2f7;cursor:pointer;">
+              <input type="checkbox" class="swal-supplier-check" value="${i}" ${i === 0 ? "checked" : ""}>
+              <span><strong>${s.variety || s.supplierName || "Item"}</strong> — ${s.product || "-"}<br><small>${s.quantity} ${s.unit} @ ₹${s.price}/${s.priceUnit}</small></span>
+            </label>`
         )
         .join("");
 
-      const { value: idx } = await Swal.fire({
-        title: "Select Supplier",
-        html: `<select id="swal-supplier-select" class="swal2-select" style="width:100%;">${options}</select>`,
+      const { value: selected } = await Swal.fire({
+        title: "Select varieties for this truck",
+        html: `<p style="font-size:13px;color:#64748b;margin-top:0;">Select up to 5 varieties. Their variety and rate will fill separate Vakal rows.</p><div style="max-height:300px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;">${options}</div>`,
         confirmButtonText: "Auto-Fill",
         confirmButtonColor: "#005a9e",
-        preConfirm: () => document.getElementById("swal-supplier-select").value,
+        preConfirm: () => {
+          const values = Array.from(document.querySelectorAll(".swal-supplier-check:checked")).map((input) => Number(input.value));
+          if (!values.length) Swal.showValidationMessage("Select at least one variety.");
+          if (values.length > 5) Swal.showValidationMessage("A bill has only 5 Vakal rows. Select up to 5 varieties.");
+          return values;
+        },
       });
-      if (idx === undefined) return;
-      selectedSupplierId = Number(idx);
+      if (!selected) return;
+      selectedSupplierIds = selected;
     } else {
-      selectedSupplierId = 0;
+      selectedSupplierIds = [0];
     }
 
-    const supplier = order.suppliers[selectedSupplierId] || {};
+    selectedSupplierId = selectedSupplierIds[0]; // compatibility with older linked bills
+    const selectedSuppliers = selectedSupplierIds.map((index) => ({ ...order.suppliers[index], index }));
+    const supplier = selectedSuppliers[0] || {};
+    const distinctProducts = [...new Set(selectedSuppliers.map((item) => String(item.product || "").trim().toLowerCase()).filter(Boolean))];
+    const templateWasSelected =
+      distinctProducts.length === 1 &&
+      typeof window.selectProductTemplateForBill === "function" &&
+      window.selectProductTemplateForBill({ id: supplier.productTemplateId || "", name: supplier.product || "" });
     const rawCustomerText = order.supplierName || supplier.supplierName || order.broker || "";
 
     let customerName = rawCustomerText;
@@ -108,6 +123,10 @@ async function loadOrderIntoForm() {
     const nameInput = document.querySelector('input[name="customer_name"]');
     if (nameInput) {
       nameInput.value = customerName.toUpperCase();
+      const party = (window.partiesMasterList || []).find(
+        (item) => (item.name || "").trim().toLowerCase() === customerName.trim().toLowerCase() && item.deleted !== true
+      );
+      if (party && typeof lockSelectedCustomer === "function") lockSelectedCustomer(party);
     }
 
     // Fill Village box
@@ -118,21 +137,29 @@ async function loadOrderIntoForm() {
       villageInput.dispatchEvent(new Event("input"));
     } // Fill broker
     if (order.broker) {
-      const brokerInput = document.querySelector('input[name="broker"]');
+      const brokerInput = document.querySelector('input[name="broker_name"], input[name="broker"]');
       if (brokerInput) brokerInput.value = order.broker.toUpperCase();
     }
+
+    // Each selected order variety gets its own Vakal row. Quantity is NOT
+    // copied because an order's Man/Khadi quantity is not necessarily bag count.
+    selectedSuppliers.forEach((item, rowIndex) => {
+      const rowNo = rowIndex + 1;
+      const varietyInput = document.querySelector(`input[name="vakal_${rowNo}_variety"]`);
+      const rateInput = document.querySelector(`input[name="vakal_${rowNo}_bhav"]`);
+      if (varietyInput) varietyInput.value = item.variety || "";
+      if (rateInput) rateInput.value = item.priceUnit === "100kg" ? Math.round(Number(item.price || 0) / 5) : Number(item.price || 0);
+    });
 
     // Show info banner
     const info = document.getElementById("order-link-info");
     if (info) {
       info.style.display = "block";
       info.innerHTML = `📦 <strong>Order #${order.orderNo}</strong> linked &nbsp;|&nbsp;
-        🌾 ${supplier.product} &nbsp;|&nbsp;
-        📦 ${supplier.quantity} ${supplier.unit} &nbsp;|&nbsp;
-        💰 ₹${supplier.price}/${supplier.priceUnit}
-        <br><small style="color:#6c757d;">Vakal mein price manually fill karo: ₹${
-          supplier.priceUnit === "100kg" ? Math.round(supplier.price / 5) : supplier.price
-        } per 20kg</small>`;
+        🌾 ${selectedSuppliers.map((item) => item.variety || item.product || "Item").join(", ")} &nbsp;|&nbsp;
+        👤 Broker: <strong>${order.broker || "—"}</strong>
+        ${templateWasSelected ? `<br><small style="color:#198754;font-weight:700;">✓ Product template and bill prefix selected automatically</small>` : `<br><small style="color:#8a5a00;">⚠ No matching product template — choose the bill prefix manually</small>`}
+        <br><small style="color:#6c757d;">Selected varieties ke rate alag Vakal rows me fill ho gaye hain; bags actual truck ke hisaab se bharo.</small>`;
     }
 
     // Phase 4 (item #17): show the manual "Close this Order" override checkbox
@@ -160,6 +187,16 @@ async function loadOrderIntoForm() {
     }
     hiddenSupplier.value = selectedSupplierId;
 
+    let hiddenLinks = document.getElementById("linked-order-supplier-links");
+    if (!hiddenLinks) {
+      hiddenLinks = document.createElement("input");
+      hiddenLinks.type = "hidden";
+      hiddenLinks.id = "linked-order-supplier-links";
+      hiddenLinks.name = "linked_order_supplier_links";
+      document.getElementById("estimateForm").appendChild(hiddenLinks);
+    }
+    hiddenLinks.value = JSON.stringify(selectedSupplierIds.map((supplierIdx, index) => ({ supplierIdx, vakalIndex: index + 1 })));
+
     Swal.fire({
       icon: "success",
       title: "✅ Order linked!",
@@ -185,14 +222,17 @@ async function loadOrderIntoForm() {
 function clearOrderLink() {
   selectedOrderId = null;
   selectedSupplierId = null;
+  selectedSupplierIds = [];
   const select = document.getElementById("order-select");
   if (select) select.value = "";
   const info = document.getElementById("order-link-info");
   if (info) info.style.display = "none";
   const h1 = document.getElementById("linked-order-id");
   const h2 = document.getElementById("linked-supplier-idx");
+  const h3 = document.getElementById("linked-order-supplier-links");
   if (h1) h1.value = "";
   if (h2) h2.value = "";
+  if (h3) h3.value = "";
   // Phase 4 (item #17): hide + reset the manual close-order checkbox too
   const closeOrderWrap = document.getElementById("close-order-wrap");
   const closeOrderCheckbox = document.getElementById("close_order_checkbox");
@@ -232,75 +272,45 @@ async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
       billSerials.push(currentBillSerial);
     }
 
-    // 2. Database se un saare bills ka data fetch karo aur Total Net Weight calculate karo
-    let totalNetWeightKg = 0;
+    // Read linked bills once. New multi-variety bills keep a Vakal-row →
+    // supplier mapping; older single-variety bills retain LinkedSupplierIdx.
+    const linkedBills = [];
     if (billSerials.length > 0) {
       for (let i = 0; i < billSerials.length; i += 10) {
         const chunk = billSerials.slice(i, i + 10);
         const snap = await db.collection("bills").where("Serial No", "in", chunk).get();
         snap.forEach((doc) => {
           const bData = doc.data();
-          if (bData.deleted !== true) {
-            // Net weight kg ya Man/Quintal me ho sakta hai, apne bill structure ke mutabiq uthayein
-            const netWt = Number(bData["Net Weight"] || bData.netWeight || 0);
-            totalNetWeightKg += netWt;
-          }
+          if (bData.deleted !== true) linkedBills.push(bData);
         });
       }
     }
 
-    // 3. Suppliers array ko update karo
+    // Recalculate delivery independently for EVERY supplier/variety in the
+    // order. This prevents a multi-variety truck from being counted entirely
+    // against only the first selected variety.
     const suppliers = [...(order.suppliers || [])];
-    const supplierIdx = Number(billData["LinkedSupplierIdx"]) || 0;
-    if (suppliers[supplierIdx]) {
-      const unit = suppliers[supplierIdx].unit || "Man";
-
-      // Agar unit Man hai toh kg ko Man me convert karein (20kg = 1 Man, ya jo bhi aapka standard ho)
-      // Yahan hum direct bill ka weight unit ke hisaab se calculate karenge:
-      let totalDeliveredCalculated = 0;
-      if (billSerials.length > 0) {
-        for (let i = 0; i < billSerials.length; i += 10) {
-          const chunk = billSerials.slice(i, i + 10);
-          const snap = await db.collection("bills").where("Serial No", "in", chunk).get();
-          snap.forEach((doc) => {
-            const bData = doc.data();
-            if (bData.deleted !== true) {
-              const netWt = Number(bData["Net Weight"] || 0);
-              const bUnit = suppliers[supplierIdx].unit || "Man";
-              const wtInUnit = bUnit === "Khadi" ? netWt / 400 : netWt / 20; // 20kg per Man standard
-              totalDeliveredCalculated += wtInUnit;
-            }
+    suppliers.forEach((supplier, supplierIdx) => {
+      let deliveredKg = 0;
+      linkedBills.forEach((linkedBill) => {
+        const links = Array.isArray(linkedBill.OrderSupplierLinks) ? linkedBill.OrderSupplierLinks : [];
+        if (links.length) {
+          links.filter((link) => Number(link.supplierIdx) === supplierIdx).forEach((link) => {
+            deliveredKg += Number(linkedBill[`Vakal ${Number(link.vakalIndex)} Kilo`] || 0);
           });
+        } else if (Number(linkedBill["LinkedSupplierIdx"]) === supplierIdx) {
+          deliveredKg += Number(linkedBill["Net Weight"] || 0);
         }
-      }
+      });
+      const divisor = supplier.unit === "Khadi" ? 400 : 20;
+      supplier.delivered = Math.round((deliveredKg / divisor) * 100) / 100;
+    });
 
-      suppliers[supplierIdx].delivered = Math.round(totalDeliveredCalculated * 100) / 100;
-
-      const totalOrdered = suppliers[supplierIdx].quantity || 0;
-      const totalDelivered = suppliers[supplierIdx].delivered;
-
-      let newStatus;
-      if (closeOrderOverride) {
-        newStatus = "Completed";
-      } else if (totalDelivered >= totalOrdered) {
-        newStatus = "Completed";
-      } else if (totalDelivered > 0) {
-        newStatus = "Partial";
-      } else {
-        newStatus = order.status;
-      }
-
-      // Update payload prepare karein
-      let updatePayload = {
-        suppliers,
-        status: newStatus,
-        linkedBillNos: billSerials,
-        updatedAt: Date.now(),
-      };
-
-      await orderRef.update(updatePayload);
-      console.log(`Order ${orderId} delivered quantity successfully synced: ${totalDelivered}`);
-    }
+    const hasDelivery = suppliers.some((supplier) => Number(supplier.delivered || 0) > 0);
+    const allDelivered = suppliers.length > 0 && suppliers.every((supplier) => Number(supplier.delivered || 0) >= Number(supplier.quantity || 0));
+    const newStatus = closeOrderOverride || allDelivered ? "Completed" : hasDelivery ? "Partial" : order.status;
+    await orderRef.update({ suppliers, status: newStatus, linkedBillNos: billSerials, updatedAt: Date.now() });
+    console.log(`Order ${orderId} delivery successfully synced for ${suppliers.length} varieties.`);
   } catch (e) {
     console.error("Could not update order delivered qty:", e);
   }

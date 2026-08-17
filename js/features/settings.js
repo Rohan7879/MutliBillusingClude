@@ -28,6 +28,7 @@ const deductionsRef = db.collection("settings").doc("deductions");
 const templatesRef = db.collection("settings").doc("productTemplates");
 const versionRef = db.collection("settings").doc("appVersion");
 const savedFormulasRef = db.collection("settings").doc("savedFormulas");
+const billWorkflowRef = db.collection("settings").doc("billWorkflow");
 
 // Formula Builder aur cheat-sheet dono isi list ko use karte hain, taaki
 // kahi bhi naya variable add karna ho to sirf yahi ek jagah badalni pade.
@@ -140,6 +141,8 @@ document.addEventListener("DOMContentLoaded", async () => {
   await loadDeductionSettings();
   await loadTemplates();
   await loadPrintLayoutSettings();
+  await loadBillWorkflowSettings();
+  await loadSecureShareLinks();
   await loadSavedFormulas();
   setupDeductionForm();
   setupWhatsAppAutoSendSetting();
@@ -165,6 +168,120 @@ function setupWhatsAppAutoSendSetting() {
     showToast(`WhatsApp auto-send ${toggle.checked ? "ON" : "OFF"}.`, "success");
   });
 }
+
+async function loadBillWorkflowSettings() {
+  const select = document.getElementById("print-policy-select");
+  const itemLabelSelect = document.getElementById("item-label-mode-select");
+  const status = document.getElementById("print-policy-status");
+  if (!select) return;
+  try {
+    const doc = await billWorkflowRef.get();
+    select.value = doc.exists && doc.data().printPolicy === "approved_only" ? "approved_only" : "allow_draft";
+    if (itemLabelSelect) itemLabelSelect.value = doc.exists && doc.data().itemLabelMode === "variety" ? "variety" : "vakal";
+  } catch (error) {
+    console.warn("Could not load print policy; using current workflow.", error);
+    select.value = "allow_draft";
+    if (itemLabelSelect) itemLabelSelect.value = "vakal";
+  }
+  if (status) status.textContent = select.value === "approved_only" ? "Only approved or locked bills can be printed." : "Draft bills can also be printed.";
+}
+
+async function saveBillWorkflowSettings() {
+  const select = document.getElementById("print-policy-select");
+  const itemLabelSelect = document.getElementById("item-label-mode-select");
+  const status = document.getElementById("print-policy-status");
+  if (!select) return;
+  try {
+    await billWorkflowRef.set({
+      printPolicy: select.value,
+      itemLabelMode: itemLabelSelect?.value === "variety" ? "variety" : "vakal",
+      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+    }, { merge: true });
+    if (status) status.textContent = select.value === "approved_only" ? "Only approved or locked bills can be printed." : "Draft bills can also be printed.";
+    showToast("✅ Print policy saved.", "success");
+  } catch (error) {
+    console.error("Could not save print policy", error);
+    showToast("Could not save print policy.", "error");
+  }
+}
+
+function escapeSettingHtml(value) {
+  const box = document.createElement("div");
+  box.textContent = String(value || "");
+  return box.innerHTML;
+}
+
+async function loadSecureShareLinks() {
+  const container = document.getElementById("secure-share-links");
+  if (!container) return;
+  if (typeof hasRole === "function" && window.currentUserProfile && !hasRole("admin")) {
+    container.textContent = "Only an Admin can view secure share links.";
+    return;
+  }
+  container.textContent = "Loading secure links...";
+  try {
+    const snap = await db.collection("sharedBills").orderBy("createdAt", "desc").limit(50).get();
+    const now = Date.now();
+    const rows = snap.docs.map((doc) => {
+      const share = doc.data();
+      const expiry = share.expiresAt?.toDate ? share.expiresAt.toDate() : null;
+      const created = share.createdAt?.toDate ? share.createdAt.toDate() : null;
+      const expired = expiry && expiry.getTime() <= now;
+      const state = share.revoked ? "Revoked" : expired ? "Expired" : "Active";
+      const serialNo = share.bill?.["Serial No"] || share.billId || "Unknown bill";
+      const action = state === "Active"
+        ? `<button class="btn-save" style="background:#c0392b;padding:7px 12px;font-size:12px;" onclick="revokeSecureShareLink('${doc.id}')">Revoke</button>`
+        : `<span style="color:#6c757d;font-weight:700;">${state}</span>`;
+      return `<tr><td>${escapeSettingHtml(serialNo)}</td><td>${created ? created.toLocaleString("en-IN") : "—"}</td><td>${expiry ? expiry.toLocaleDateString("en-IN") : "—"}</td><td>${action}</td></tr>`;
+    });
+    container.innerHTML = rows.length
+      ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:#475569;border-bottom:1px solid #e2e8f0;"><th style="padding:8px;">Bill</th><th>Created</th><th>Expires</th><th>Action</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+      : "No secure share links yet.";
+  } catch (error) {
+    console.error("Could not load secure share links.", error);
+    container.textContent = "Could not load secure links. Deploy the latest Firestore rules, then refresh.";
+  }
+}
+
+async function revokeSecureShareLink(shareId) {
+  const confirmation = await Swal.fire({
+    icon: "warning",
+    title: "Revoke this link?",
+    text: "Anyone opening this WhatsApp/download link will lose access immediately.",
+    showCancelButton: true,
+    confirmButtonText: "Revoke link",
+    confirmButtonColor: "#c0392b",
+  });
+  if (!confirmation.isConfirmed) return;
+  try {
+    const shareRef = db.collection("sharedBills").doc(shareId);
+    const shareDoc = await shareRef.get();
+    if (!shareDoc.exists) throw new Error("Share link no longer exists.");
+    const share = shareDoc.data();
+    await shareRef.update({
+      revoked: true,
+      revokedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      revokedBy: firebase.auth().currentUser.uid,
+    });
+    if (typeof recordAudit === "function") {
+      try {
+        await recordAudit("bill.share_revoked", "bill", share.billId || "", {
+          after: { serialNo: share.bill?.["Serial No"] || "", shareId },
+          reason: "Secure bill share link revoked",
+        });
+      } catch (auditError) {
+        console.warn("Share-link revoke audit could not be recorded.", auditError);
+      }
+    }
+    showToast("Secure share link revoked.", "success");
+    loadSecureShareLinks();
+  } catch (error) {
+    console.error("Could not revoke secure share link.", error);
+    showToast(error.message || "Could not revoke secure share link.", "error");
+  }
+}
+window.loadSecureShareLinks = loadSecureShareLinks;
+window.revokeSecureShareLink = revokeSecureShareLink;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // PRINT LAYOUT ORDER — lets Rohan reorder which box appears where on the

@@ -53,11 +53,39 @@ async function createPublicBillShare(billId, billData) {
   crypto.getRandomValues(bytes);
   const token = Array.from(bytes, (value) => value.toString(16).padStart(2, "0")).join("");
   const expiresAt = firebase.firestore.Timestamp.fromDate(new Date(Date.now() + 30 * 24 * 60 * 60 * 1000));
+  let printPolicy = "allow_draft";
+  let itemLabelMode = "vakal";
+  try {
+    const workflowDoc = await db.collection("settings").doc("billWorkflow").get();
+    if (workflowDoc.exists) {
+      if (workflowDoc.data().printPolicy === "approved_only") printPolicy = "approved_only";
+      if (workflowDoc.data().itemLabelMode === "variety") itemLabelMode = "variety";
+    }
+  } catch (error) {
+    console.warn("Could not read print policy for shared bill; using current behavior.", error);
+  }
   await db.collection("sharedBills").doc(token).set({
+    billId,
     bill: billData,
+    printPolicy,
+    itemLabelMode,
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
     expiresAt,
   });
+  if (typeof recordAudit === "function") {
+    try {
+      await recordAudit("bill.shared", "bill", billId, {
+        after: {
+          serialNo: billData["Serial No"] || "",
+          expiresAt: expiresAt.toDate().toISOString(),
+          delivery: "secure_download_link",
+        },
+        reason: "Secure bill share link created",
+      });
+    } catch (error) {
+      console.warn("Share-link audit could not be recorded.", error);
+    }
+  }
   const base = (window.companyProfile.appUrl || "https://ganesh-agri-new.web.app").replace(/\/$/, "");
   return `${base}/download.html?share=${token}`;
 }
