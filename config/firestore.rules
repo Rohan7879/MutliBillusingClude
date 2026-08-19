@@ -56,7 +56,14 @@ service cloud.firestore {
         && resource.data.get('deleted', false) == false
         && request.resource.data.get('locked', false) == resource.data.get('locked', false)
         && request.resource.data.get('workflowStatus', 'draft') == resource.data.get('workflowStatus', 'draft')
-        && !(request.resource.data.get('deleted', false) == true && billHasPayment());
+        && !(request.resource.data.get('deleted', false) == true && billHasPayment())
+        // A "normal edit" (item/rate/customer changes etc.) must never be able
+        // to also move amountPaid/amountDue/paymentStatus — that would let a
+        // manager/biller silently bypass billPaymentUpdater()'s admin/accountant
+        // + value checks by smuggling a payment field into an ordinary edit.
+        // Only billPaymentUpdater() may ever touch these three fields.
+        && !request.resource.data.diff(resource.data).affectedKeys()
+          .hasAny(['amountPaid', 'amountDue', 'paymentStatus']);
     }
 
     // Archived bills are accounting evidence. Only an Admin can restore one,
@@ -88,10 +95,48 @@ service cloud.firestore {
     }
 
     function billPaymentUpdater() {
+      let finalTotal = resource.data.get('Final Total', 0);
+      let newPaid = request.resource.data.get('amountPaid', -1);
+      let newDue = request.resource.data.get('amountDue', -1);
       return anyRole(['admin', 'accountant'])
         && billApprovedForRelease()
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['amountPaid', 'amountDue', 'paymentStatus', 'lastUpdatedAt']);
+          .hasOnly(['amountPaid', 'amountDue', 'paymentStatus', 'lastUpdatedAt'])
+        // Value-level guardrails: amountPaid can rise (a payment) or fall
+        // (a payment being deleted/reversed) but must always stay inside
+        // what the bill can actually owe, and amountDue must stay its
+        // exact complement so the two fields can never drift apart.
+        && newPaid is number && newDue is number
+        && newPaid >= -0.01 && newPaid <= finalTotal + 0.01
+        && newDue >= -0.01
+        && (newPaid + newDue) >= finalTotal - 0.01
+        && (newPaid + newDue) <= finalTotal + 0.01;
+    }
+
+    // A payment write also has to touch the customer's cached balance and
+    // (sometimes) an order's payment status. Accountant needs just enough
+    // access to finish that side-effect — not full edit rights on either
+    // collection, which stay limited to admin/manager/biller.
+    function validPaymentDoc() {
+      let cash = request.resource.data.get('cashAmount', -1);
+      let ded = request.resource.data.get('deductionAmount', -1);
+      let total = request.resource.data.get('totalCredit', -1);
+      return cash is number && ded is number && total is number
+        && cash >= 0 && ded >= 0 && total >= 0
+        && total >= cash + ded - 0.01 && total <= cash + ded + 0.01;
+    }
+
+    function partyBalanceUpdater() {
+      return anyRole(['admin', 'manager', 'biller', 'accountant'])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['currentBalance', 'lastUpdatedAt'])
+        && request.resource.data.get('currentBalance', 'invalid') is number;
+    }
+
+    function orderPaymentStatusUpdater() {
+      return anyRole(['admin', 'manager', 'biller', 'accountant'])
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['paymentStatus', 'updatedAt']);
     }
 
     // The configured owner can bootstrap only their own admin record. Every
@@ -108,7 +153,7 @@ service cloud.firestore {
       allow update: if admin()
           || (signedIn() && request.auth.uid == uid
               && request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['displayName', 'mobileNumber', 'mobileKey', 'providerIds', 'lastSignInAt', 'updatedAt'])
+                .hasOnly(['displayName', 'mobileNumber', 'mobileKey', 'providerIds', 'lastSignInAt', 'updatedAt', 'email'])
               && (request.resource.data.get('mobileKey', '') == resource.data.get('mobileKey', '')
                 || (request.resource.data.get('mobileKey', '').size() == 12
                   && existsAfter(/databases/$(database)/documents/mobileDirectory/$(request.resource.data.mobileKey))
@@ -159,21 +204,32 @@ service cloud.firestore {
 
     match /orders/{orderId} {
       allow read: if active();
-      allow create, update: if anyRole(['admin', 'manager', 'biller']);
+      allow create: if anyRole(['admin', 'manager', 'biller']);
+      allow update: if anyRole(['admin', 'manager', 'biller']) || orderPaymentStatusUpdater();
       allow delete: if admin();
     }
 
     match /parties/{partyId} {
       allow read: if active();
-      allow create, update: if anyRole(['admin', 'manager', 'biller']);
+      allow create: if anyRole(['admin', 'manager', 'biller']);
+      allow update: if anyRole(['admin', 'manager', 'biller']) || partyBalanceUpdater();
       allow delete: if admin();
+    }
+
+    // Payments are the money-moving record, so they get their own block
+    // (pulled out of the generic wildcard below) with amount validation
+    // instead of just a role check.
+    match /payments/{paymentId} {
+      allow read: if active();
+      allow create: if anyRole(['admin', 'accountant']) && validPaymentDoc();
+      allow update, delete: if anyRole(['admin', 'accountant']);
     }
 
     match /{collection}/{document} {
       allow read: if collection != 'auditLogs' && active();
       allow create, update: if collection in ['products', 'varieties', 'customers', 'counters', 'brokers']
           && anyRole(['admin', 'manager', 'biller']);
-      allow create, update, delete: if collection in ['payments', 'broker_payments']
+      allow create, update, delete: if collection == 'broker_payments'
           && anyRole(['admin', 'accountant']);
       allow write: if collection == 'settings' && admin();
       allow delete: if collection in ['products', 'varieties', 'customers', 'counters', 'brokers'] && admin();

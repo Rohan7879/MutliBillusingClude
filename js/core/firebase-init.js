@@ -27,7 +27,9 @@ db.enablePersistence().catch((err) => {
 });
 
 function normaliseEmail(email) {
-  return String(email || "").trim().toLowerCase();
+  return String(email || "")
+    .trim()
+    .toLowerCase();
 }
 
 function isOwner(user) {
@@ -36,11 +38,17 @@ function isOwner(user) {
 
 function signInMetadata(user) {
   const providerIds = (user.providerData || []).map((provider) => provider.providerId).filter(Boolean);
-  return {
+  const fields = {
     providerIds,
     lastSignInAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
+  // Backfill email whenever this sign-in actually supplies one (e.g. a
+  // phone-first account later links Google) — omitted (not blanked) when
+  // this particular sign-in has none, so an already-saved email is never
+  // overwritten with an empty string on a later phone-only login.
+  if (user.email) fields.email = normaliseEmail(user.email);
+  return fields;
 }
 
 function newProfileFields(user) {
@@ -65,23 +73,33 @@ function stopIdleSessionTimer() {
 
 function startIdleSessionTimer() {
   const currentPage = window.location.pathname.split("/").pop() || "index.html";
-  const isPublicSharedBill = currentPage === "download.html" && new URLSearchParams(window.location.search).has("share");
+  const isPublicSharedBill =
+    currentPage === "download.html" && new URLSearchParams(window.location.search).has("share");
   if (currentPage === "login.html" || currentPage === "access-pending.html" || isPublicSharedBill) return;
   stopIdleSessionTimer();
   idleSessionTimer = setTimeout(async () => {
     try {
       await firebase.auth().signOut();
     } finally {
-      if (window.Swal) Swal.fire({ icon: "info", title: "Session expired", text: "30 minutes inactivity ke baad security ke liye logout kar diya gaya." });
+      if (window.Swal)
+        Swal.fire({
+          icon: "info",
+          title: "Session expired",
+          text: "30 minutes inactivity ke baad security ke liye logout kar diya gaya.",
+        });
       else alert("Session expired. Please login again.");
     }
   }, IDLE_SESSION_TIMEOUT_MS);
 }
 
 ["pointerdown", "keydown", "touchstart", "scroll"].forEach((eventName) => {
-  window.addEventListener(eventName, () => {
-    if (window.currentUserProfile) startIdleSessionTimer();
-  }, { passive: eventName !== "keydown" });
+  window.addEventListener(
+    eventName,
+    () => {
+      if (window.currentUserProfile) startIdleSessionTimer();
+    },
+    { passive: eventName !== "keydown" }
+  );
 });
 
 async function ensureUserProfile(user) {
@@ -98,7 +116,16 @@ async function ensureUserProfile(user) {
     }
     // Keep the staff directory current after every successful Firebase sign-in.
     // Google supplies name/email, while a phone-linked provider may supply mobile.
-    await profileRef.set(signInMetadata(user), { merge: true });
+    // This is NOT awaited: it's background housekeeping (lastSignInAt,
+    // providerIds, email backfill) that the page doesn't need to wait on.
+    // Previously this blocked here before the onSnapshot listener below was
+    // even set up — meaning every page load waited on this extra Firestore
+    // round trip before the navbar could render its real (role-based)
+    // links. onSnapshot() below still gives us the freshest profile data
+    // regardless of whether this write has landed yet.
+    profileRef.set(signInMetadata(user), { merge: true }).catch((e) => {
+      console.warn("Sign-in metadata update failed (non-critical):", e);
+    });
     return;
   }
 
@@ -155,7 +182,8 @@ firebase.auth().onAuthStateChanged(async (user) => {
   const currentPage = window.location.pathname.split("/").pop() || "index.html";
   const isLoginPage = currentPage === "login.html";
   const isPendingPage = currentPage === "access-pending.html";
-  const isPublicSharedBill = currentPage === "download.html" && new URLSearchParams(window.location.search).has("share");
+  const isPublicSharedBill =
+    currentPage === "download.html" && new URLSearchParams(window.location.search).has("share");
 
   if (unsubscribeUserAccess) {
     unsubscribeUserAccess();
@@ -173,13 +201,16 @@ firebase.auth().onAuthStateChanged(async (user) => {
 
   try {
     await ensureUserProfile(user);
-    unsubscribeUserAccess = db.collection("users").doc(user.uid).onSnapshot(
-      (snapshot) => applyAccessProfile(user, snapshot.exists ? snapshot.data() : null),
-      (error) => {
-        console.error("Could not verify staff access:", error);
-        if (!isLoginPage && !isPendingPage) redirectTo("access-pending.html");
-      }
-    );
+    unsubscribeUserAccess = db
+      .collection("users")
+      .doc(user.uid)
+      .onSnapshot(
+        (snapshot) => applyAccessProfile(user, snapshot.exists ? snapshot.data() : null),
+        (error) => {
+          console.error("Could not verify staff access:", error);
+          if (!isLoginPage && !isPendingPage) redirectTo("access-pending.html");
+        }
+      );
   } catch (error) {
     console.error("Could not create or verify staff profile:", error);
     if (!isLoginPage && !isPendingPage) redirectTo("access-pending.html");
@@ -233,5 +264,9 @@ window.recordAudit = recordAudit;
 window.billAuditSnapshot = billAuditSnapshot;
 
 function logoutUser() {
-  firebase.auth().signOut().then(() => redirectTo("login.html")).catch((error) => console.error("Logout error:", error));
+  firebase
+    .auth()
+    .signOut()
+    .then(() => redirectTo("login.html"))
+    .catch((error) => console.error("Logout error:", error));
 }

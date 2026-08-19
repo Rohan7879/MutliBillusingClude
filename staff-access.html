@@ -12,38 +12,270 @@
     <script src="js/core/utils.js"></script>
     <script src="js/core/core-engine.js"></script>
     <link rel="stylesheet" href="css/main.css" />
-    <style>.staff-wrap{max-width:1180px;margin:34px auto 60px;padding:0 22px}.staff-card{overflow:hidden;background:#fff;border:1px solid #dbe7f3;border-radius:18px;box-shadow:0 14px 32px rgba(15,55,95,.09)}.staff-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:20px;padding:28px;background:linear-gradient(135deg,#f7fbff,#edf6ff);border-bottom:1px solid #dbe7f3}.staff-heading h1{margin:0;color:#075fa8;font-size:2rem;letter-spacing:-.04em}.staff-heading p{margin:8px 0 0;color:#526579}.staff-note{max-width:300px;padding:10px 12px;background:#fff;border:1px solid #cfe2f4;border-radius:10px;color:#40617f;font-size:.84rem;line-height:1.4}.staff-list-wrap{overflow:auto;padding:6px 28px 20px}.staff-table{width:100%;min-width:780px;border-collapse:collapse}.staff-table th{padding:15px 10px 12px;color:#687b90;font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;text-align:left}.staff-table td{padding:15px 10px;border-top:1px solid #e8eff6;color:#20364c;vertical-align:middle}.staff-table tbody tr:hover{background:#f7fbff}.staff-email{font-weight:800;color:#075fa8}.staff-name{font-weight:650}.staff-table select{width:100%;min-width:125px;padding:10px;border:1px solid #bfd3e7;border-radius:8px;background:#fbfdff;color:#20364c;font:inherit}.staff-table select:focus{outline:none;border-color:#0877ca;box-shadow:0 0 0 3px #0877ca1a}.staff-save{padding:10px 15px;border:0;border-radius:8px;background:#0769b5;color:#fff;font-weight:800;cursor:pointer;box-shadow:0 3px 8px #0769b533}.staff-save:hover{background:#045894}.status-badge{display:inline-flex;align-items:center;gap:5px;padding:5px 8px;border-radius:999px;font-size:.76rem;font-weight:800;text-transform:capitalize}.status-active{color:#087443;background:#e7f8ef}.status-pending{color:#9b6200;background:#fff4d7}.status-suspended,.status-revoked{color:#b42318;background:#fff0ef}@media(max-width:760px){.staff-wrap{padding:0 12px;margin-top:20px}.staff-heading{padding:22px 18px;display:block}.staff-heading h1{font-size:1.65rem}.staff-note{margin-top:14px;max-width:none}.staff-list-wrap{padding:4px 18px 14px}}</style>
+    <style>
+      .staff-wrap {
+        max-width: 1180px;
+        margin: 34px auto 60px;
+        padding: 0 22px;
+      }
+      .staff-card {
+        overflow: hidden;
+        background: #fff;
+        border: 1px solid #dbe7f3;
+        border-radius: 18px;
+        box-shadow: 0 14px 32px rgba(15, 55, 95, 0.09);
+      }
+      .staff-heading {
+        display: flex;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 20px;
+        padding: 28px;
+        background: linear-gradient(135deg, #f7fbff, #edf6ff);
+        border-bottom: 1px solid #dbe7f3;
+      }
+      .staff-heading h1 {
+        margin: 0;
+        color: #075fa8;
+        font-size: 2rem;
+        letter-spacing: -0.04em;
+      }
+      .staff-heading p {
+        margin: 8px 0 0;
+        color: #526579;
+      }
+      .staff-note {
+        max-width: 300px;
+        padding: 10px 12px;
+        background: #fff;
+        border: 1px solid #cfe2f4;
+        border-radius: 10px;
+        color: #40617f;
+        font-size: 0.84rem;
+        line-height: 1.4;
+      }
+      .staff-list-wrap {
+        overflow: auto;
+        padding: 6px 28px 20px;
+      }
+      .staff-table {
+        width: 100%;
+        min-width: 780px;
+        border-collapse: collapse;
+      }
+      .staff-table th {
+        padding: 15px 10px 12px;
+        color: #687b90;
+        font-size: 0.76rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        text-align: left;
+      }
+      .staff-table td {
+        padding: 15px 10px;
+        border-top: 1px solid #e8eff6;
+        color: #20364c;
+        vertical-align: middle;
+      }
+      .staff-table tbody tr:hover {
+        background: #f7fbff;
+      }
+      .staff-email {
+        font-weight: 800;
+        color: #075fa8;
+      }
+      .staff-name {
+        font-weight: 650;
+      }
+      .staff-table select {
+        width: 100%;
+        min-width: 125px;
+        padding: 10px;
+        border: 1px solid #bfd3e7;
+        border-radius: 8px;
+        background: #fbfdff;
+        color: #20364c;
+        font: inherit;
+      }
+      .staff-table select:focus {
+        outline: none;
+        border-color: #0877ca;
+        box-shadow: 0 0 0 3px #0877ca1a;
+      }
+      .staff-email-input {
+        width: 100%;
+        min-width: 170px;
+        padding: 10px;
+        border: 1px solid #bfd3e7;
+        border-radius: 8px;
+        background: #fbfdff;
+        color: #075fa8;
+        font-weight: 800;
+        font: inherit;
+      }
+      .staff-email-input:focus {
+        outline: none;
+        border-color: #0877ca;
+        box-shadow: 0 0 0 3px #0877ca1a;
+      }
+      .staff-save {
+        padding: 10px 15px;
+        border: 0;
+        border-radius: 8px;
+        background: #0769b5;
+        color: #fff;
+        font-weight: 800;
+        cursor: pointer;
+        box-shadow: 0 3px 8px #0769b533;
+      }
+      .staff-save:hover {
+        background: #045894;
+      }
+      .status-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 5px;
+        padding: 5px 8px;
+        border-radius: 999px;
+        font-size: 0.76rem;
+        font-weight: 800;
+        text-transform: capitalize;
+      }
+      .status-active {
+        color: #087443;
+        background: #e7f8ef;
+      }
+      .status-pending {
+        color: #9b6200;
+        background: #fff4d7;
+      }
+      .status-suspended,
+      .status-revoked {
+        color: #b42318;
+        background: #fff0ef;
+      }
+      @media (max-width: 760px) {
+        .staff-wrap {
+          padding: 0 12px;
+          margin-top: 20px;
+        }
+        .staff-heading {
+          padding: 22px 18px;
+          display: block;
+        }
+        .staff-heading h1 {
+          font-size: 1.65rem;
+        }
+        .staff-note {
+          margin-top: 14px;
+          max-width: none;
+        }
+        .staff-list-wrap {
+          padding: 4px 18px 14px;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="navbar-root"></div>
-    <main class="staff-wrap"><section class="staff-card"><header class="staff-heading"><div><h1>👥 Staff Access</h1><p>Approve accounts and assign only the access needed for each person's work.</p></div><aside class="staff-note">Changes apply immediately. Suspended or revoked users lose company-data access on their next sync.</aside></header><div class="staff-list-wrap"><div id="staff-list">Loading staff profiles…</div></div></section></main>
+    <main class="staff-wrap">
+      <section class="staff-card">
+        <header class="staff-heading">
+          <div>
+            <h1>👥 Staff Access</h1>
+            <p>Approve accounts and assign only the access needed for each person's work.</p>
+          </div>
+          <aside class="staff-note">
+            Changes apply immediately. Suspended or revoked users lose company-data access on their next sync.
+          </aside>
+        </header>
+        <div class="staff-list-wrap"><div id="staff-list">Loading staff profiles…</div></div>
+      </section>
+    </main>
     <script>
       const ROLES = ["admin", "manager", "biller", "accountant", "viewer"];
       const STATUSES = ["active", "pending", "suspended", "revoked"];
       let unsubscribeStaff = null;
-      function esc(value) { return String(value || "").replace(/[&<>\"']/g, c => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[c])); }
-      function options(values, selected) { return values.map(v => `<option value="${v}" ${v === selected ? "selected" : ""}>${v}</option>`).join(""); }
-      function formatTimestamp(value) { const date = value && typeof value.toDate === "function" ? value.toDate() : null; return date ? date.toLocaleString("en-IN") : "—"; }
-      function providerLabel(providerIds) { return (providerIds || []).map(id => id === "google.com" ? "Google" : id === "password" ? "Email" : id).join(", ") || "—"; }
+      function esc(value) {
+        return String(value || "").replace(
+          /[&<>\"']/g,
+          (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[c])
+        );
+      }
+      function options(values, selected) {
+        return values.map((v) => `<option value="${v}" ${v === selected ? "selected" : ""}>${v}</option>`).join("");
+      }
+      function formatTimestamp(value) {
+        const date = value && typeof value.toDate === "function" ? value.toDate() : null;
+        return date ? date.toLocaleString("en-IN") : "—";
+      }
+      function providerLabel(providerIds) {
+        return (
+          (providerIds || [])
+            .map((id) => (id === "google.com" ? "Google" : id === "password" ? "Email" : id))
+            .join(", ") || "—"
+        );
+      }
       function renderStaff(rows) {
         const target = document.getElementById("staff-list");
-        if (!rows.length) { target.textContent = "No staff profiles yet."; return; }
-        target.innerHTML = `<table class="staff-table"><thead><tr><th>Email</th><th>Name</th><th>Mobile</th><th>Sign-in</th><th>Last sign-in</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows.map(({id, data}) => `<tr><td><span class="staff-email">${esc(data.email)}</span></td><td><span class="staff-name">${esc(data.displayName || "—")}</span></td><td>${esc(data.mobileNumber || "—")}</td><td>${esc(providerLabel(data.providerIds))}</td><td>${esc(formatTimestamp(data.lastSignInAt))}</td><td><select id="role-${id}" aria-label="Role for ${esc(data.email)}">${options(ROLES, data.role || "viewer")}</select></td><td><select id="status-${id}" aria-label="Status for ${esc(data.email)}">${options(STATUSES, data.status || "pending")}</select><span class="status-badge status-${esc(data.status || "pending")}">${esc(data.status || "pending")}</span></td><td><button class="staff-save" onclick="saveStaff('${id}')">Save</button></td></tr>`).join("")}</tbody></table>`;
+        if (!rows.length) {
+          target.textContent = "No staff profiles yet.";
+          return;
+        }
+        target.innerHTML = `<table class="staff-table"><thead><tr><th>Email</th><th>Name</th><th>Mobile</th><th>Sign-in</th><th>Last sign-in</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows
+          .map(
+            ({ id, data }) =>
+              `<tr><td><input class="staff-email-input" id="email-${id}" type="email" value="${esc(
+                data.email
+              )}" placeholder="staff@example.com" aria-label="Email for ${esc(
+                data.displayName || id
+              )}" /></td><td><span class="staff-name">${esc(data.displayName || "—")}</span></td><td>${esc(
+                data.mobileNumber || "—"
+              )}</td><td>${esc(providerLabel(data.providerIds))}</td><td>${esc(
+                formatTimestamp(data.lastSignInAt)
+              )}</td><td><select id="role-${id}" aria-label="Role for ${esc(data.email)}">${options(
+                ROLES,
+                data.role || "viewer"
+              )}</select></td><td><select id="status-${id}" aria-label="Status for ${esc(data.email)}">${options(
+                STATUSES,
+                data.status || "pending"
+              )}</select><span class="status-badge status-${esc(data.status || "pending")}">${esc(
+                data.status || "pending"
+              )}</span></td><td><button class="staff-save" onclick="saveStaff('${id}')">Save</button></td></tr>`
+          )
+          .join("")}</tbody></table>`;
       }
       async function saveStaff(uid) {
         const role = document.getElementById(`role-${uid}`).value;
         const status = document.getElementById(`status-${uid}`).value;
+        const email = document.getElementById(`email-${uid}`).value.trim().toLowerCase();
+        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+          Swal.fire({
+            icon: "error",
+            title: "Invalid email",
+            text: "Please enter a valid email address or leave it blank.",
+          });
+          return;
+        }
         try {
-          await db.collection("users").doc(uid).update({ role, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() });
-          Swal.fire({icon:"success",title:"Staff access updated",timer:1200,showConfirmButton:false});
-        } catch (error) { Swal.fire({icon:"error",title:"Could not update staff",text:error.message}); }
+          const payload = { role, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+          if (email) payload.email = email;
+          await db.collection("users").doc(uid).update(payload);
+          Swal.fire({ icon: "success", title: "Staff access updated", timer: 1200, showConfirmButton: false });
+        } catch (error) {
+          Swal.fire({ icon: "error", title: "Could not update staff", text: error.message });
+        }
       }
       window.saveStaff = saveStaff;
-      window.addEventListener("mandibook:access-ready", ({detail}) => {
+      window.addEventListener("mandibook:access-ready", ({ detail }) => {
         if (!detail || detail.role !== "admin" || unsubscribeStaff) return;
-        unsubscribeStaff = db.collection("users").onSnapshot(snapshot => renderStaff(snapshot.docs.map(doc => ({id:doc.id, data:doc.data()}))));
+        unsubscribeStaff = db
+          .collection("users")
+          .onSnapshot((snapshot) => renderStaff(snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }))));
       });
-      window.addEventListener("pagehide", () => { if (unsubscribeStaff) unsubscribeStaff(); });
+      window.addEventListener("pagehide", () => {
+        if (unsubscribeStaff) unsubscribeStaff();
+      });
     </script>
   </body>
 </html>

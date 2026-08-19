@@ -383,8 +383,8 @@ input:checked + .slider:before {
 }
 
 /* ══════════════════════════════
-         BUTTONS — COLORFUL & DISTINCT
-      ══════════════════════════════ */
+            BUTTONS — COLORFUL & DISTINCT
+         ══════════════════════════════ */
 
 /* Base button reset */
 button,
@@ -951,8 +951,8 @@ button[type="submit"]:hover {
   }
   .top-navbar {
     /* Body ka padding chhoti screen pe 20px/16px se 8px ho jata hai —
-          navbar ka negative margin bhi isi ke hisaab se match karna zaroori
-          hai, warna background edge tak sahi se nahi pahunchta. */
+             navbar ka negative margin bhi isi ke hisaab se match karna zaroori
+             hai, warna background edge tak sahi se nahi pahunchta. */
     margin: -8px -8px 24px;
   }
   .container {
@@ -984,8 +984,8 @@ button[type="submit"]:hover {
 }
 
 /* ══════════════════════════════
-         PRINT STYLES
-      ══════════════════════════════ */
+            PRINT STYLES
+         ══════════════════════════════ */
 @media print {
   @page {
     size: A5;
@@ -1110,22 +1110,22 @@ button[type="submit"]:hover {
 }
 
 /* ── SweetAlert2 z-index fix ──
-         Ensures SweetAlert popups always appear above navbar (z-index:1000),
-         template modals (z-index:99999), and all other overlays. */
+            Ensures SweetAlert popups always appear above navbar (z-index:1000),
+            template modals (z-index:99999), and all other overlays. */
 .swal2-container {
   z-index: 999999 !important;
 }
 
 /* ============================================================
-         CENTRALIZED NAVBAR — single source of truth for every page.
-         Previously this was copy-pasted inline into ~10 different HTML
-         files, which meant a fix (like the flex-wrap overflow bug) had
-         to be applied file-by-file and was easy to miss on new pages.
-         Now every page just links to main.css and gets this for free.
-         (themes.css still overrides the gradient colors via --nav-from /
-         --nav-to with !important when the user picks a theme in Settings —
-         that keeps working exactly as before.)
-         ============================================================ */
+            CENTRALIZED NAVBAR — single source of truth for every page.
+            Previously this was copy-pasted inline into ~10 different HTML
+            files, which meant a fix (like the flex-wrap overflow bug) had
+            to be applied file-by-file and was easy to miss on new pages.
+            Now every page just links to main.css and gets this for free.
+            (themes.css still overrides the gradient colors via --nav-from /
+            --nav-to with !important when the user picks a theme in Settings —
+            that keeps working exactly as before.)
+            ============================================================ */
 .top-navbar {
   position: sticky;
   top: 0;
@@ -1195,6 +1195,44 @@ button[type="submit"]:hover {
   background: rgba(255, 255, 255, 0.18);
   color: #fff;
 }
+.nav-user-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 13px;
+  border-radius: 8px;
+  color: rgba(255, 255, 255, 0.85);
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+  max-width: 180px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.nav-role-pill {
+  padding: 2px 8px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  text-transform: capitalize;
+  background: rgba(255, 255, 255, 0.2);
+  color: #fff;
+}
+.nav-role-admin {
+  background: #e74c3c;
+}
+.nav-role-manager {
+  background: #f39c12;
+}
+.nav-role-biller {
+  background: #2980b9;
+}
+.nav-role-accountant {
+  background: #16a085;
+}
+.nav-role-viewer {
+  background: rgba(255, 255, 255, 0.2);
+}
 .nav-conn {
   display: flex;
   align-items: center;
@@ -1228,10 +1266,10 @@ button[type="submit"]:hover {
 }
 
 /* ── Chhoti/medium screen: hamburger menu ──
-      9-10 tabs kabhi bhi ek line mein comfortably fit nahi honge, is liye
-      inhe wrap karne ke bajaye ☰ button ke peeche chhupa dete hain — click
-      karne par poori chaudai ka dropdown khulta hai (background bhi navbar
-      jaisa hi hota hai, koi white gap nahi rehta). */
+         9-10 tabs kabhi bhi ek line mein comfortably fit nahi honge, is liye
+         inhe wrap karne ke bajaye ☰ button ke peeche chhupa dete hain — click
+         karne par poori chaudai ka dropdown khulta hai (background bhi navbar
+         jaisa hi hota hai, koi white gap nahi rehta). */
 @media (max-width: 900px) {
   .top-navbar {
     padding: 10px 16px;

@@ -17,7 +17,8 @@ let paymentModal,
   amountInput,
   dateInput,
   deductionAmountInput,
-  deductionReasonInput;
+  deductionReasonInput,
+  saveBtn;
 
 function initializeLedgerPage() {
   paymentModal = document.getElementById("payment-modal");
@@ -28,6 +29,7 @@ function initializeLedgerPage() {
   dateInput = document.getElementById("payment-date-input");
   deductionAmountInput = document.getElementById("payment-deduction-amount");
   deductionReasonInput = document.getElementById("payment-deduction-reason");
+  saveBtn = document.getElementById("save-payment-btn");
 
   showLoading();
   fetchUniqueCustomers();
@@ -545,18 +547,7 @@ function closePaymentModal() {
   paymentModal.style.display = "none";
 }
 
-async function updateCustomerMasterBalance(customer, delta) {
-  if (!customer || !customer.customerId) return;
-  try {
-    await adjustPartyBalance(customer.customerId, delta);
-  } catch (e) {
-    console.error("Party Master balance update error:", e);
-  }
-}
-
 async function savePayment() {
-  const saveBtn = document.getElementById("save-payment-btn");
-
   const selectedCheckboxes = document.querySelectorAll(".bill-checkbox-ledger:checked");
   const cashAmount = Number(amountInput.value) || 0;
   const deductionAmount = Number(deductionAmountInput.value) || 0;
@@ -581,7 +572,9 @@ async function savePayment() {
     if (totalCredit > selectedDue + 0.01) {
       Swal.fire(
         "Payment exceeds pending amount",
-        `Selected bills have ₹${selectedDue.toFixed(2)} pending. Record any extra amount as a separate advance payment.`,
+        `Selected bills have ₹${selectedDue.toFixed(
+          2
+        )} pending. Record any extra amount as a separate advance payment.`,
         "error"
       );
       return;
@@ -597,14 +590,30 @@ async function savePayment() {
   }
 
   showLoading();
+  let orderSyncFailed = false;
   try {
     const paymentDate = firebase.firestore.Timestamp.fromDate(new Date(dateStr));
     const affectedOrderIds = new Set();
+    const selectedBillIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
+    const partyRef =
+      currentCustomer && currentCustomer.customerId ? db.collection("parties").doc(currentCustomer.customerId) : null;
 
-    if (selectedCheckboxes.length > 0) {
-      const selectedBillIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
+    // 🔒 ATOMIC WRITE: payment doc + every bill's amountPaid/amountDue +
+    // the party's cached balance all go through in a single Firestore
+    // transaction now. Either everything above lands together, or (on any
+    // failure — network drop, permission error, etc.) NONE of it does.
+    // Previously these were separate awaited calls, so a failure partway
+    // through could leave a payment recorded but the balance untouched
+    // (or vice versa) — this is what caused the mismatch you saw.
+    await db.runTransaction(async (transaction) => {
+      // --- READS FIRST (Firestore transactions require this) ---
+      const billRefs = selectedBillIds.map((id) => billsCollection.doc(id));
+      const billDocs = await Promise.all(billRefs.map((ref) => transaction.get(ref)));
+      const partyDoc = partyRef ? await transaction.get(partyRef) : null;
 
-      await paymentsCollection.add({
+      // --- THEN COMPUTE ---
+      const paymentRef = paymentsCollection.doc();
+      const paymentPayload = {
         customerName: currentCustomer.name,
         customerVillage: currentCustomer.village,
         customerId: currentCustomer.customerId || null,
@@ -613,20 +622,16 @@ async function savePayment() {
         deductionReason,
         totalCredit,
         paymentDate,
-        appliedToBills: selectedBillIds,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
+      };
+      if (selectedBillIds.length > 0) paymentPayload.appliedToBills = selectedBillIds;
 
-      const batch = db.batch();
-      let remainingCredit = totalCredit;
-
-      for (const billId of selectedBillIds) {
-        if (remainingCredit <= 0) break;
-        const billRef = billsCollection.doc(billId);
-        const billDoc = await billRef.get();
-        if (billDoc.exists) {
+      const billUpdates = []; // { ref, billSerial }
+      if (selectedBillIds.length > 0) {
+        let remainingCredit = totalCredit;
+        billDocs.forEach((billDoc, i) => {
+          if (!billDoc.exists) return;
           const billData = billDoc.data();
-
           const currentAmountPaid = Number(billData.amountPaid || 0);
           const billTotal = Number(
             billData["Final Total"] ||
@@ -635,68 +640,83 @@ async function savePayment() {
               Number(billData.amountDue || 0) + currentAmountPaid ||
               0
           );
-
           const amountOwedOnBill = billTotal - currentAmountPaid;
-          const paymentForThisBill = Math.min(remainingCredit, amountOwedOnBill);
-
+          const paymentForThisBill = Math.max(0, Math.min(remainingCredit, amountOwedOnBill));
           const newAmountPaid = currentAmountPaid + paymentForThisBill;
           const newAmountDue = billTotal - newAmountPaid;
           const newStatus = newAmountDue <= 0.01 ? "Paid" : "Partial";
 
-          batch.update(billRef, {
-            amountPaid: newAmountPaid,
-            amountDue: newAmountDue,
-            paymentStatus: newStatus,
+          billUpdates.push({
+            ref: billRefs[i],
+            billSerial: billData["Serial No"] || billData.serialNo,
+            fields: { amountPaid: newAmountPaid, amountDue: newAmountDue, paymentStatus: newStatus },
           });
-
           remainingCredit -= paymentForThisBill;
+        });
+      }
 
-          try {
-            const billSerial = billData["Serial No"] || billData.serialNo;
-            if (billSerial) {
-              const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
-              matchingOrders.forEach((ordDoc) => affectedOrderIds.add(ordDoc.id));
+      // --- WRITES LAST ---
+      transaction.set(paymentRef, paymentPayload);
+      billUpdates.forEach(({ ref, fields }) => transaction.update(ref, fields));
+      if (partyRef && partyDoc && partyDoc.exists) {
+        const currentBalance = Number(partyDoc.data().currentBalance || 0);
+        transaction.update(partyRef, {
+          currentBalance: currentBalance - totalCredit,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
 
-              const matchingOrdersArray = await db
-                .collection("orders")
-                .where("linkedBillNos", "array-contains", billSerial)
-                .get();
-              matchingOrdersArray.forEach((ordDoc) => affectedOrderIds.add(ordDoc.id));
-            }
-          } catch (e) {
-            console.warn("Order match error non-fatal");
+      billUpdates.forEach(({ billSerial }) => {
+        if (billSerial) affectedOrderIds.add(billSerial);
+      });
+    });
+
+    // Order-status recalculation still runs as a separate step afterwards
+    // (it needs a collection query, which Firestore transactions can't do).
+    // This is a display-only field, not money — but we no longer hide a
+    // failure here behind a console.warn. If it fails, the payment itself
+    // is still safely saved (see above), and you get a visible heads-up
+    // to go check that specific order instead of finding out by accident.
+    if (affectedOrderIds.size > 0) {
+      for (const billSerial of affectedOrderIds) {
+        try {
+          const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
+          const matchingOrdersArray = await db
+            .collection("orders")
+            .where("linkedBillNos", "array-contains", billSerial)
+            .get();
+          const orderIds = new Set([
+            ...matchingOrders.docs.map((d) => d.id),
+            ...matchingOrdersArray.docs.map((d) => d.id),
+          ]);
+          if (orderIds.size === 0) {
+            console.warn(`No order found linking bill ${billSerial} — Order Book status not updated.`);
+            orderSyncFailed = true;
           }
+          for (const ordId of orderIds) {
+            await recalculateAndUpdateOrderPaymentStatus(ordId);
+          }
+        } catch (e) {
+          console.error(`Order sync failed for bill ${billSerial}:`, e);
+          orderSyncFailed = true;
         }
       }
-      await batch.commit();
-
-      for (const ordId of affectedOrderIds) {
-        await recalculateAndUpdateOrderPaymentStatus(ordId);
-      }
-
-      await updateCustomerMasterBalance(currentCustomer, -totalCredit);
-    } else {
-      await paymentsCollection.add({
-        customerName: currentCustomer.name,
-        customerVillage: currentCustomer.village,
-        customerId: currentCustomer.customerId || null,
-        cashAmount,
-        deductionAmount,
-        deductionReason,
-        totalCredit,
-        paymentDate,
-        createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      });
-
-      await updateCustomerMasterBalance(currentCustomer, -totalCredit);
     }
 
     closePaymentModal();
-    Swal.fire("Success!", "Payment entry has been saved.", "success");
+    if (orderSyncFailed) {
+      Swal.fire(
+        "Payment Saved",
+        "Payment aur balance safely save ho gaya. Lekin linked order ka status Order Book mein sync nahi ho paya — please check manually.",
+        "warning"
+      );
+    } else {
+      Swal.fire("Success!", "Payment entry has been saved.", "success");
+    }
     showCustomerLedger(currentCustomer);
   } catch (error) {
     console.error("Error saving payment:", error);
-    Swal.fire("Error", "Could not save the payment.", "error");
+    Swal.fire("Error", "Could not save the payment. Kuch bhi save nahi hua — dubara try karein.", "error");
   } finally {
     hideLoading();
 
@@ -880,108 +900,109 @@ window.deletePaymentEntry = async function (paymentId) {
   if (!confirm.isConfirmed) return;
 
   showLoading("Deleting payment securely...");
+  let orderSyncFailed = false;
   try {
     const paymentRef = paymentsCollection.doc(paymentId);
-    const paymentDoc = await paymentRef.get();
+    const affectedBillSerials = new Set();
 
-    if (!paymentDoc.exists) {
-      Swal.fire("Error", "Payment record not found.", "error");
-      hideLoading();
-      return;
-    }
+    // 🔒 ATOMIC WRITE — same reasoning as savePayment(): the bill reversal,
+    // the party-balance reversal, and the payment delete itself now happen
+    // in one transaction. A dropped connection mid-delete used to be able
+    // to leave a bill "un-refunded" while the payment record vanished (or
+    // vice versa) — that can't happen now.
+    await db.runTransaction(async (transaction) => {
+      const paymentDoc = await transaction.get(paymentRef);
+      if (!paymentDoc.exists) throw new Error("Payment record not found.");
 
-    const paymentData = paymentDoc.data();
-    const totalCredit = Number(paymentData.totalCredit || 0);
-    const appliedBills = paymentData.appliedToBills || [];
-    const affectedOrderIds = new Set();
+      const paymentData = paymentDoc.data();
+      const totalCredit = Number(paymentData.totalCredit || 0);
+      const appliedBills = paymentData.appliedToBills || [];
+      // Reverse against the customer this payment was actually recorded
+      // for — not whichever ledger happens to be open right now.
+      const partyRef = paymentData.customerId ? db.collection("parties").doc(paymentData.customerId) : null;
 
-    // 2. Agar kisi bill par apply hua tha, toh bills ka amountPaid wapas adjust karo
-    if (appliedBills.length > 0) {
-      let remainingRefund = totalCredit; // 🚀 FIX: Ab proper amount minus hoga
-      const batch = db.batch(); // 🚀 FIX: Multiple bills ke liye safe batch process
+      const billRefs = appliedBills.map((id) => billsCollection.doc(id));
+      const billDocs = await Promise.all(billRefs.map((ref) => transaction.get(ref)));
+      const partyDoc = partyRef ? await transaction.get(partyRef) : null;
 
-      for (const billId of appliedBills) {
-        if (remainingRefund <= 0) break;
+      let remainingRefund = totalCredit;
+      billDocs.forEach((billDoc, i) => {
+        if (!billDoc.exists || remainingRefund <= 0) return;
+        const billData = billDoc.data();
+        const currentPaid = Number(billData.amountPaid || 0);
+        const billTotal = Number(
+          billData["Final Total"] ||
+            billData.total ||
+            billData.amount ||
+            Number(billData.amountDue || 0) + currentPaid ||
+            0
+        );
+        const refundForThisBill = Math.min(remainingRefund, currentPaid);
+        const newAmountPaid = currentPaid - refundForThisBill;
+        const newAmountDue = billTotal - newAmountPaid;
+        const newStatus = newAmountDue <= 0.01 ? "Paid" : newAmountPaid > 0 ? "Partial" : "Unpaid";
 
-        const billRef = billsCollection.doc(billId);
-        const billDoc = await billRef.get();
+        transaction.update(billRefs[i], {
+          amountPaid: newAmountPaid,
+          amountDue: newAmountDue,
+          paymentStatus: newStatus,
+        });
+        remainingRefund -= refundForThisBill;
 
-        if (billDoc.exists) {
-          const billData = billDoc.data();
-          const currentPaid = Number(billData.amountPaid || 0);
+        const billSerial = billData["Serial No"] || billData.serialNo;
+        if (billSerial) affectedBillSerials.add(billSerial);
+      });
 
-          // 🚀 FIX: Sahi Bill Total Pakdo (Jaise Save mein karte hain)
-          const billTotal = Number(
-            billData["Final Total"] ||
-              billData.total ||
-              billData.amount ||
-              Number(billData.amountDue || 0) + currentPaid ||
-              0
-          );
-
-          const refundForThisBill = Math.min(remainingRefund, currentPaid);
-          const newAmountPaid = currentPaid - refundForThisBill;
-          const newAmountDue = billTotal - newAmountPaid;
-
-          // 🚀 FIX: "Partially Paid" hata kar "Partial" kiya
-          const newStatus = newAmountDue <= 0.01 ? "Paid" : newAmountPaid > 0 ? "Partial" : "Unpaid";
-
-          batch.update(billRef, {
-            amountPaid: newAmountPaid,
-            amountDue: newAmountDue,
-            paymentStatus: newStatus,
-          });
-
-          remainingRefund -= refundForThisBill;
-
-          // 🚀 FIX: Try-catch lagaya taaki agar Order fetch fail ho toh kam se kam delete to ho jaye
-          try {
-            const billSerial = billData["Serial No"] || billData.serialNo;
-            if (billSerial) {
-              const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
-              matchingOrders.forEach((ordDoc) => affectedOrderIds.add(ordDoc.id));
-
-              const matchingOrdersArray = await db
-                .collection("orders")
-                .where("linkedBillNos", "array-contains", billSerial)
-                .get();
-              matchingOrdersArray.forEach((ordDoc) => affectedOrderIds.add(ordDoc.id));
-            }
-          } catch (orderFetchError) {
-            console.warn("Order match nahi mila, par process continue rahega.");
-          }
-        }
+      if (partyRef && partyDoc && partyDoc.exists) {
+        const currentBalance = Number(partyDoc.data().currentBalance || 0);
+        transaction.update(partyRef, {
+          currentBalance: currentBalance + totalCredit,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
       }
-      // Saare bills update commit karo
-      await batch.commit();
-    }
 
-    // 3. Master Party balance ko wapas update karo
-    if (currentCustomer) {
-      await updateCustomerMasterBalance(currentCustomer, totalCredit);
-    }
+      transaction.delete(paymentRef);
+    });
 
-    // 4. 🔥 FIREBASE SE ORIGINAL PAYMENT DELETE KARO 🔥
-    await paymentRef.delete();
-
-    // 5. Affected orders ko safe tarike se update karo
-    for (const ordId of affectedOrderIds) {
+    // Order-status recalculation — same visible-failure treatment as
+    // savePayment() instead of a silent console.warn.
+    for (const billSerial of affectedBillSerials) {
       try {
-        await recalculateAndUpdateOrderPaymentStatus(ordId);
+        const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
+        const matchingOrdersArray = await db
+          .collection("orders")
+          .where("linkedBillNos", "array-contains", billSerial)
+          .get();
+        const orderIds = new Set([
+          ...matchingOrders.docs.map((d) => d.id),
+          ...matchingOrdersArray.docs.map((d) => d.id),
+        ]);
+        for (const ordId of orderIds) {
+          await recalculateAndUpdateOrderPaymentStatus(ordId);
+        }
       } catch (err) {
-        console.error("Order recalculate mein dikkat:", err);
+        console.error(`Order recalculate mein dikkat (bill ${billSerial}):`, err);
+        orderSyncFailed = true;
       }
     }
 
     hideLoading();
-    Swal.fire("Deleted!", "Payment entry successfully removed.", "success");
+    if (orderSyncFailed) {
+      Swal.fire(
+        "Deleted",
+        "Payment safely reverse ho gaya. Lekin linked order ka status Order Book mein sync nahi ho paya — please check manually.",
+        "warning"
+      );
+    } else {
+      Swal.fire("Deleted!", "Payment entry successfully removed.", "success");
+    }
 
     // Ledger ko refresh karke wapas load karo
     showCustomerLedger(currentCustomer);
   } catch (error) {
     console.error("Error deleting payment:", error);
     hideLoading();
-    Swal.fire("Error", "Could not delete payment. Please try again.", "error");
+    Swal.fire("Error", error.message || "Could not delete payment. Please try again.", "error");
   }
 };
 // Payment delete hone ke baad order ka status wapas update karne ke liye:

@@ -57,51 +57,58 @@ document.addEventListener("DOMContentLoaded", () => {
       try {
         showLoading("Saving payment...");
         const billRef = billsCollection.doc(billId);
-        const billDoc = await billRef.get();
+        const paymentRef = db.collection("payments").doc();
+        let billData, newAmountPaid, newAmountDue, newStatus;
 
-        if (!billDoc.exists) {
-          alert("Bill not found.");
-          hideLoading();
-          return;
-        }
+        // 🔒 ATOMIC WRITE — same fix as the ledger page: the bill update,
+        // the payment record, and the party balance now all commit
+        // together in one transaction instead of as three separate awaited
+        // calls, so a mid-flow failure can't leave them out of sync.
+        await db.runTransaction(async (transaction) => {
+          const billDoc = await transaction.get(billRef);
+          if (!billDoc.exists) throw new Error("Bill not found.");
+          billData = billDoc.data();
+          if (approvalRequiredFor(billData)) throw new Error("APPROVAL_REQUIRED");
 
-        const billData = billDoc.data();
-        if (approvalRequiredFor(billData)) {
-          hideLoading();
-          showApprovalRequired("record a payment");
-          return;
-        }
-        const currentAmountPaid = Number(billData.amountPaid || 0);
-        const finalTotal = Number(billData["Final Total"] || 0);
-        const amountDue = Math.max(0, finalTotal - currentAmountPaid);
-        if (cashAmount > amountDue + 0.01) {
-          hideLoading();
-          alert(`Payment cannot exceed the pending amount (₹${amountDue.toFixed(2)}).`);
-          return;
-        }
-        const newAmountPaid = currentAmountPaid + cashAmount;
-        const newAmountDue = Math.max(0, finalTotal - newAmountPaid);
-        const newStatus = newAmountDue <= 0.01 ? "Paid" : "Partially Paid";
+          const partyRef = billData.customerId ? db.collection("parties").doc(billData.customerId) : null;
+          const partyDoc = partyRef ? await transaction.get(partyRef) : null;
 
-        // 1. Bill update karo
-        await billRef.update({
-          amountPaid: newAmountPaid,
-          amountDue: newAmountDue,
-          paymentStatus: newStatus,
-        });
+          const currentAmountPaid = Number(billData.amountPaid || 0);
+          const finalTotal = Number(billData["Final Total"] || 0);
+          const amountDue = Math.max(0, finalTotal - currentAmountPaid);
+          if (cashAmount > amountDue + 0.01) {
+            throw new Error(`Payment cannot exceed the pending amount (₹${amountDue.toFixed(2)}).`);
+          }
+          newAmountPaid = currentAmountPaid + cashAmount;
+          newAmountDue = Math.max(0, finalTotal - newAmountPaid);
+          newStatus = newAmountDue <= 0.01 ? "Paid" : "Partial";
 
-        // 2. Payments collection mein entry daalo
-        const paymentRef = await db.collection("payments").add({
-          customerName: billData["Customer Name"] || billData.customerName,
-          customerVillage: billData["Village"] || billData.customerVillage || "N/A",
-          customerId: billData.customerId || null,
-          cashAmount: cashAmount,
-          deductionAmount: 0,
-          totalCredit: cashAmount,
-          paymentDate: firebase.firestore.Timestamp.fromDate(new Date()),
-          appliedToBills: [billId],
-          reason: paymentReason,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          transaction.update(billRef, {
+            amountPaid: newAmountPaid,
+            amountDue: newAmountDue,
+            paymentStatus: newStatus,
+          });
+
+          transaction.set(paymentRef, {
+            customerName: billData["Customer Name"] || billData.customerName,
+            customerVillage: billData["Village"] || billData.customerVillage || "N/A",
+            customerId: billData.customerId || null,
+            cashAmount: cashAmount,
+            deductionAmount: 0,
+            totalCredit: cashAmount,
+            paymentDate: firebase.firestore.Timestamp.fromDate(new Date()),
+            appliedToBills: [billId],
+            reason: paymentReason,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+
+          if (partyRef && partyDoc && partyDoc.exists) {
+            const currentBalance = Number(partyDoc.data().currentBalance || 0);
+            transaction.update(partyRef, {
+              currentBalance: currentBalance - cashAmount,
+              lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+          }
         });
 
         await recordAudit("payment.created", "payment", paymentRef.id, {
@@ -117,9 +124,6 @@ document.addEventListener("DOMContentLoaded", () => {
           reason: paymentReason,
         });
 
-        // 3. Party Master ka balance update karo
-        if (billData.customerId) await adjustPartyBalance(billData.customerId, -cashAmount);
-
         hideLoading();
         alert("Payment saved successfully!");
         if (paymentModal) paymentModal.style.display = "none";
@@ -127,7 +131,13 @@ document.addEventListener("DOMContentLoaded", () => {
       } catch (error) {
         console.error("Error saving payment from bill view:", error);
         hideLoading();
-        alert("Could not save the payment.");
+        if (error.message === "APPROVAL_REQUIRED") {
+          showApprovalRequired("record a payment");
+        } else if (error.message === "Bill not found." || error.message.startsWith("Payment cannot exceed")) {
+          alert(error.message);
+        } else {
+          alert("Could not save the payment.");
+        }
       }
     });
   }
@@ -260,7 +270,10 @@ async function changeBillWorkflow(billId, nextStatus) {
   const confirmation = await Swal.fire({
     icon: "warning",
     title: `${actionLabel.charAt(0).toUpperCase()}${actionLabel.slice(1)} this bill?`,
-    text: nextStatus === "locked" ? "A locked bill cannot be edited or deleted from MandiBook." : "Approval records that the bill has been reviewed.",
+    text:
+      nextStatus === "locked"
+        ? "A locked bill cannot be edited or deleted from MandiBook."
+        : "Approval records that the bill has been reviewed.",
     showCancelButton: true,
     confirmButtonText: `Yes, ${actionLabel}`,
     confirmButtonColor: nextStatus === "locked" ? "#343a40" : "#6f42c1",
@@ -273,10 +286,12 @@ async function changeBillWorkflow(billId, nextStatus) {
     if (!beforeDoc.exists) throw new Error("Bill not found.");
     const before = beforeDoc.data();
     const role = window.currentUserProfile && window.currentUserProfile.role;
-    if (nextStatus === "approved" && !["admin", "manager"].includes(role)) throw new Error("Only an Admin or Manager can approve bills.");
+    if (nextStatus === "approved" && !["admin", "manager"].includes(role))
+      throw new Error("Only an Admin or Manager can approve bills.");
     if (nextStatus === "locked" && role !== "admin") throw new Error("Only an Admin can lock bills.");
     if (before.locked === true || before.workflowStatus === "locked") throw new Error("This bill is already locked.");
-    if (nextStatus === "locked" && before.workflowStatus !== "approved") throw new Error("Approve the bill before locking it.");
+    if (nextStatus === "locked" && before.workflowStatus !== "approved")
+      throw new Error("Approve the bill before locking it.");
 
     const update = {
       workflowStatus: nextStatus,
@@ -815,7 +830,11 @@ async function sendBillViaWhatsApp() {
   }
   if (!customerPhone) {
     try {
-      const partySnap = await db.collection("parties").where("name", "==", data["Customer Name"] || "").limit(1).get();
+      const partySnap = await db
+        .collection("parties")
+        .where("name", "==", data["Customer Name"] || "")
+        .limit(1)
+        .get();
       if (!partySnap.empty) customerPhone = partySnap.docs[0].data().phone || "";
     } catch (e) {
       console.warn("Could not search customer phone:", e);

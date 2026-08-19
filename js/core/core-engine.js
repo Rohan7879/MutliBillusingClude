@@ -30,6 +30,25 @@
  */
 
 // ═══════════════════════════════════════════════════════════════════════════
+// NUMBER INPUT SCROLL-SAFETY FIX
+// ═══════════════════════════════════════════════════════════════════════════
+// Browsers change a focused <input type="number">'s value when the mouse
+// wheel / trackpad scrolls over it — an accidental scroll while filling a
+// bill can silently bump amounts up or down. This removes focus from any
+// number input the instant a wheel event fires anywhere on the page, so the
+// page scrolls normally and the value is left untouched. Applies app-wide
+// since this file loads on every page.
+document.addEventListener(
+  "wheel",
+  () => {
+    if (document.activeElement && document.activeElement.type === "number") {
+      document.activeElement.blur();
+    }
+  },
+  { passive: true }
+);
+
+// ═══════════════════════════════════════════════════════════════════════════
 // NUMBER FORMATTING & ROUNDING
 // ═══════════════════════════════════════════════════════════════════════════
 
@@ -573,12 +592,14 @@ function renderNavbar() {
   const currentFile = window.location.pathname.split("/").pop() || "index.html";
 
   const role = window.currentUserProfile && window.currentUserProfile.role;
-  const linksHtml = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role)).map((item) => {
-    const isActive = item.href === currentFile;
-    return `<a class="nav-link${isActive ? " active" : ""}" href="${item.href}">${item.icon} <span>${
-      item.label
-    }</span></a>`;
-  }).join("");
+  const linksHtml = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+    .map((item) => {
+      const isActive = item.href === currentFile;
+      return `<a class="nav-link${isActive ? " active" : ""}" href="${item.href}">${item.icon} <span>${
+        item.label
+      }</span></a>`;
+    })
+    .join("");
 
   const connHtml =
     typeof checkFirebaseConnection === "function"
@@ -587,6 +608,19 @@ function renderNavbar() {
          <span id="connection_status">Check</span>
        </button>`
       : "";
+
+  // Who's-logged-in badge — shows name/email + role at a glance, so it's
+  // obvious which account and permission level is active on this device
+  // without opening staff-access.html to check.
+  const profile = window.currentUserProfile;
+  const userBadgeHtml = profile
+    ? `<span class="nav-user-badge" title="${escapeHtml(profile.email || "")}">
+         👤 ${escapeHtml(profile.displayName || profile.email || "Signed in")}
+         <span class="nav-role-pill nav-role-${escapeHtml(profile.role || "viewer")}">${escapeHtml(
+        profile.role || "viewer"
+      )}</span>
+       </span>`
+    : "";
 
   // Har page pe logout ka option — pehle sirf index.html (Dashboard) pe
   // tha, isliye kisi doosre page se seedha logout nahi ho pata tha.
@@ -607,7 +641,7 @@ function renderNavbar() {
         <span>MandiBook</span>
       </a>
       <button class="navbar-toggle" id="navbar-toggle" aria-label="Menu" type="button">☰</button>
-      <div class="navbar-links" id="navbar-links">${linksHtml}${connHtml}${logoutHtml}</div>
+      <div class="navbar-links" id="navbar-links">${linksHtml}${connHtml}${userBadgeHtml}${logoutHtml}</div>
     </nav>`;
 
   // Hamburger toggle — chhoti screen par links ek dropdown ke peeche chhup

@@ -9,7 +9,80 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
     <script src="js/core/firebase-init.js"></script>
     <link rel="stylesheet" href="css/main.css" />
-    <style>body{min-height:100vh;display:grid;place-items:center;margin:0;background:#f4f7fb}.card{width:min(470px,calc(100% - 48px));margin:24px;padding:32px;border-radius:14px;background:#fff;box-shadow:0 8px 25px #003d6e1a;text-align:center}.card h1{color:#005a9e}.card button{border:0;border-radius:7px;background:#005a9e;color:white;padding:11px 18px;font-weight:700;cursor:pointer}.contact-form{margin:24px 0 20px;padding:20px;text-align:left;border:1px solid #dbe7f3;border-radius:10px;background:#f8fbff}.contact-form h2{margin:0 0 8px;color:#173c5e;font-size:1.05rem}.contact-form p{margin:0 0 14px;color:#5d7187;font-size:.88rem;line-height:1.45}.contact-form label{display:block;margin:12px 0 6px;color:#36516d;font-weight:700;font-size:.82rem}.contact-form input{width:100%;box-sizing:border-box;padding:11px;border:1px solid #bfd3e7;border-radius:7px;font:inherit}.contact-form button{width:100%;margin-top:16px}.contact-status{min-height:18px;margin:9px 0 0;color:#53718e;font-size:.8rem}</style>
+    <style>
+      body {
+        min-height: 100vh;
+        display: grid;
+        place-items: center;
+        margin: 0;
+        background: #f4f7fb;
+      }
+      .card {
+        width: min(470px, calc(100% - 48px));
+        margin: 24px;
+        padding: 32px;
+        border-radius: 14px;
+        background: #fff;
+        box-shadow: 0 8px 25px #003d6e1a;
+        text-align: center;
+      }
+      .card h1 {
+        color: #005a9e;
+      }
+      .card button {
+        border: 0;
+        border-radius: 7px;
+        background: #005a9e;
+        color: white;
+        padding: 11px 18px;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .contact-form {
+        margin: 24px 0 20px;
+        padding: 20px;
+        text-align: left;
+        border: 1px solid #dbe7f3;
+        border-radius: 10px;
+        background: #f8fbff;
+      }
+      .contact-form h2 {
+        margin: 0 0 8px;
+        color: #173c5e;
+        font-size: 1.05rem;
+      }
+      .contact-form p {
+        margin: 0 0 14px;
+        color: #5d7187;
+        font-size: 0.88rem;
+        line-height: 1.45;
+      }
+      .contact-form label {
+        display: block;
+        margin: 12px 0 6px;
+        color: #36516d;
+        font-weight: 700;
+        font-size: 0.82rem;
+      }
+      .contact-form input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 11px;
+        border: 1px solid #bfd3e7;
+        border-radius: 7px;
+        font: inherit;
+      }
+      .contact-form button {
+        width: 100%;
+        margin-top: 16px;
+      }
+      .contact-status {
+        min-height: 18px;
+        margin: 9px 0 0;
+        color: #53718e;
+        font-size: 0.8rem;
+      }
+    </style>
   </head>
   <body>
     <main class="card">
@@ -21,7 +94,16 @@
         <label for="staff-name">Full name</label>
         <input id="staff-name" autocomplete="name" minlength="2" required placeholder="Your full name" />
         <label for="staff-mobile">Mobile number</label>
-        <input id="staff-mobile" autocomplete="tel" inputmode="numeric" maxlength="10" required placeholder="10-digit mobile number" />
+        <input
+          id="staff-mobile"
+          autocomplete="tel"
+          inputmode="numeric"
+          maxlength="10"
+          required
+          placeholder="10-digit mobile number"
+        />
+        <label for="staff-email">Email address</label>
+        <input id="staff-email" type="email" autocomplete="email" required placeholder="you@example.com" />
         <button type="submit">Save contact details</button>
         <p id="contact-status" class="contact-status"></p>
       </form>
@@ -40,7 +122,10 @@
         const profile = await db.collection("users").doc(user.uid).get();
         pendingProfile = profile.exists ? profile.data() : {};
         document.getElementById("staff-name").value = pendingProfile.displayName || user.displayName || "";
-        document.getElementById("staff-mobile").value = String(pendingProfile.mobileNumber || user.phoneNumber || "").replace(/^\+91/, "");
+        document.getElementById("staff-mobile").value = String(
+          pendingProfile.mobileNumber || user.phoneNumber || ""
+        ).replace(/^\+91/, "");
+        document.getElementById("staff-email").value = pendingProfile.email || user.email || "";
       });
 
       contactForm.addEventListener("submit", async (event) => {
@@ -48,9 +133,14 @@
         if (!pendingUser) return;
         const displayName = document.getElementById("staff-name").value.trim();
         const digits = document.getElementById("staff-mobile").value.replace(/\D/g, "");
+        const emailTyped = document.getElementById("staff-email").value.trim().toLowerCase();
         const mobileKey = `91${digits}`;
         if (displayName.length < 2 || !/^\d{10}$/.test(digits)) {
           status.textContent = "Full name aur valid 10-digit mobile number required hai.";
+          return;
+        }
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTyped)) {
+          status.textContent = "Valid email address daalein.";
           return;
         }
         const button = contactForm.querySelector("button");
@@ -60,7 +150,8 @@
           const userRef = db.collection("users").doc(pendingUser.uid);
           const oldMobileKey = pendingProfile.mobileKey || String(pendingProfile.mobileNumber || "").replace(/\D/g, "");
           const batch = db.batch();
-          if (oldMobileKey && oldMobileKey !== mobileKey) batch.delete(db.collection("mobileDirectory").doc(oldMobileKey));
+          if (oldMobileKey && oldMobileKey !== mobileKey)
+            batch.delete(db.collection("mobileDirectory").doc(oldMobileKey));
           if (oldMobileKey !== mobileKey) {
             batch.set(db.collection("mobileDirectory").doc(mobileKey), {
               uid: pendingUser.uid,
@@ -72,16 +163,24 @@
             displayName,
             mobileNumber: `+91${digits}`,
             mobileKey,
+            email: emailTyped,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           });
           await batch.commit();
-          pendingProfile = { ...pendingProfile, displayName, mobileNumber: `+91${digits}`, mobileKey };
+          pendingProfile = {
+            ...pendingProfile,
+            displayName,
+            mobileNumber: `+91${digits}`,
+            mobileKey,
+            email: emailTyped,
+          };
           status.textContent = "Saved. Admin ko Staff Access mein ab aapke details dikh rahe hain.";
         } catch (error) {
           console.error("Could not save staff contact details", error);
-          status.textContent = error.code === "permission-denied"
-            ? "Ye mobile number kisi doosre MandiBook account me already registered hai. Alag number use karein."
-            : "Details save nahi hue. Page refresh karke dobara try karein.";
+          status.textContent =
+            error.code === "permission-denied"
+              ? "Ye mobile number kisi doosre MandiBook account me already registered hai. Alag number use karein."
+              : "Details save nahi hue. Page refresh karke dobara try karein.";
         } finally {
           button.disabled = false;
         }
