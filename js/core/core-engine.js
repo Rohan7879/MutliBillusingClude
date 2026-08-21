@@ -551,15 +551,28 @@ const NAV_ITEMS = [
   { href: "bill-create.html", icon: "🧾", label: "New Bill", roles: ["admin", "manager", "biller"] },
   { href: "bills.html", icon: "📋", label: "Bills" },
   { href: "dashboard.html", icon: "📊", label: "Dashboard" },
-  { href: "reports.html", icon: "📈", label: "Reports" },
-  { href: "broker-ledger.html", icon: "🤝", label: "Brokers", roles: ["admin", "manager", "accountant"] },
-  { href: "ledger.html", icon: "📒", label: "Ledger", roles: ["admin", "manager", "accountant"] },
-  { href: "daily-closing.html", icon: "📅", label: "Daily Close", roles: ["admin", "accountant"] },
   { href: "order-book.html", icon: "📦", label: "Orders", roles: ["admin", "manager", "biller"] },
   { href: "party-master.html", icon: "📖", label: "Party Master", roles: ["admin", "manager", "biller"] },
-  { href: "audit-log.html", icon: "🛡️", label: "Audit", roles: ["admin"] },
-  { href: "staff-access.html", icon: "👥", label: "Staff", roles: ["admin"] },
-  { href: "core_settings.html", icon: "⚙️", label: "Settings", roles: ["admin"] },
+  { href: "reports.html", icon: "📈", label: "Reports", group: "Accounts" },
+  {
+    href: "broker-ledger.html",
+    icon: "🤝",
+    label: "Brokers",
+    roles: ["admin", "manager", "accountant"],
+    group: "Accounts",
+  },
+  { href: "ledger.html", icon: "📒", label: "Ledger", roles: ["admin", "manager", "accountant"], group: "Accounts" },
+  { href: "daily-closing.html", icon: "📅", label: "Daily Close", roles: ["admin", "accountant"], group: "Accounts" },
+  { href: "audit-log.html", icon: "🛡️", label: "Audit", roles: ["admin"], group: "Admin" },
+  { href: "staff-access.html", icon: "👥", label: "Staff", roles: ["admin"], group: "Admin" },
+  { href: "core_settings.html", icon: "⚙️", label: "Settings", roles: ["admin"], group: "Admin" },
+];
+
+// Order controls which dropdown appears first; icon is shown on the
+// dropdown's own toggle button.
+const NAV_GROUPS = [
+  { key: "Accounts", icon: "💰", label: "Accounts" },
+  { key: "Admin", icon: "🛠️", label: "Admin" },
 ];
 
 const PAGE_ROLE_REQUIREMENTS = {
@@ -592,7 +605,10 @@ function renderNavbar() {
   const currentFile = window.location.pathname.split("/").pop() || "index.html";
 
   const role = window.currentUserProfile && window.currentUserProfile.role;
-  const linksHtml = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role))
+  const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
+
+  const topLevelHtml = visibleItems
+    .filter((item) => !item.group)
     .map((item) => {
       const isActive = item.href === currentFile;
       return `<a class="nav-link${isActive ? " active" : ""}" href="${item.href}">${item.icon} <span>${
@@ -600,6 +616,33 @@ function renderNavbar() {
       }</span></a>`;
     })
     .join("");
+
+  // Grouped items (Accounts, Admin) render as a dropdown instead of
+  // adding more items to the main row — this is what keeps the navbar
+  // from growing a new item every time a feature is added. A group with
+  // no items visible to this role (e.g. Admin, for a biller) is skipped
+  // entirely rather than showing an empty dropdown.
+  const groupsHtml = NAV_GROUPS.map((group) => {
+    const items = visibleItems.filter((item) => item.group === group.key);
+    if (items.length === 0) return "";
+    const isActiveGroup = items.some((item) => item.href === currentFile);
+    const itemsHtml = items
+      .map((item) => {
+        const isActive = item.href === currentFile;
+        return `<a class="nav-dropdown-item${isActive ? " active" : ""}" href="${item.href}">${item.icon} <span>${
+          item.label
+        }</span></a>`;
+      })
+      .join("");
+    return `<div class="nav-dropdown">
+        <button type="button" class="nav-link nav-dropdown-toggle${isActiveGroup ? " active" : ""}">${
+      group.icon
+    } <span>${group.label}</span> <span class="nav-caret">▾</span></button>
+        <div class="nav-dropdown-menu">${itemsHtml}</div>
+      </div>`;
+  }).join("");
+
+  const linksHtml = topLevelHtml + groupsHtml;
 
   const connHtml =
     typeof checkFirebaseConnection === "function"
@@ -611,15 +654,20 @@ function renderNavbar() {
 
   // Who's-logged-in badge — shows name/email + role at a glance, so it's
   // obvious which account and permission level is active on this device
-  // without opening staff-access.html to check.
+  // without opening staff-access.html to check. Now clickable — links to
+  // the self-service profile page where the user can fix their own
+  // name/email/mobile (with email/mobile ownership verified, not just
+  // typed in) instead of relying on Admin to type it in for them.
   const profile = window.currentUserProfile;
   const userBadgeHtml = profile
-    ? `<span class="nav-user-badge" title="${escapeHtml(profile.email || "")}">
+    ? `<a class="nav-user-badge" href="my-profile.html" title="${escapeHtml(
+        profile.email || ""
+      )} — click to edit your profile">
          👤 ${escapeHtml(profile.displayName || profile.email || "Signed in")}
          <span class="nav-role-pill nav-role-${escapeHtml(profile.role || "viewer")}">${escapeHtml(
         profile.role || "viewer"
       )}</span>
-       </span>`
+       </a>`
     : "";
 
   // Har page pe logout ka option — pehle sirf index.html (Dashboard) pe
@@ -654,10 +702,29 @@ function renderNavbar() {
       linksPanel.classList.toggle("open");
     });
     // Kisi link pe click karte hi menu apne aap band ho jaye
-    linksPanel.querySelectorAll("a.nav-link").forEach((a) => {
+    linksPanel.querySelectorAll("a.nav-link, a.nav-dropdown-item").forEach((a) => {
       a.addEventListener("click", () => linksPanel.classList.remove("open"));
     });
   }
+
+  // Accounts/Admin dropdowns — click to open (works on both desktop and
+  // touch, unlike hover), click elsewhere or Escape to close, and only
+  // one open at a time.
+  root.querySelectorAll(".nav-dropdown-toggle").forEach((btn) => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const dropdown = btn.closest(".nav-dropdown");
+      const wasOpen = dropdown.classList.contains("open");
+      root.querySelectorAll(".nav-dropdown.open").forEach((d) => d.classList.remove("open"));
+      if (!wasOpen) dropdown.classList.add("open");
+    });
+  });
+  document.addEventListener("click", () => {
+    root.querySelectorAll(".nav-dropdown.open").forEach((d) => d.classList.remove("open"));
+  });
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") root.querySelectorAll(".nav-dropdown.open").forEach((d) => d.classList.remove("open"));
+  });
 }
 
 function enforceCurrentPageRole(profile) {

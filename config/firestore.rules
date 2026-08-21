@@ -153,7 +153,7 @@ service cloud.firestore {
       allow update: if admin()
           || (signedIn() && request.auth.uid == uid
               && request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['displayName', 'mobileNumber', 'mobileKey', 'providerIds', 'lastSignInAt', 'updatedAt', 'email'])
+                .hasOnly(['displayName', 'mobileNumber', 'mobileKey', 'providerIds', 'lastSignInAt', 'updatedAt', 'email', 'emailVerified'])
               && (request.resource.data.get('mobileKey', '') == resource.data.get('mobileKey', '')
                 || (request.resource.data.get('mobileKey', '').size() == 12
                   && existsAfter(/databases/$(database)/documents/mobileDirectory/$(request.resource.data.mobileKey))

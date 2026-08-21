@@ -82,6 +82,24 @@
         color: #53718e;
         font-size: 0.8rem;
       }
+      .verify-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        padding: 2px 9px;
+        border-radius: 999px;
+        font-size: 0.72rem;
+        font-weight: 800;
+        vertical-align: middle;
+      }
+      .verify-badge.ok {
+        background: #e3f6ea;
+        color: #1a7f4b;
+      }
+      .verify-badge.pending {
+        background: #fff2df;
+        color: #9a5b06;
+      }
     </style>
   </head>
   <body>
@@ -102,11 +120,20 @@
           required
           placeholder="10-digit mobile number"
         />
-        <label for="staff-email">Email address</label>
-        <input id="staff-email" type="email" autocomplete="email" required placeholder="you@example.com" />
-        <button type="submit">Save contact details</button>
+        <button type="submit">Save name &amp; mobile</button>
         <p id="contact-status" class="contact-status"></p>
       </form>
+      <div class="contact-form">
+        <h2>Verify your email <span id="email-badge"></span></h2>
+        <p>Admin approval se pehle email verify karna zaroori hai — isse galat/typo email save nahi hoti.</p>
+        <p style="color: #c0392b; font-size: 0.78rem">
+          ⚠️ Sirf apni khud ki email daalo — kisi doosre staff ki email mat daalo.
+        </p>
+        <label for="staff-email">Email address</label>
+        <input id="staff-email" type="email" autocomplete="email" required placeholder="you@example.com" />
+        <button type="button" id="email-verify-btn">Send verification link</button>
+        <p id="email-status" class="contact-status"></p>
+      </div>
       <p>Please contact the MandiBook owner. You will be redirected automatically once approved.</p>
       <button onclick="logoutUser()">Logout</button>
     </main>
@@ -126,21 +153,29 @@
           pendingProfile.mobileNumber || user.phoneNumber || ""
         ).replace(/^\+91/, "");
         document.getElementById("staff-email").value = pendingProfile.email || user.email || "";
+        refreshEmailBadge();
       });
+
+      function refreshEmailBadge() {
+        const badge = document.getElementById("email-badge");
+        const currentEmail = pendingUser.email || pendingProfile.email || "";
+        if (currentEmail && pendingUser.emailVerified) {
+          badge.innerHTML = `<span class="verify-badge ok">✓ Verified</span>`;
+        } else if (currentEmail) {
+          badge.innerHTML = `<span class="verify-badge pending">⏳ Unverified</span>`;
+        } else {
+          badge.innerHTML = "";
+        }
+      }
 
       contactForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (!pendingUser) return;
         const displayName = document.getElementById("staff-name").value.trim();
         const digits = document.getElementById("staff-mobile").value.replace(/\D/g, "");
-        const emailTyped = document.getElementById("staff-email").value.trim().toLowerCase();
         const mobileKey = `91${digits}`;
         if (displayName.length < 2 || !/^\d{10}$/.test(digits)) {
           status.textContent = "Full name aur valid 10-digit mobile number required hai.";
-          return;
-        }
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(emailTyped)) {
-          status.textContent = "Valid email address daalein.";
           return;
         }
         const button = contactForm.querySelector("button");
@@ -163,17 +198,10 @@
             displayName,
             mobileNumber: `+91${digits}`,
             mobileKey,
-            email: emailTyped,
             updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
           });
           await batch.commit();
-          pendingProfile = {
-            ...pendingProfile,
-            displayName,
-            mobileNumber: `+91${digits}`,
-            mobileKey,
-            email: emailTyped,
-          };
+          pendingProfile = { ...pendingProfile, displayName, mobileNumber: `+91${digits}`, mobileKey };
           status.textContent = "Saved. Admin ko Staff Access mein ab aapke details dikh rahe hain.";
         } catch (error) {
           console.error("Could not save staff contact details", error);
@@ -183,6 +211,70 @@
               : "Details save nahi hue. Page refresh karke dobara try karein.";
         } finally {
           button.disabled = false;
+        }
+      });
+
+      // ── Email verification — same real-ownership-proof pattern as
+      // my-profile.html: Firebase emails a link to the new address, and
+      // the email only actually changes once that link is clicked. Doing
+      // this at the very first login (right here, before Admin approval)
+      // means every approved staff member's email is guaranteed real. ──
+      document.getElementById("email-verify-btn").addEventListener("click", async () => {
+        const btn = document.getElementById("email-verify-btn");
+        const emailStatus = document.getElementById("email-status");
+        const newEmail = document.getElementById("staff-email").value.trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+          emailStatus.textContent = "Valid email address daalein.";
+          return;
+        }
+        // Same email, just unverified (common for Email/Password sign-ups)
+        // → plain verification email to the CURRENT address, not a
+        // change-email flow (verifyBeforeUpdateEmail with the same address
+        // it already has can silently fail).
+        if (newEmail === (pendingUser.email || "").toLowerCase()) {
+          if (pendingUser.emailVerified) {
+            emailStatus.textContent = "Yeh email already verified hai.";
+            return;
+          }
+          btn.disabled = true;
+          emailStatus.textContent = "Bhej rahe hain...";
+          try {
+            await pendingUser.sendEmailVerification();
+            emailStatus.textContent = `Verification link ${newEmail} pe bhej diya. Inbox check karo aur link pe click karo.`;
+          } catch (e) {
+            emailStatus.textContent = "Nahi ho paya: " + e.message;
+          } finally {
+            btn.disabled = false;
+          }
+          return;
+        }
+        btn.disabled = true;
+        emailStatus.textContent = "Bhej rahe hain...";
+        try {
+          await pendingUser.verifyBeforeUpdateEmail(newEmail);
+          emailStatus.textContent = `Verification link ${newEmail} pe bhej diya. Inbox check karo aur link pe click karo.`;
+        } catch (e) {
+          if (e.code === "auth/requires-recent-login") {
+            emailStatus.textContent = "Security check chal raha hai...";
+            try {
+              const providerId = (pendingUser.providerData[0] || {}).providerId;
+              if (providerId === "google.com") {
+                await pendingUser.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider());
+                await pendingUser.verifyBeforeUpdateEmail(newEmail);
+                emailStatus.textContent = `Verification link ${newEmail} pe bhej diya. Inbox check karo aur link pe click karo.`;
+              } else {
+                throw e;
+              }
+            } catch (e2) {
+              emailStatus.textContent = "Ek baar Logout karke dobara login karo, phir email verify try karo.";
+            }
+          } else if (e.code === "auth/email-already-in-use") {
+            emailStatus.textContent = "Yeh email kisi doosre account mein already use ho rahi hai.";
+          } else {
+            emailStatus.textContent = "Nahi ho paya: " + e.message;
+          }
+        } finally {
+          btn.disabled = false;
         }
       });
     </script>

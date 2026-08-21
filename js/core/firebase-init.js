@@ -47,7 +47,13 @@ function signInMetadata(user) {
   // phone-first account later links Google) — omitted (not blanked) when
   // this particular sign-in has none, so an already-saved email is never
   // overwritten with an empty string on a later phone-only login.
-  if (user.email) fields.email = normaliseEmail(user.email);
+  if (user.email) {
+    fields.email = normaliseEmail(user.email);
+    // So Admin (Staff Access page) can see whether this email was ever
+    // actually confirmed by the owner (via Firebase's verification link
+    // in my-profile.html) rather than just typed in.
+    fields.emailVerified = !!user.emailVerified;
+  }
   return fields;
 }
 

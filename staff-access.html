@@ -118,6 +118,24 @@
         border-color: #0877ca;
         box-shadow: 0 0 0 3px #0877ca1a;
       }
+      .email-verify-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 3px;
+        margin-top: 5px;
+        padding: 2px 8px;
+        border-radius: 999px;
+        font-size: 0.68rem;
+        font-weight: 800;
+      }
+      .email-verify-badge.verified {
+        color: #087443;
+        background: #e7f8ef;
+      }
+      .email-verify-badge.unverified {
+        color: #9b6200;
+        background: #fff4d7;
+      }
       .staff-save {
         padding: 10px 15px;
         border: 0;
@@ -227,9 +245,15 @@
             ({ id, data }) =>
               `<tr><td><input class="staff-email-input" id="email-${id}" type="email" value="${esc(
                 data.email
-              )}" placeholder="staff@example.com" aria-label="Email for ${esc(
+              )}" data-original="${esc(data.email)}" placeholder="staff@example.com" aria-label="Email for ${esc(
                 data.displayName || id
-              )}" /></td><td><span class="staff-name">${esc(data.displayName || "—")}</span></td><td>${esc(
+              )}" />${
+                data.email
+                  ? data.emailVerified
+                    ? `<span class="email-verify-badge verified">✓ Verified</span>`
+                    : `<span class="email-verify-badge unverified">⏳ Unverified</span>`
+                  : ""
+              }</td><td><span class="staff-name">${esc(data.displayName || "—")}</span></td><td>${esc(
                 data.mobileNumber || "—"
               )}</td><td>${esc(providerLabel(data.providerIds))}</td><td>${esc(
                 formatTimestamp(data.lastSignInAt)
@@ -248,7 +272,9 @@
       async function saveStaff(uid) {
         const role = document.getElementById(`role-${uid}`).value;
         const status = document.getElementById(`status-${uid}`).value;
-        const email = document.getElementById(`email-${uid}`).value.trim().toLowerCase();
+        const emailInput = document.getElementById(`email-${uid}`);
+        const email = emailInput.value.trim().toLowerCase();
+        const emailChanged = email !== (emailInput.dataset.original || "").toLowerCase();
         if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
           Swal.fire({
             icon: "error",
@@ -260,6 +286,10 @@
         try {
           const payload = { role, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
           if (email) payload.email = email;
+          // Admin typing an email in is not the same as the owner
+          // confirming it via the verification link in My Profile — don't
+          // let a stale "Verified" badge carry over to a different email.
+          if (emailChanged) payload.emailVerified = false;
           await db.collection("users").doc(uid).update(payload);
           Swal.fire({ icon: "success", title: "Staff access updated", timer: 1200, showConfirmButton: false });
         } catch (error) {

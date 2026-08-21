@@ -1,0 +1,490 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>My Profile — MandiBook</title>
+
+    <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
+
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+
+    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/core-engine.js"></script>
+
+    <link rel="stylesheet" href="css/main.css" />
+    <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
+
+    <style>
+      .profile-wrap {
+        max-width: 640px;
+        margin: 32px auto;
+        padding: 0 16px;
+      }
+      .profile-card {
+        background: #fff;
+        border-radius: 14px;
+        box-shadow: 0 8px 25px #003d6e14;
+        padding: 28px;
+        margin-bottom: 20px;
+      }
+      .profile-card h2 {
+        margin: 0 0 6px;
+        color: #173c5e;
+        font-size: 1.15rem;
+      }
+      .profile-card p.hint {
+        margin: 0 0 18px;
+        color: #5d7187;
+        font-size: 0.85rem;
+        line-height: 1.5;
+      }
+      .profile-field {
+        margin-bottom: 16px;
+      }
+      .profile-field label {
+        display: block;
+        margin-bottom: 6px;
+        color: #36516d;
+        font-weight: 700;
+        font-size: 0.82rem;
+      }
+      .profile-field input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 11px 13px;
+        border: 1.5px solid #dee2e6;
+        border-radius: 8px;
+        font: inherit;
+      }
+      .profile-field input:disabled {
+        background: #f4f6f8;
+        color: #8fa1b3;
+      }
+      .profile-row {
+        display: flex;
+        gap: 10px;
+        align-items: flex-end;
+      }
+      .profile-row .profile-field {
+        flex: 1;
+        margin-bottom: 0;
+      }
+      .profile-btn {
+        border: 0;
+        border-radius: 8px;
+        background: #005a9e;
+        color: #fff;
+        padding: 11px 18px;
+        font-weight: 700;
+        cursor: pointer;
+        white-space: nowrap;
+      }
+      .profile-btn:disabled {
+        background: #b7c3cd;
+        cursor: not-allowed;
+      }
+      .profile-btn.secondary {
+        background: #fff;
+        color: #005a9e;
+        border: 1.5px solid #005a9e;
+      }
+      .verify-badge {
+        display: inline-flex;
+        align-items: center;
+        gap: 4px;
+        font-size: 0.78rem;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 999px;
+        margin-left: 8px;
+        vertical-align: middle;
+      }
+      .verify-badge.ok {
+        background: #e3f6ea;
+        color: #1a7f4b;
+      }
+      .verify-badge.pending {
+        background: #fff2df;
+        color: #9a5b06;
+      }
+      .status-msg {
+        min-height: 18px;
+        margin: 10px 0 0;
+        font-size: 0.82rem;
+        color: #53718e;
+      }
+      .status-msg.error {
+        color: #c0392b;
+      }
+      .status-msg.success {
+        color: #1a7f4b;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="navbar-root"></div>
+
+    <div class="profile-wrap">
+      <div class="profile-card">
+        <h2>My Profile</h2>
+        <p class="hint">
+          Apni details khud update karo — email aur mobile change karne se pehle verify karna padega, taaki galti se
+          galat detail save na ho jaye.
+        </p>
+
+        <div class="profile-field">
+          <label for="pf-name">Full name</label>
+          <div class="profile-row">
+            <input id="pf-name" placeholder="Your full name" />
+            <button class="profile-btn" id="pf-name-save">Save</button>
+          </div>
+          <p class="status-msg" id="pf-name-status"></p>
+        </div>
+
+        <div class="profile-field">
+          <label for="pf-email">Email address <span id="pf-email-badge"></span></label>
+          <p style="color: #c0392b; font-size: 0.78rem; margin: 0 0 8px">
+            ⚠️ Sirf apni khud ki email daalo — kisi doosre staff ki email mat daalo, isse aapki apni login-email badal
+            jaayegi, unka account verify nahi hoga.
+          </p>
+          <div class="profile-row">
+            <input id="pf-email" type="email" placeholder="you@example.com" />
+            <button class="profile-btn" id="pf-email-save">Send verification link</button>
+          </div>
+          <p class="status-msg" id="pf-email-status">
+            Nayi email daal ke "Send verification link" dabao — us email pe ek link aayega, click karne ke baad hi yahan
+            email update hogi (isse galat/typo email save nahi ho sakti).
+          </p>
+        </div>
+
+        <div class="profile-field">
+          <label for="pf-mobile">Mobile number</label>
+          <div class="profile-row">
+            <span style="padding: 11px 0; color: #5d7187; font-weight: 700">+91</span>
+            <input id="pf-mobile" inputmode="numeric" maxlength="10" placeholder="10-digit mobile number" />
+            <button class="profile-btn" id="pf-mobile-save">Save</button>
+          </div>
+          <p class="status-msg" id="pf-mobile-status">
+            Mobile number sirf record ke liye hai — abhi SMS-OTP se verify nahi hota (agar chahiye to alag se setup ho
+            sakta hai).
+          </p>
+        </div>
+      </div>
+
+      <div class="profile-card">
+        <h2>Sign-in methods</h2>
+        <p class="hint">
+          Yeh account abhi in tarikon se login ho sakta hai. Dono link kar lo taaki Google aur Email/Password dono se
+          hamesha isi ek account mein aao — do alag accounts na ban jaayein.
+        </p>
+        <div id="pf-providers"></div>
+        <p class="status-msg" id="pf-link-status"></p>
+      </div>
+    </div>
+
+    <script>
+      let pfUser = null;
+
+      firebase.auth().onAuthStateChanged((user) => {
+        if (!user) {
+          redirectTo("login.html");
+          return;
+        }
+        pfUser = user;
+        loadProfile();
+        renderProviders();
+      });
+
+      function renderProviders() {
+        const container = document.getElementById("pf-providers");
+        const linkStatus = document.getElementById("pf-link-status");
+        const hasGoogle = pfUser.providerData.some((p) => p.providerId === "google.com");
+        const hasPassword = pfUser.providerData.some((p) => p.providerId === "password");
+
+        let html = "";
+        if (hasGoogle) {
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eef1f4;"><span>🔵 Google</span><span class="verify-badge ok">✓ Linked</span></div>`;
+        } else {
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;border-bottom:1px solid #eef1f4;"><span>🔵 Google</span><button class="profile-btn secondary" id="pf-link-google">Link Google</button></div>`;
+        }
+        if (hasPassword) {
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;"><span>🔑 Email &amp; Password</span><span class="verify-badge ok">✓ Linked</span></div>`;
+        } else {
+          html += `<div style="display:flex;align-items:center;justify-content:space-between;padding:10px 0;"><span>🔑 Email &amp; Password</span><button class="profile-btn secondary" id="pf-link-password">Set a password</button></div>`;
+        }
+        container.innerHTML = html;
+
+        const linkGoogleBtn = document.getElementById("pf-link-google");
+        if (linkGoogleBtn) {
+          linkGoogleBtn.addEventListener("click", async () => {
+            linkStatus.className = "status-msg";
+            linkStatus.textContent = "Google popup khul raha hai...";
+            try {
+              await pfUser.linkWithPopup(new firebase.auth.GoogleAuthProvider());
+              linkStatus.className = "status-msg success";
+              linkStatus.textContent = "Google account link ho gaya!";
+              renderProviders();
+            } catch (e) {
+              linkStatus.className = "status-msg error";
+              if (e.code === "auth/credential-already-in-use" || e.code === "auth/email-already-in-use") {
+                linkStatus.textContent =
+                  "Yeh Google account pehle se ek ALAG MandiBook login se juda hua hai — isliye seedha link nahi ho sakta (Firebase do already-bane accounts ko khud merge nahi karta). Sirf ek hi tarika (Google YA Email/Password) use karna sabse aasan hai.";
+              } else {
+                linkStatus.textContent = "Link nahi ho paya: " + e.message;
+              }
+            }
+          });
+        }
+
+        const linkPasswordBtn = document.getElementById("pf-link-password");
+        if (linkPasswordBtn) {
+          linkPasswordBtn.addEventListener("click", async () => {
+            const { value: pwd } = await Swal.fire({
+              title: "Naya password set karo",
+              input: "password",
+              inputPlaceholder: "Kam se kam 6 characters",
+              showCancelButton: true,
+              confirmButtonText: "Set password",
+              inputValidator: (v) => (!v || v.length < 6 ? "Password kam se kam 6 characters ka hona chahiye" : null),
+            });
+            if (!pwd) return;
+            linkStatus.className = "status-msg";
+            linkStatus.textContent = "Set kar rahe hain...";
+            try {
+              const cred = firebase.auth.EmailAuthProvider.credential(pfUser.email, pwd);
+              await pfUser.linkWithCredential(cred);
+              linkStatus.className = "status-msg success";
+              linkStatus.textContent = "Password set ho gaya! Ab email + is password se bhi login kar sakte ho.";
+              renderProviders();
+            } catch (e) {
+              linkStatus.className = "status-msg error";
+              if (e.code === "auth/email-already-in-use" || e.code === "auth/credential-already-in-use") {
+                linkStatus.textContent =
+                  "Iss email ka pehle se ek ALAG account/password already bana hua hai — isliye seedha link nahi ho sakta. Sirf ek hi tarika (Google YA Email/Password) use karna sabse aasan hai.";
+              } else {
+                linkStatus.textContent = "Set nahi ho paya: " + e.message;
+              }
+            }
+          });
+        }
+      }
+
+      async function loadProfile() {
+        const doc = await db.collection("users").doc(pfUser.uid).get();
+        const data = doc.exists ? doc.data() : {};
+
+        document.getElementById("pf-name").value = data.displayName || pfUser.displayName || "";
+
+        const currentEmail = pfUser.email || data.email || "";
+        document.getElementById("pf-email").value = currentEmail;
+        const badge = document.getElementById("pf-email-badge");
+        if (currentEmail && pfUser.emailVerified) {
+          badge.innerHTML = `<span class="verify-badge ok">✓ Verified</span>`;
+        } else if (currentEmail) {
+          badge.innerHTML = `<span class="verify-badge pending">⏳ Unverified</span>`;
+        } else {
+          badge.innerHTML = `<span class="verify-badge pending">⚠ Not set</span>`;
+        }
+
+        document.getElementById("pf-mobile").value = String(data.mobileNumber || pfUser.phoneNumber || "").replace(
+          /^\+91/,
+          ""
+        );
+      }
+
+      // ── Name: no verification needed, it's just a display label ──
+      document.getElementById("pf-name-save").addEventListener("click", async () => {
+        const btn = document.getElementById("pf-name-save");
+        const status = document.getElementById("pf-name-status");
+        const displayName = document.getElementById("pf-name").value.trim();
+        if (displayName.length < 2) {
+          status.className = "status-msg error";
+          status.textContent = "Naam kam se kam 2 characters ka hona chahiye.";
+          return;
+        }
+        btn.disabled = true;
+        try {
+          await db.collection("users").doc(pfUser.uid).update({
+            displayName,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          status.className = "status-msg success";
+          status.textContent = "Naam save ho gaya.";
+        } catch (e) {
+          status.className = "status-msg error";
+          status.textContent = "Save nahi hua: " + e.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      // ── Email: Firebase sends a real verification link to the NEW
+      // address. The email only actually changes once that link is
+      // clicked — so a typo'd or someone-else's email can never get set,
+      // and our Firestore email field only backfills afterwards (via the
+      // sign-in metadata sync) once Firebase Auth confirms it. ──
+      async function sendEmailVerificationLink(newEmail, status, btn) {
+        try {
+          await pfUser.verifyBeforeUpdateEmail(newEmail);
+          status.className = "status-msg success";
+          status.textContent = `Verification link ${newEmail} pe bhej diya. Us email ka inbox check karo aur link pe click karo — uske baad email yahan update ho jayegi.`;
+        } catch (e) {
+          if (e.code === "auth/requires-recent-login") {
+            // Instead of making the user manually logout+login, quietly
+            // re-confirm their identity via the same sign-in method they
+            // already used, then retry automatically.
+            status.className = "status-msg";
+            status.textContent = "Security check chal raha hai...";
+            try {
+              const providerId = (pfUser.providerData[0] || {}).providerId;
+              if (providerId === "google.com") {
+                await pfUser.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider());
+              } else {
+                throw { code: "auth/requires-recent-login" };
+              }
+              await pfUser.verifyBeforeUpdateEmail(newEmail);
+              status.className = "status-msg success";
+              status.textContent = `Verification link ${newEmail} pe bhej diya. Us email ka inbox check karo aur link pe click karo — uske baad email yahan update ho jayegi.`;
+            } catch (e2) {
+              status.className = "status-msg error";
+              status.textContent =
+                "Security confirm nahi ho paya — ek baar Logout karke dobara login karo, phir email change try karo.";
+            }
+          } else if (e.code === "auth/email-already-in-use") {
+            status.className = "status-msg error";
+            status.textContent = "Yeh email kisi doosre account mein already use ho rahi hai.";
+          } else {
+            status.className = "status-msg error";
+            status.textContent = "Nahi ho paya: " + e.message;
+          }
+        } finally {
+          btn.disabled = false;
+        }
+      }
+
+      document.getElementById("pf-email-save").addEventListener("click", async () => {
+        const btn = document.getElementById("pf-email-save");
+        const status = document.getElementById("pf-email-status");
+        const newEmail = document.getElementById("pf-email").value.trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
+          status.className = "status-msg error";
+          status.textContent = "Valid email address daalein.";
+          return;
+        }
+
+        // Safety check: is this email already someone ELSE's account?
+        // (Only works when signed in as Admin — Firestore rules block
+        // anyone else from querying other users' records, so this check
+        // silently no-ops for non-admins and they just rely on the
+        // warning text above instead.)
+        if (newEmail !== (pfUser.email || "").toLowerCase()) {
+          try {
+            const dupCheck = await db.collection("users").where("email", "==", newEmail).limit(1).get();
+            if (!dupCheck.empty && dupCheck.docs[0].id !== pfUser.uid) {
+              const otherName = dupCheck.docs[0].data().displayName || newEmail;
+              const confirmResult = await Swal.fire({
+                icon: "warning",
+                title: "Yeh kisi aur ki email hai!",
+                html: `<b>${newEmail}</b> already <b>${otherName}</b> ke staff account se linked hai.<br><br>Agar aap yeh yahan verify karte ho, to <b>aapki apni login-email badal jaayegi</b> — ${otherName} ka account verify <u>nahi</u> hoga.<br><br>Kya aap sach mein aage badhna chahte ho?`,
+                showCancelButton: true,
+                confirmButtonText: "Haan, mujhe pata hai",
+                cancelButtonText: "Cancel",
+                confirmButtonColor: "#c0392b",
+              });
+              if (!confirmResult.isConfirmed) return;
+            }
+          } catch (e) {
+            // permission-denied for non-admin — just skip the check
+          }
+        }
+
+        btn.disabled = true;
+        // Same email, just unverified (common for Email/Password sign-ups —
+        // Firebase never auto-verifies those) → send a plain "verify your
+        // email" link to the CURRENT address. verifyBeforeUpdateEmail is
+        // only for actually changing to a different address — using it
+        // here was silently blocking anyone whose email just needed
+        // verifying, not changing.
+        if (newEmail === (pfUser.email || "").toLowerCase()) {
+          if (pfUser.emailVerified) {
+            status.className = "status-msg";
+            status.textContent = "Yeh email already verified hai.";
+            btn.disabled = false;
+            return;
+          }
+          try {
+            await pfUser.sendEmailVerification();
+            status.className = "status-msg success";
+            status.textContent = `Verification link ${newEmail} pe bhej diya. Inbox check karo aur link pe click karo.`;
+          } catch (e) {
+            status.className = "status-msg error";
+            status.textContent = "Nahi ho paya: " + e.message;
+          } finally {
+            btn.disabled = false;
+          }
+          return;
+        }
+        await sendEmailVerificationLink(newEmail, status, btn);
+      });
+
+      // ── Mobile: same dedup pattern as access-pending.html (one mobile
+      // number can only belong to one account, enforced via
+      // mobileDirectory). Not SMS-OTP verified yet — see note in UI. ──
+      document.getElementById("pf-mobile-save").addEventListener("click", async () => {
+        const btn = document.getElementById("pf-mobile-save");
+        const status = document.getElementById("pf-mobile-status");
+        const digits = document.getElementById("pf-mobile").value.replace(/\D/g, "");
+        if (!/^\d{10}$/.test(digits)) {
+          status.className = "status-msg error";
+          status.textContent = "Valid 10-digit mobile number daalein.";
+          return;
+        }
+        const mobileKey = `91${digits}`;
+        btn.disabled = true;
+        try {
+          const userRef = db.collection("users").doc(pfUser.uid);
+          const doc = await userRef.get();
+          const oldKey = doc.exists ? doc.data().mobileKey : null;
+
+          if (oldKey === mobileKey) {
+            status.className = "status-msg success";
+            status.textContent = "Yeh already aapka current mobile number hai.";
+            btn.disabled = false;
+            return;
+          }
+
+          const batch = db.batch();
+          if (oldKey) {
+            batch.delete(db.collection("mobileDirectory").doc(oldKey));
+          }
+          batch.update(userRef, {
+            mobileNumber: `+91${digits}`,
+            mobileKey,
+            updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          batch.set(db.collection("mobileDirectory").doc(mobileKey), {
+            uid: pfUser.uid,
+            mobileKey,
+            createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          await batch.commit();
+
+          status.className = "status-msg success";
+          status.textContent = "Mobile number save ho gaya.";
+        } catch (e) {
+          status.className = "status-msg error";
+          status.textContent =
+            e.code === "permission-denied"
+              ? "Yeh mobile number kisi doosre MandiBook account mein already registered hai."
+              : "Save nahi hua: " + e.message;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>
