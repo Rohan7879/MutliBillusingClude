@@ -63,7 +63,9 @@ async function loadOrderIntoForm() {
           (s, i) =>
             `<label style="display:flex;gap:10px;align-items:center;text-align:left;padding:9px;border-bottom:1px solid #edf2f7;cursor:pointer;">
               <input type="checkbox" class="swal-supplier-check" value="${i}" ${i === 0 ? "checked" : ""}>
-              <span><strong>${s.variety || s.supplierName || "Item"}</strong> — ${s.product || "-"}<br><small>${s.quantity} ${s.unit} @ ₹${s.price}/${s.priceUnit}</small></span>
+              <span><strong>${s.variety || s.supplierName || "Item"}</strong> — ${s.product || "-"}<br><small>${
+              s.quantity
+            } ${s.unit} @ ₹${s.price}/${s.priceUnit}</small></span>
             </label>`
         )
         .join("");
@@ -74,7 +76,9 @@ async function loadOrderIntoForm() {
         confirmButtonText: "Auto-Fill",
         confirmButtonColor: "#005a9e",
         preConfirm: () => {
-          const values = Array.from(document.querySelectorAll(".swal-supplier-check:checked")).map((input) => Number(input.value));
+          const values = Array.from(document.querySelectorAll(".swal-supplier-check:checked")).map((input) =>
+            Number(input.value)
+          );
           if (!values.length) Swal.showValidationMessage("Select at least one variety.");
           if (values.length > 5) Swal.showValidationMessage("A bill has only 5 Vakal rows. Select up to 5 varieties.");
           return values;
@@ -89,7 +93,17 @@ async function loadOrderIntoForm() {
     selectedSupplierId = selectedSupplierIds[0]; // compatibility with older linked bills
     const selectedSuppliers = selectedSupplierIds.map((index) => ({ ...order.suppliers[index], index }));
     const supplier = selectedSuppliers[0] || {};
-    const distinctProducts = [...new Set(selectedSuppliers.map((item) => String(item.product || "").trim().toLowerCase()).filter(Boolean))];
+    const distinctProducts = [
+      ...new Set(
+        selectedSuppliers
+          .map((item) =>
+            String(item.product || "")
+              .trim()
+              .toLowerCase()
+          )
+          .filter(Boolean)
+      ),
+    ];
     const templateWasSelected =
       distinctProducts.length === 1 &&
       typeof window.selectProductTemplateForBill === "function" &&
@@ -148,7 +162,9 @@ async function loadOrderIntoForm() {
       const varietyInput = document.querySelector(`input[name="vakal_${rowNo}_variety"]`);
       const rateInput = document.querySelector(`input[name="vakal_${rowNo}_bhav"]`);
       if (varietyInput) varietyInput.value = item.variety || "";
-      if (rateInput) rateInput.value = item.priceUnit === "100kg" ? Math.round(Number(item.price || 0) / 5) : Number(item.price || 0);
+      if (rateInput)
+        rateInput.value =
+          item.priceUnit === "100kg" ? Math.round(Number(item.price || 0) / 5) : Number(item.price || 0);
     });
 
     // Show info banner
@@ -158,7 +174,11 @@ async function loadOrderIntoForm() {
       info.innerHTML = `📦 <strong>Order #${order.orderNo}</strong> linked &nbsp;|&nbsp;
         🌾 ${selectedSuppliers.map((item) => item.variety || item.product || "Item").join(", ")} &nbsp;|&nbsp;
         👤 Broker: <strong>${order.broker || "—"}</strong>
-        ${templateWasSelected ? `<br><small style="color:#198754;font-weight:700;">✓ Product template and bill prefix selected automatically</small>` : `<br><small style="color:#8a5a00;">⚠ No matching product template — choose the bill prefix manually</small>`}
+        ${
+          templateWasSelected
+            ? `<br><small style="color:#198754;font-weight:700;">✓ Product template and bill prefix selected automatically</small>`
+            : `<br><small style="color:#8a5a00;">⚠ No matching product template — choose the bill prefix manually</small>`
+        }
         <br><small style="color:#6c757d;">Selected varieties ke rate alag Vakal rows me fill ho gaye hain; bags actual truck ke hisaab se bharo.</small>`;
     }
 
@@ -195,7 +215,9 @@ async function loadOrderIntoForm() {
       hiddenLinks.name = "linked_order_supplier_links";
       document.getElementById("estimateForm").appendChild(hiddenLinks);
     }
-    hiddenLinks.value = JSON.stringify(selectedSupplierIds.map((supplierIdx, index) => ({ supplierIdx, vakalIndex: index + 1 })));
+    hiddenLinks.value = JSON.stringify(
+      selectedSupplierIds.map((supplierIdx, index) => ({ supplierIdx, vakalIndex: index + 1 }))
+    );
 
     Swal.fire({
       icon: "success",
@@ -254,19 +276,22 @@ async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
 
   try {
     const orderRef = db.collection("orders").doc(orderId);
-    const orderDoc = await orderRef.get();
-    if (!orderDoc.exists) return;
-    const order = orderDoc.data();
 
-    // 1. Is order ke saare linked bill numbers nikal lo
+    // Read once first (read-only, cheap) just to know which bill serials
+    // to look up — Firestore transactions can't run a collection query
+    // (.where().get()), only direct document reads, so this part has to
+    // stay outside the transaction below.
+    const initialSnap = await orderRef.get();
+    if (!initialSnap.exists) return;
+    const initialOrder = initialSnap.data();
+
     let billSerials = [];
-    if (order.linkedBillNos && Array.isArray(order.linkedBillNos)) {
-      billSerials = order.linkedBillNos.map((b) => (b.billNo || b).toString().trim());
-    } else if (order.linkedBillNo) {
-      billSerials = order.linkedBillNo.split(",").map((s) => s.trim());
+    if (initialOrder.linkedBillNos && Array.isArray(initialOrder.linkedBillNos)) {
+      billSerials = initialOrder.linkedBillNos.map((b) => (b.billNo || b).toString().trim());
+    } else if (initialOrder.linkedBillNo) {
+      billSerials = initialOrder.linkedBillNo.split(",").map((s) => s.trim());
     }
 
-    // Naya bill bhi add kar lo agar current bill serial me nahi hai
     const currentBillSerial = billData["Serial No"] || billData["billNo"] || "";
     if (currentBillSerial && !billSerials.includes(currentBillSerial)) {
       billSerials.push(currentBillSerial);
@@ -286,31 +311,51 @@ async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
       }
     }
 
-    // Recalculate delivery independently for EVERY supplier/variety in the
-    // order. This prevents a multi-variety truck from being counted entirely
-    // against only the first selected variety.
-    const suppliers = [...(order.suppliers || [])];
-    suppliers.forEach((supplier, supplierIdx) => {
-      let deliveredKg = 0;
-      linkedBills.forEach((linkedBill) => {
-        const links = Array.isArray(linkedBill.OrderSupplierLinks) ? linkedBill.OrderSupplierLinks : [];
-        if (links.length) {
-          links.filter((link) => Number(link.supplierIdx) === supplierIdx).forEach((link) => {
-            deliveredKg += Number(linkedBill[`Vakal ${Number(link.vakalIndex)} Kilo`] || 0);
-          });
-        } else if (Number(linkedBill["LinkedSupplierIdx"]) === supplierIdx) {
-          deliveredKg += Number(linkedBill["Net Weight"] || 0);
-        }
+    // 🔒 The actual race this fixes: two bills saved against the same
+    // order at nearly the same moment used to each read the order, both
+    // compute an update independently, then whichever write landed last
+    // silently won — potentially discarding an unrelated concurrent edit
+    // to the order (e.g. someone editing order notes/quantity at the same
+    // time). Re-reading the order fresh INSIDE the transaction, right
+    // before writing, means Firestore detects if it changed since our
+    // first read and automatically retries this whole block — so the
+    // write can never be based on stale data.
+    await db.runTransaction(async (transaction) => {
+      const orderDoc = await transaction.get(orderRef);
+      if (!orderDoc.exists) return;
+      const order = orderDoc.data();
+
+      // Recalculate delivery independently for EVERY supplier/variety in
+      // the order. This prevents a multi-variety truck from being counted
+      // entirely against only the first selected variety.
+      const suppliers = [...(order.suppliers || [])];
+      suppliers.forEach((supplier, supplierIdx) => {
+        let deliveredKg = 0;
+        linkedBills.forEach((linkedBill) => {
+          const links = Array.isArray(linkedBill.OrderSupplierLinks) ? linkedBill.OrderSupplierLinks : [];
+          if (links.length) {
+            links
+              .filter((link) => Number(link.supplierIdx) === supplierIdx)
+              .forEach((link) => {
+                deliveredKg += Number(linkedBill[`Vakal ${Number(link.vakalIndex)} Kilo`] || 0);
+              });
+          } else if (Number(linkedBill["LinkedSupplierIdx"]) === supplierIdx) {
+            deliveredKg += Number(linkedBill["Net Weight"] || 0);
+          }
+        });
+        const divisor = supplier.unit === "Khadi" ? 400 : 20;
+        supplier.delivered = Math.round((deliveredKg / divisor) * 100) / 100;
       });
-      const divisor = supplier.unit === "Khadi" ? 400 : 20;
-      supplier.delivered = Math.round((deliveredKg / divisor) * 100) / 100;
+
+      const hasDelivery = suppliers.some((supplier) => Number(supplier.delivered || 0) > 0);
+      const allDelivered =
+        suppliers.length > 0 &&
+        suppliers.every((supplier) => Number(supplier.delivered || 0) >= Number(supplier.quantity || 0));
+      const newStatus = closeOrderOverride || allDelivered ? "Completed" : hasDelivery ? "Partial" : order.status;
+      transaction.update(orderRef, { suppliers, status: newStatus, linkedBillNos: billSerials, updatedAt: Date.now() });
     });
 
-    const hasDelivery = suppliers.some((supplier) => Number(supplier.delivered || 0) > 0);
-    const allDelivered = suppliers.length > 0 && suppliers.every((supplier) => Number(supplier.delivered || 0) >= Number(supplier.quantity || 0));
-    const newStatus = closeOrderOverride || allDelivered ? "Completed" : hasDelivery ? "Partial" : order.status;
-    await orderRef.update({ suppliers, status: newStatus, linkedBillNos: billSerials, updatedAt: Date.now() });
-    console.log(`Order ${orderId} delivery successfully synced for ${suppliers.length} varieties.`);
+    console.log(`Order ${orderId} delivery successfully synced for ${linkedBills.length} linked bills.`);
   } catch (e) {
     console.error("Could not update order delivered qty:", e);
   }

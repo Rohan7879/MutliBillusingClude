@@ -6,9 +6,9 @@
     <title>Login — MandiBook</title>
 
     <!-- Firebase Libraries -->
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
 
     <!-- Aapka Init File -->
@@ -76,12 +76,42 @@
         font-weight: 700;
         text-decoration: underline;
       }
-      .login-help:hover { background: transparent; color: #003d6e; }
-      .login-note { margin: 14px 0 0; color: #6c757d; font-size: 12px; line-height: 1.45; }
-      .divider { display:flex; align-items:center; gap:10px; margin:18px 0; color:#94a3b8; font-size:12px; }
-      .divider::before, .divider::after { content:""; height:1px; background:#e2e8f0; flex:1; }
-      .google-login { background:#fff; color:#334155; border:1.5px solid #d7dee7; box-shadow:none; }
-      .google-login:hover { background:#f8fafc; color:#005a9e; border-color:#9fc8eb; }
+      .login-help:hover {
+        background: transparent;
+        color: #003d6e;
+      }
+      .login-note {
+        margin: 14px 0 0;
+        color: #6c757d;
+        font-size: 12px;
+        line-height: 1.45;
+      }
+      .divider {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin: 18px 0;
+        color: #94a3b8;
+        font-size: 12px;
+      }
+      .divider::before,
+      .divider::after {
+        content: "";
+        height: 1px;
+        background: #e2e8f0;
+        flex: 1;
+      }
+      .google-login {
+        background: #fff;
+        color: #334155;
+        border: 1.5px solid #d7dee7;
+        box-shadow: none;
+      }
+      .google-login:hover {
+        background: #f8fafc;
+        color: #005a9e;
+        border-color: #9fc8eb;
+      }
     </style>
   </head>
   <body>
@@ -93,7 +123,10 @@
       <button type="button" class="login-help" id="forgot-password-btn">Forgot password?</button>
       <div class="divider">or</div>
       <button type="button" class="google-login" id="google-login-btn">🔵 Continue with Google</button>
-      <p class="login-note">Only approved staff can access company records after signing in. New staff will complete their contact details before Admin approval.</p>
+      <p class="login-note">
+        Only approved staff can access company records after signing in. New staff will complete their contact details
+        before Admin approval.
+      </p>
     </form>
 
     <script>
@@ -109,7 +142,11 @@
         const cooldownUntil = Number(localStorage.getItem("mandibook_login_cooldown_until") || 0);
         if (cooldownUntil > Date.now()) {
           const seconds = Math.ceil((cooldownUntil - Date.now()) / 1000);
-          Swal.fire({ icon: "info", title: "Please wait", text: `Too many failed attempts. Try again in ${seconds} seconds.` });
+          Swal.fire({
+            icon: "info",
+            title: "Please wait",
+            text: `Too many failed attempts. Try again in ${seconds} seconds.`,
+          });
           return;
         }
 
@@ -134,8 +171,9 @@
             } else {
               localStorage.setItem("mandibook_login_failures", String(failures));
             }
-            const invalidCredentials = ["auth/wrong-password", "auth/user-not-found", "auth/invalid-credential"].includes(error.code)
-              || String(error.message || "").includes("INVALID_LOGIN_CREDENTIALS");
+            const invalidCredentials =
+              ["auth/wrong-password", "auth/user-not-found", "auth/invalid-credential"].includes(error.code) ||
+              String(error.message || "").includes("INVALID_LOGIN_CREDENTIALS");
             Swal.fire({
               icon: "error",
               title: "Login Failed",
@@ -154,7 +192,11 @@
       document.getElementById("forgot-password-btn").addEventListener("click", async () => {
         const email = document.getElementById("email").value.trim();
         if (!email) {
-          Swal.fire({ icon: "info", title: "Enter your email", text: "Pehle apna registered email address likho, phir password reset link bhejenge." });
+          Swal.fire({
+            icon: "info",
+            title: "Enter your email",
+            text: "Pehle apna registered email address likho, phir password reset link bhejenge.",
+          });
           document.getElementById("email").focus();
           return;
         }
@@ -163,7 +205,10 @@
           Swal.fire({
             icon: "success",
             title: "Password reset link sent",
-            html: `<p style="margin-bottom:8px;">We sent a secure password-reset link to:</p><strong>${email.replace(/</g, "&lt;")}</strong><p style="margin-top:14px;color:#64748b;font-size:13px;">Please check your inbox and spam folder. For security, do not forward this link to anyone.</p>`,
+            html: `<p style="margin-bottom:8px;">We sent a secure password-reset link to:</p><strong>${email.replace(
+              /</g,
+              "&lt;"
+            )}</strong><p style="margin-top:14px;color:#64748b;font-size:13px;">Please check your inbox and spam folder. For security, do not forward this link to anyone.</p>`,
             confirmButtonText: "Done",
             confirmButtonColor: "#005a9e",
           });
@@ -172,7 +217,9 @@
           Swal.fire({
             icon: "error",
             title: "Could not send reset link",
-            text: invalidEmail ? "Email address sahi format me likho." : "Reset link send nahi hua. Email address check karke dobara try karo.",
+            text: invalidEmail
+              ? "Email address sahi format me likho."
+              : "Reset link send nahi hua. Email address check karke dobara try karo.",
           });
         }
       });
@@ -193,7 +240,9 @@
           Swal.fire({
             icon: cancelled ? "info" : "error",
             title: cancelled ? "Google sign-in cancelled" : "Google sign-in failed",
-            text: cancelled ? "Aapne Google window close kar di." : "Google sign-in enable aur authorised domain check karke dobara try karo.",
+            text: cancelled
+              ? "Aapne Google window close kar di."
+              : "Google sign-in enable aur authorised domain check karke dobara try karo.",
           });
         } finally {
           button.disabled = false;

@@ -4,41 +4,148 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Daily Closing — MandiBook</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
     <script src="js/core/firebase-init.js"></script>
     <script src="js/core/utils.js"></script>
     <script src="js/core/core-engine.js"></script>
     <link rel="stylesheet" href="css/main.css" />
-    <style>.closing-wrap{max-width:1050px;margin:28px auto;padding:0 18px}.closing-card{background:#fff;border:1px solid #d9e2ef;border-radius:12px;padding:20px;box-shadow:0 2px 8px #003d6e0d}.closing-controls{display:flex;gap:10px;align-items:center;flex-wrap:wrap;margin:16px 0}.closing-controls input,.closing-controls button{padding:9px 12px;border-radius:6px;border:1px solid #b9c9db}.closing-controls button{background:#005a9e;color:#fff;border:0;font-weight:700;cursor:pointer}.closing-grid{display:grid;grid-template-columns:repeat(4,minmax(150px,1fr));gap:14px}.closing-metric{border:1px solid #d9e2ef;border-radius:10px;padding:16px}.closing-metric span{display:block;color:#64748b;font-weight:700}.closing-metric strong{font-size:1.5rem;color:#005a9e}@media(max-width:700px){.closing-grid{grid-template-columns:repeat(2,minmax(0,1fr))}}</style>
+    <style>
+      .closing-wrap {
+        max-width: 1050px;
+        margin: 28px auto;
+        padding: 0 18px;
+      }
+      .closing-card {
+        background: #fff;
+        border: 1px solid #d9e2ef;
+        border-radius: 12px;
+        padding: 20px;
+        box-shadow: 0 2px 8px #003d6e0d;
+      }
+      .closing-controls {
+        display: flex;
+        gap: 10px;
+        align-items: center;
+        flex-wrap: wrap;
+        margin: 16px 0;
+      }
+      .closing-controls input,
+      .closing-controls button {
+        padding: 9px 12px;
+        border-radius: 6px;
+        border: 1px solid #b9c9db;
+      }
+      .closing-controls button {
+        background: #005a9e;
+        color: #fff;
+        border: 0;
+        font-weight: 700;
+        cursor: pointer;
+      }
+      .closing-grid {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(150px, 1fr));
+        gap: 14px;
+      }
+      .closing-metric {
+        border: 1px solid #d9e2ef;
+        border-radius: 10px;
+        padding: 16px;
+      }
+      .closing-metric span {
+        display: block;
+        color: #64748b;
+        font-weight: 700;
+      }
+      .closing-metric strong {
+        font-size: 1.5rem;
+        color: #005a9e;
+      }
+      @media (max-width: 700px) {
+        .closing-grid {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="navbar-root"></div>
-    <main class="closing-wrap"><section class="closing-card"><h1>📅 Daily Closing</h1><p>Review bills, collections and current outstanding before closing the day.</p><div class="closing-controls"><label for="closing-date">Date</label><input id="closing-date" type="date" /><button id="load-closing">Refresh summary</button></div><div id="closing-summary">Loading summary…</div></section></main>
+    <main class="closing-wrap">
+      <section class="closing-card">
+        <h1>📅 Daily Closing</h1>
+        <p>Review bills, collections and current outstanding before closing the day.</p>
+        <div class="closing-controls">
+          <label for="closing-date">Date</label><input id="closing-date" type="date" /><button id="load-closing">
+            Refresh summary
+          </button>
+        </div>
+        <div id="closing-summary">Loading summary…</div>
+      </section>
+    </main>
     <script>
-      const localDateKey = date => { const yyyy=date.getFullYear(), mm=String(date.getMonth()+1).padStart(2,"0"), dd=String(date.getDate()).padStart(2,"0"); return `${yyyy}-${mm}-${dd}`; };
-      const billDateKey = value => { if (!value) return ""; if (value.toDate) return localDateKey(value.toDate()); const text=String(value); const parts=text.split("/"); return parts.length===3 ? `${parts[2]}-${parts[1].padStart(2,"0")}-${parts[0].padStart(2,"0")}` : text.slice(0,10); };
-      const money = value => `₹${Number(value || 0).toLocaleString("en-IN")}`;
+      const localDateKey = (date) => {
+        const yyyy = date.getFullYear(),
+          mm = String(date.getMonth() + 1).padStart(2, "0"),
+          dd = String(date.getDate()).padStart(2, "0");
+        return `${yyyy}-${mm}-${dd}`;
+      };
+      const billDateKey = (value) => {
+        if (!value) return "";
+        if (value.toDate) return localDateKey(value.toDate());
+        const text = String(value);
+        const parts = text.split("/");
+        return parts.length === 3
+          ? `${parts[2]}-${parts[1].padStart(2, "0")}-${parts[0].padStart(2, "0")}`
+          : text.slice(0, 10);
+      };
+      const money = (value) => `₹${Number(value || 0).toLocaleString("en-IN")}`;
       async function loadDailyClosing() {
         const selectedDate = document.getElementById("closing-date").value;
-        const target = document.getElementById("closing-summary"); target.textContent = "Loading summary…";
+        const target = document.getElementById("closing-summary");
+        target.textContent = "Loading summary…";
         try {
-          const [billsSnapshot, paymentsSnapshot] = await Promise.all([billsCollection.limit(200).get(), db.collection("payments").limit(200).get()]);
-          const bills = billsSnapshot.docs.map(doc => doc.data()).filter(bill => bill.deleted !== true);
-          const payments = paymentsSnapshot.docs.map(doc => doc.data());
-          const dayBills = bills.filter(bill => billDateKey(bill.Date || bill.createdAt) === selectedDate);
-          const dayPayments = payments.filter(payment => billDateKey(payment.paymentDate || payment.createdAt) === selectedDate);
-          const dayBillTotal = dayBills.reduce((sum,bill) => sum + Number(bill["Final Total"] || 0), 0);
-          const dayPaymentTotal = dayPayments.reduce((sum,payment) => sum + Number(payment.totalCredit ?? payment.cashAmount ?? 0), 0);
-          const outstanding = bills.reduce((sum,bill) => sum + Math.max(0, Number(bill.amountDue ?? bill["Final Total"] ?? 0)), 0);
+          const [billsSnapshot, paymentsSnapshot] = await Promise.all([
+            billsCollection.limit(200).get(),
+            db.collection("payments").limit(200).get(),
+          ]);
+          const bills = billsSnapshot.docs.map((doc) => doc.data()).filter((bill) => bill.deleted !== true);
+          const payments = paymentsSnapshot.docs.map((doc) => doc.data());
+          const dayBills = bills.filter((bill) => billDateKey(bill.Date || bill.createdAt) === selectedDate);
+          const dayPayments = payments.filter(
+            (payment) => billDateKey(payment.paymentDate || payment.createdAt) === selectedDate
+          );
+          const dayBillTotal = dayBills.reduce((sum, bill) => sum + Number(bill["Final Total"] || 0), 0);
+          const dayPaymentTotal = dayPayments.reduce(
+            (sum, payment) => sum + Number(payment.totalCredit ?? payment.cashAmount ?? 0),
+            0
+          );
+          const outstanding = bills.reduce(
+            (sum, bill) => sum + Math.max(0, Number(bill.amountDue ?? bill["Final Total"] ?? 0)),
+            0
+          );
           const difference = dayBillTotal - dayPaymentTotal;
-          target.innerHTML = `<div class="closing-grid"><div class="closing-metric"><span>Bills created</span><strong>${dayBills.length}</strong></div><div class="closing-metric"><span>Bill total</span><strong>${money(dayBillTotal)}</strong></div><div class="closing-metric"><span>Payments received</span><strong>${money(dayPaymentTotal)}</strong></div><div class="closing-metric"><span>Current outstanding</span><strong>${money(outstanding)}</strong></div></div><p style="margin:18px 0 0;color:#475569">Selected-day difference (bill total − payments): <b>${money(difference)}</b>. Review this before closing the day.</p>`;
-        } catch (error) { target.textContent = `Could not load daily closing: ${error.message}`; }
+          target.innerHTML = `<div class="closing-grid"><div class="closing-metric"><span>Bills created</span><strong>${
+            dayBills.length
+          }</strong></div><div class="closing-metric"><span>Bill total</span><strong>${money(
+            dayBillTotal
+          )}</strong></div><div class="closing-metric"><span>Payments received</span><strong>${money(
+            dayPaymentTotal
+          )}</strong></div><div class="closing-metric"><span>Current outstanding</span><strong>${money(
+            outstanding
+          )}</strong></div></div><p style="margin:18px 0 0;color:#475569">Selected-day difference (bill total − payments): <b>${money(
+            difference
+          )}</b>. Review this before closing the day.</p>`;
+        } catch (error) {
+          target.textContent = `Could not load daily closing: ${error.message}`;
+        }
       }
       document.getElementById("closing-date").value = localDateKey(new Date());
       document.getElementById("load-closing").addEventListener("click", loadDailyClosing);
-      window.addEventListener("mandibook:access-ready", detail => { if (detail.detail && ["admin","accountant"].includes(detail.detail.role)) loadDailyClosing(); });
+      window.addEventListener("mandibook:access-ready", (detail) => {
+        if (detail.detail && ["admin", "accountant"].includes(detail.detail.role)) loadDailyClosing();
+      });
     </script>
   </body>
 </html>

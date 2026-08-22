@@ -1381,6 +1381,7 @@
                       type="number"
                       name="weighbridge_weight"
                       step="any"
+                      min="0"
                       required
                       style="
                         width: 100%;
@@ -1435,8 +1436,10 @@
                       <div class="bcard">
                         <div class="bcard-title">🟤 કંતાન (600 ગ્રામ)</div>
                         <div class="binputs">
-                          <div><label>ભરેલા</label><input type="number" name="bharela_600" placeholder="0" /></div>
-                          <div><label>ખાલી</label><input type="number" name="khali_600" placeholder="0" /></div>
+                          <div>
+                            <label>ભરેલા</label><input type="number" name="bharela_600" min="0" placeholder="0" />
+                          </div>
+                          <div><label>ખાલી</label><input type="number" name="khali_600" min="0" placeholder="0" /></div>
                         </div>
                         <div class="bded">
                           Deduct<label class="switch" style="transform: scale(0.85)"
@@ -1447,8 +1450,10 @@
                       <div class="bcard">
                         <div class="bcard-title">⬜ પ્લાસ્ટિક (200 ગ્રામ)</div>
                         <div class="binputs">
-                          <div><label>ભરેલા</label><input type="number" name="bharela_200" placeholder="0" /></div>
-                          <div><label>ખાલી</label><input type="number" name="khali_200" placeholder="0" /></div>
+                          <div>
+                            <label>ભરેલા</label><input type="number" name="bharela_200" min="0" placeholder="0" />
+                          </div>
+                          <div><label>ખાલી</label><input type="number" name="khali_200" min="0" placeholder="0" /></div>
                         </div>
                         <div class="bded">
                           Deduct<label class="switch" style="transform: scale(0.85)"
@@ -1727,7 +1732,7 @@
             </div>
             <div class="ff" style="margin-top: 14px">
               <label>🚛 ભાડું (Truck Freight)</label>
-              <input type="number" name="truck_freight" placeholder="ટ્રક ભાડું ઉમેરો..." />
+              <input type="number" name="truck_freight" min="0" placeholder="ટ્રક ભાડું ઉમેરો..." />
             </div>
             <div class="trow" style="margin-top: 12px; background: #f0fff4; border-color: #a5d6a7">
               <div class="trow-label" style="color: #1a4731">🤝 Broker Commission (per 100kg)</div>

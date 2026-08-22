@@ -216,7 +216,9 @@ function renderCustomerList(customers) {
   customers.forEach((customer) => {
     const customerCard = document.createElement("div");
     customerCard.className = "customer-card";
-    customerCard.innerHTML = `<div class="customer-name">${customer.name}</div><div class="customer-village">${customer.village}</div>`;
+    customerCard.innerHTML = `<div class="customer-name">${escapeHtml(
+      customer.name
+    )}</div><div class="customer-village">${escapeHtml(customer.village)}</div>`;
 
     // Yahan click par seedha URL change karenge, taaki browser history mein bhi path rahe
     customerCard.addEventListener("click", () => {

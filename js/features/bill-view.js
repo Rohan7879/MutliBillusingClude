@@ -689,9 +689,9 @@ function renderTemplateDeductionsForPrint(data) {
       const sign = d.applyAs === "add" ? "+" : "-";
       const item = document.createElement("div");
       item.className = "detail-item tda-weight-item";
-      item.innerHTML = `<span class="detail-label">${d.name}</span><span class="detail-value">${sign}${Number(
-        d.impact
-      ).toLocaleString("en-IN")}</span>`;
+      item.innerHTML = `<span class="detail-label">${escapeHtml(
+        d.name
+      )}</span><span class="detail-value">${sign}${Number(d.impact).toLocaleString("en-IN")}</span>`;
       if (netWeightBox) {
         detailsGrid.insertBefore(item, netWeightBox);
       } else {
@@ -710,9 +710,9 @@ function renderTemplateDeductionsForPrint(data) {
       const sign = d.applyAs === "add" ? "+" : "-";
       const item = document.createElement("div");
       item.className = "detail-item tda-amount-item";
-      item.innerHTML = `<span class="detail-label">${d.name}</span><span class="detail-value">${sign}₹${Number(
-        d.impact
-      ).toLocaleString("en-IN")}</span>`;
+      item.innerHTML = `<span class="detail-label">${escapeHtml(
+        d.name
+      )}</span><span class="detail-value">${sign}₹${Number(d.impact).toLocaleString("en-IN")}</span>`;
       if (finalTotalBox) {
         totalsGrid.insertBefore(item, finalTotalBox);
       } else {

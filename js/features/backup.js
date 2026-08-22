@@ -28,16 +28,33 @@ async function softDeleteBill(docId) {
       });
       return false;
     }
-    await billRef.update({
-      deleted: true,
-      deletedAt: Date.now(),
+
+    // 🔒 ATOMIC — the bill's "deleted" flag and the party's balance
+    // reversal now happen in one transaction, exactly like the
+    // payment/bill fixes elsewhere. Previously these were two separate
+    // awaited steps: if the delete succeeded but the balance step then
+    // failed, the whole function's catch block fired and told the user
+    // "Could not delete" — even though the bill WAS already deleted. That
+    // mismatch is now structurally impossible; either both happen or
+    // neither does, so the message shown always matches reality.
+    const partyRef = bill.customerId ? db.collection("parties").doc(bill.customerId) : null;
+    await db.runTransaction(async (transaction) => {
+      const partyDoc = partyRef ? await transaction.get(partyRef) : null;
+      transaction.update(billRef, { deleted: true, deletedAt: Date.now() });
+      if (partyRef && partyDoc && partyDoc.exists) {
+        const currentBalance = Number(partyDoc.data().currentBalance || 0);
+        transaction.update(partyRef, {
+          currentBalance: roundCurrency(currentBalance - Number(bill["Final Total"] || 0)),
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
     });
+
     await recordAudit("bill.deleted", "bill", docId, {
       before: billAuditSnapshot(bill),
       after: billAuditSnapshot({ ...bill, deleted: true }),
       reason: "Soft delete",
     });
-    if (bill.customerId) await adjustPartyBalance(bill.customerId, -Number(bill["Final Total"] || 0));
     Swal.fire({
       icon: "success",
       title: "Bill deleted!",
@@ -49,13 +66,16 @@ async function softDeleteBill(docId) {
     return true;
   } catch (e) {
     console.error(e);
+    // Now that delete + balance are one atomic step, this catch means the
+    // delete genuinely did NOT happen — the message is accurate.
     Swal.fire({
       icon: "error",
       title: "Could not delete.",
+      text: "Nothing was changed — please try again.",
       toast: true,
       position: "top-end",
       showConfirmButton: false,
-      timer: 2000,
+      timer: 2500,
     });
     return false;
   }
@@ -75,13 +95,26 @@ async function restoreBill(docId) {
     const billDoc = await billRef.get();
     if (!billDoc.exists || billDoc.data().deleted !== true) return false;
     const bill = billDoc.data();
-    await billRef.update({ deleted: false, deletedAt: null });
+
+    // 🔒 ATOMIC — same fix as delete, mirrored for restore.
+    const partyRef = bill.customerId ? db.collection("parties").doc(bill.customerId) : null;
+    await db.runTransaction(async (transaction) => {
+      const partyDoc = partyRef ? await transaction.get(partyRef) : null;
+      transaction.update(billRef, { deleted: false, deletedAt: null });
+      if (partyRef && partyDoc && partyDoc.exists) {
+        const currentBalance = Number(partyDoc.data().currentBalance || 0);
+        transaction.update(partyRef, {
+          currentBalance: roundCurrency(currentBalance + Number(bill["Final Total"] || 0)),
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      }
+    });
+
     await recordAudit("bill.restored", "bill", docId, {
       before: billAuditSnapshot(bill),
       after: billAuditSnapshot({ ...bill, deleted: false }),
       reason: "Restore from archive",
     });
-    if (bill.customerId) await adjustPartyBalance(bill.customerId, Number(bill["Final Total"] || 0));
     Swal.fire({
       icon: "success",
       title: "✅ Bill Restored!",
@@ -93,9 +126,29 @@ async function restoreBill(docId) {
     return true;
   } catch (e) {
     console.error(e);
+    Swal.fire({
+      icon: "error",
+      title: "Could not restore.",
+      text: "Nothing was changed — please try again.",
+      toast: true,
+      position: "top-end",
+      showConfirmButton: false,
+      timer: 2500,
+    });
     return false;
   }
 }
+
+// Wired from the deleted-bills list's Restore button. Previously this
+// called restoreBill(id) WITHOUT awaiting it and closed the list modal
+// immediately regardless — so if restore failed, the modal was already
+// gone and the user had no idea. Now it waits for the real result before
+// deciding whether to close.
+async function restoreBillAndClose(docId) {
+  const ok = await restoreBill(docId);
+  if (ok) Swal.close();
+}
+window.restoreBillAndClose = restoreBillAndClose;
 
 async function showDeletedBills() {
   showLoading();
@@ -121,7 +174,7 @@ async function showDeletedBills() {
         <td>${b["Customer Name"]}</td>
         <td>₹${Number(b["Final Total"]).toLocaleString("en-IN")}</td>
         <td>${daysLeft} days</td>
-        <td><button onclick="restoreBill('${d.id}');Swal.close();" 
+        <td><button onclick="restoreBillAndClose('${d.id}')" 
           style="padding:6px 12px;background:#28a745;color:#fff;border:none;border-radius:7px;cursor:pointer;font-weight:700;">
           ↩️ Restore</button></td>
       </tr>`;

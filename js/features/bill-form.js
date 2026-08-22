@@ -561,7 +561,12 @@ function updateTotalBags() {
   let total = 0;
   const bagInputs = document.querySelectorAll('#vakal_section input[name$="_katta"]');
   bagInputs.forEach((input) => {
-    total += Number(input.value) || 0;
+    // Match the save-time guard (nonNegativeNumber in calculateBillData) —
+    // otherwise this live preview can show a misleading negative total
+    // while typing, even though a negative value never actually makes it
+    // into the saved bill.
+    const val = Number(input.value);
+    total += !isFinite(val) || val < 0 ? 0 : val;
   });
   document.getElementById("total-bags-count").textContent = total;
 
@@ -590,7 +595,8 @@ function updateExpensesSubtotal() {
   let total = 0;
   const expenseAmountInputs = document.querySelectorAll('input[name="expense_amount"]');
   expenseAmountInputs.forEach((input) => {
-    total += Number(input.value) || 0;
+    const val = Number(input.value);
+    total += !isFinite(val) || val < 0 ? 0 : val;
   });
   document.getElementById("expenses-subtotal").textContent = `₹${total.toLocaleString("en-IN")}`;
 }
@@ -601,7 +607,7 @@ function addExpense(name = "", amount = "") {
   newRow.classList.add("expense-row");
   newRow.innerHTML = `
         <input type="text" name="expense_name" placeholder="ખર્ચનું નામ (Expense Name)" value="${name}">
-        <input type="number" name="expense_amount" placeholder="રકમ (Amount)" value="${amount}">
+        <input type="number" name="expense_amount" min="0" placeholder="રકમ (Amount)" value="${amount}">
         <button type="button" class="remove-expense-btn" onclick="this.parentElement.remove(); updateExpensesSubtotal();">Remove</button>
     `;
   expenseList.appendChild(newRow);
@@ -647,6 +653,15 @@ function nonNegativeNumber(value) {
   return !isFinite(n) || n < 0 ? 0 : n;
 }
 
+// Same idea, but also caps at 100 — for moisture/percentage fields, where
+// a value above 100% is just as nonsensical as a negative one and could
+// otherwise blow up a bill's deductions.
+function clampPercent(value) {
+  const n = Number(value);
+  if (!isFinite(n) || n < 0) return 0;
+  return n > 100 ? 100 : n;
+}
+
 function calculateBillData(formData) {
   let data = {}; // This object will hold all our results
 
@@ -660,7 +675,7 @@ function calculateBillData(formData) {
 
   // --- MOISTURE DEDUCTIONS ---
   const deductWeighbridgeMoisture = formData.get("deduct_weighbridge_moisture") !== null;
-  const weighbridgeMoisturePct = Number(formData.get("weighbridge_moisture_pct")) || 0;
+  const weighbridgeMoisturePct = clampPercent(formData.get("weighbridge_moisture_pct"));
   const deductVakalMoisture = formData.get("deduct_vakal_moisture") !== null;
 
   const bharela_600 = Number(formData.get("bharela_600")) || 0;
@@ -698,14 +713,14 @@ function calculateBillData(formData) {
   // --- Perform Calculations ---
   if (isLooseSupply) {
     data["Bill Type"] = "Loose";
-    const weight = Number(formData.get("weighbridge_weight")) || 0;
+    const weight = nonNegativeNumber(formData.get("weighbridge_weight"));
     const price = nonNegativeNumber(formData.get("loose_price"));
     const katta_kasar = deductKasar ? customRound(weight * globalSettings.kasarPercentage) : 0;
     const wb_moisture_kg = deductWeighbridgeMoisture ? customRound(weight * (weighbridgeMoisturePct / 100)) : 0;
     net_vajan = customRound(weight - katta_kasar - wb_moisture_kg);
 
     // Vakal moisture for loose
-    const vakal_moisture_pct_1 = deductVakalMoisture ? Number(formData.get("vakal_1_moisture")) || 0 : 0;
+    const vakal_moisture_pct_1 = deductVakalMoisture ? clampPercent(formData.get("vakal_1_moisture")) : 0;
     const vakal_moisture_kg_1 = customRound(net_vajan * (vakal_moisture_pct_1 / 100));
     const net_vajan_after_vakal_moisture = customRound(net_vajan - vakal_moisture_kg_1);
     total = customRound((net_vajan_after_vakal_moisture / 20) * price);
@@ -731,11 +746,11 @@ function calculateBillData(formData) {
     }
   } else {
     data["Bill Type"] = "Bag";
-    const weighbridge_weight = Number(formData.get("weighbridge_weight")) || 0;
-    const bharela_600 = Number(formData.get("bharela_600")) || 0;
-    const khali_600 = Number(formData.get("khali_600")) || 0;
-    const bharela_200 = Number(formData.get("bharela_200")) || 0;
-    const khali_200 = Number(formData.get("khali_200")) || 0;
+    const weighbridge_weight = nonNegativeNumber(formData.get("weighbridge_weight"));
+    const bharela_600 = nonNegativeNumber(formData.get("bharela_600"));
+    const khali_600 = nonNegativeNumber(formData.get("khali_600"));
+    const bharela_200 = nonNegativeNumber(formData.get("bharela_200"));
+    const khali_200 = nonNegativeNumber(formData.get("khali_200"));
 
     const bardanWeightKantan = deductKantan ? customRound((bharela_600 + khali_600) * globalSettings.kantanWeight) : 0;
     const bardanWeightPlastic = deductPlastic
@@ -834,7 +849,7 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
   // first, then apply the ₹10-rounding Utrai adjustment last.
   // ═══════════════════════════════════════════════════════════════════════
   const totalExpenses = expenses.reduce((sum, exp) => sum + exp.amount, 0);
-  const truckFreight = Number(formData.get("truck_freight")) || 0;
+  const truckFreight = nonNegativeNumber(formData.get("truck_freight"));
 
   // Everything except Utrai, combined first:
   const preUtraiTotal = total - totalExpenses + truckFreight;
