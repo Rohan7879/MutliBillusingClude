@@ -12,35 +12,265 @@
     <script src="js/core/core-engine.js"></script>
     <link rel="stylesheet" href="css/main.css" />
     <style>
-      .audit-wrap{max-width:1280px;margin:34px auto 60px;padding:0 22px}.audit-card{overflow:hidden;background:#fff;border:1px solid #dbe7f3;border-radius:18px;box-shadow:0 14px 32px rgba(15,55,95,.09)}.audit-heading{padding:28px 28px 22px;background:linear-gradient(135deg,#f7fbff,#edf6ff);border-bottom:1px solid #dbe7f3}.audit-heading h1{margin:0;color:#075fa8;font-size:2rem;letter-spacing:-.04em}.audit-heading p{margin:8px 0 0;color:#526579;font-size:1rem}.audit-filters{display:grid;grid-template-columns:1.25fr .8fr .8fr;gap:12px;padding:20px 28px;background:#fff;border-bottom:1px solid #e6eef6}.audit-filters input,.audit-filters select{width:100%;box-sizing:border-box;padding:11px 12px;border:1px solid #bfd3e7;border-radius:9px;background:#fbfdff;color:#20364c;font:inherit;outline:none}.audit-filters input:focus,.audit-filters select:focus{border-color:#0877ca;box-shadow:0 0 0 3px #0877ca1a}.audit-results-wrap{overflow:auto;padding:4px 28px 18px}.audit-table{width:100%;min-width:820px;border-collapse:collapse}.audit-table th{padding:15px 10px 12px;color:#687b90;font-size:.76rem;letter-spacing:.08em;text-transform:uppercase;text-align:left}.audit-table td{padding:15px 10px;border-top:1px solid #e8eff6;text-align:left;vertical-align:top;color:#20364c}.audit-table tbody tr:hover{background:#f7fbff}.audit-action{display:inline-flex;align-items:center;padding:5px 9px;border-radius:999px;background:#e8f4ff;color:#0964ac;font-size:.82rem;font-weight:800}.audit-change{font-size:.88rem;color:#516579;max-width:360px;line-height:1.45;word-break:break-word}.audit-user{font-weight:700;color:#075fa8}.audit-role{display:inline-block;margin-top:4px;color:#61768b;font-size:.78rem;text-transform:capitalize}.audit-record{font-size:.82rem;color:#60758a}.audit-record strong{display:block;color:#264662;font-size:.9rem;margin-bottom:3px}@media(max-width:760px){.audit-wrap{padding:0 12px;margin-top:20px}.audit-heading{padding:22px 18px}.audit-heading h1{font-size:1.65rem}.audit-filters{grid-template-columns:1fr;padding:16px 18px}.audit-results-wrap{padding:4px 18px 14px}.audit-table{min-width:720px}}</style>
+      .audit-wrap {
+        max-width: 1280px;
+        margin: 34px auto 60px;
+        padding: 0 22px;
+      }
+      .audit-card {
+        overflow: hidden;
+        background: #fff;
+        border: 1px solid #dbe7f3;
+        border-radius: 18px;
+        box-shadow: 0 14px 32px rgba(15, 55, 95, 0.09);
+      }
+      .audit-heading {
+        padding: 28px 28px 22px;
+        background: linear-gradient(135deg, #f7fbff, #edf6ff);
+        border-bottom: 1px solid #dbe7f3;
+      }
+      .audit-heading h1 {
+        margin: 0;
+        color: #075fa8;
+        font-size: 2rem;
+        letter-spacing: -0.04em;
+      }
+      .audit-heading p {
+        margin: 8px 0 0;
+        color: #526579;
+        font-size: 1rem;
+      }
+      .audit-filters {
+        display: grid;
+        grid-template-columns: 1.25fr 0.8fr 0.8fr;
+        gap: 12px;
+        padding: 20px 28px;
+        background: #fff;
+        border-bottom: 1px solid #e6eef6;
+      }
+      .audit-filters input,
+      .audit-filters select {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 11px 12px;
+        border: 1px solid #bfd3e7;
+        border-radius: 9px;
+        background: #fbfdff;
+        color: #20364c;
+        font: inherit;
+        outline: none;
+      }
+      .audit-filters input:focus,
+      .audit-filters select:focus {
+        border-color: #0877ca;
+        box-shadow: 0 0 0 3px #0877ca1a;
+      }
+      .audit-results-wrap {
+        overflow: auto;
+        padding: 4px 28px 18px;
+      }
+      .audit-table {
+        width: 100%;
+        min-width: 820px;
+        border-collapse: collapse;
+      }
+      .audit-table th {
+        padding: 15px 10px 12px;
+        color: #687b90;
+        font-size: 0.76rem;
+        letter-spacing: 0.08em;
+        text-transform: uppercase;
+        text-align: left;
+      }
+      .audit-table td {
+        padding: 15px 10px;
+        border-top: 1px solid #e8eff6;
+        text-align: left;
+        vertical-align: top;
+        color: #20364c;
+      }
+      .audit-table tbody tr:hover {
+        background: #f7fbff;
+      }
+      .audit-action {
+        display: inline-flex;
+        align-items: center;
+        padding: 5px 9px;
+        border-radius: 999px;
+        background: #e8f4ff;
+        color: #0964ac;
+        font-size: 0.82rem;
+        font-weight: 800;
+      }
+      .audit-change {
+        font-size: 0.88rem;
+        color: #516579;
+        max-width: 360px;
+        line-height: 1.45;
+        word-break: break-word;
+      }
+      .audit-user {
+        font-weight: 700;
+        color: #075fa8;
+        display: block;
+      }
+      .audit-email {
+        display: block;
+        font-size: 0.74rem;
+        color: #8296a9;
+        font-weight: 500;
+        margin-top: 1px;
+      }
+      .audit-role {
+        display: inline-block;
+        margin-top: 4px;
+        color: #61768b;
+        font-size: 0.78rem;
+        text-transform: capitalize;
+      }
+      .audit-record {
+        font-size: 0.82rem;
+        color: #60758a;
+      }
+      .audit-record strong {
+        display: block;
+        color: #264662;
+        font-size: 0.9rem;
+        margin-bottom: 3px;
+      }
+      @media (max-width: 760px) {
+        .audit-wrap {
+          padding: 0 12px;
+          margin-top: 20px;
+        }
+        .audit-heading {
+          padding: 22px 18px;
+        }
+        .audit-heading h1 {
+          font-size: 1.65rem;
+        }
+        .audit-filters {
+          grid-template-columns: 1fr;
+          padding: 16px 18px;
+        }
+        .audit-results-wrap {
+          padding: 4px 18px 14px;
+        }
+        .audit-table {
+          min-width: 720px;
+        }
+      }
+    </style>
   </head>
   <body>
     <div id="navbar-root"></div>
-    <main class="audit-wrap"><section class="audit-card"><header class="audit-heading"><h1>🛡️ Audit History</h1><p>Protected, append-only trail for billing and financial actions.</p></header><div class="audit-filters"><input id="audit-search" placeholder="Search bill no., user or action…" aria-label="Search audit history" /><select id="audit-action" aria-label="Filter by action"><option value="">All actions</option><option value="bill">Bills</option><option value="payment">Payments</option></select><input id="audit-date" type="date" aria-label="Filter by date" /></div><div class="audit-results-wrap"><div id="audit-results">Loading audit history…</div></div></section></main>
+    <main class="audit-wrap">
+      <section class="audit-card">
+        <header class="audit-heading">
+          <h1>🛡️ Audit History</h1>
+          <p>Protected, append-only trail for billing and financial actions.</p>
+        </header>
+        <div class="audit-filters">
+          <input
+            id="audit-search"
+            placeholder="Search bill no., user or action…"
+            aria-label="Search audit history"
+          /><select id="audit-action" aria-label="Filter by action">
+            <option value="">All actions</option>
+            <option value="bill">Bills</option>
+            <option value="payment">Payments</option></select
+          ><input id="audit-date" type="date" aria-label="Filter by date" />
+        </div>
+        <div class="audit-results-wrap"><div id="audit-results">Loading audit history…</div></div>
+      </section>
+    </main>
     <script>
-      let allAuditEntries = [], unsubscribeAudit = null;
-      const escapeAuditHtml = value => String(value || "").replace(/[&<>\"']/g, char => ({"&":"&amp;","<":"&lt;",">":"&gt;","\"":"&quot;","'":"&#039;"}[char]));
-      const formatAuditDate = timestamp => timestamp && timestamp.toDate ? timestamp.toDate().toLocaleString("en-IN") : "Syncing…";
-      const dateKey = timestamp => timestamp && timestamp.toDate ? timestamp.toDate().toISOString().slice(0, 10) : "";
-      function auditSummary(entry) { const before = entry.before || {}; const after = entry.after || {}; const serial = after.serialNo || before.serialNo || ""; const total = after.finalTotal ?? before.finalTotal; return [serial && `Bill ${serial}`, total !== undefined && `₹${Number(total).toLocaleString("en-IN")}`, entry.reason].filter(Boolean).join(" · ") || "—"; }
+      let allAuditEntries = [],
+        unsubscribeAudit = null;
+      const escapeAuditHtml = (value) =>
+        String(value || "").replace(
+          /[&<>\"']/g,
+          (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])
+        );
+      const formatAuditDate = (timestamp) =>
+        timestamp && timestamp.toDate ? timestamp.toDate().toLocaleString("en-IN") : "Syncing…";
+      const dateKey = (timestamp) =>
+        timestamp && timestamp.toDate ? timestamp.toDate().toISOString().slice(0, 10) : "";
+      function auditSummary(entry) {
+        const before = entry.before || {};
+        const after = entry.after || {};
+        const serial = after.serialNo || before.serialNo || "";
+        const total = after.finalTotal ?? before.finalTotal;
+        return (
+          [serial && `Bill ${serial}`, total !== undefined && `₹${Number(total).toLocaleString("en-IN")}`, entry.reason]
+            .filter(Boolean)
+            .join(" · ") || "—"
+        );
+      }
       function renderAudit() {
         const search = document.getElementById("audit-search").value.trim().toLowerCase();
         const actionType = document.getElementById("audit-action").value;
         const selectedDate = document.getElementById("audit-date").value;
-        const rows = allAuditEntries.filter(({data}) => {
-          const haystack = `${data.action || ""} ${data.actor?.email || ""} ${auditSummary(data)}`.toLowerCase();
-          return (!search || haystack.includes(search)) && (!actionType || String(data.action || "").startsWith(actionType + ".")) && (!selectedDate || dateKey(data.createdAt) === selectedDate);
+        const rows = allAuditEntries.filter(({ data }) => {
+          const haystack = `${data.action || ""} ${data.actor?.displayName || ""} ${
+            data.actor?.email || ""
+          } ${auditSummary(data)}`.toLowerCase();
+          return (
+            (!search || haystack.includes(search)) &&
+            (!actionType || String(data.action || "").startsWith(actionType + ".")) &&
+            (!selectedDate || dateKey(data.createdAt) === selectedDate)
+          );
         });
         const target = document.getElementById("audit-results");
-        if (!rows.length) { target.textContent = "No audit entries match these filters."; return; }
-        target.innerHTML = `<table class="audit-table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Record</th><th>Change</th></tr></thead><tbody>${rows.map(({data}) => `<tr><td>${escapeAuditHtml(formatAuditDate(data.createdAt))}</td><td><span class="audit-action">${escapeAuditHtml(data.action)}</span></td><td><span class="audit-user">${escapeAuditHtml(data.actor?.email)}</span><span class="audit-role">${escapeAuditHtml(data.actor?.role)}</span></td><td class="audit-record"><strong>${escapeAuditHtml(data.entityType)}</strong>${escapeAuditHtml(data.entityId)}</td><td class="audit-change">${escapeAuditHtml(auditSummary(data))}</td></tr>`).join("")}</tbody></table>`;
+        if (!rows.length) {
+          target.textContent = "No audit entries match these filters.";
+          return;
+        }
+        target.innerHTML = `<table class="audit-table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Record</th><th>Change</th></tr></thead><tbody>${rows
+          .map(
+            ({ data }) =>
+              `<tr><td>${escapeAuditHtml(
+                formatAuditDate(data.createdAt)
+              )}</td><td><span class="audit-action">${escapeAuditHtml(
+                data.action
+              )}</span></td><td><span class="audit-user">${escapeAuditHtml(
+                data.actor?.displayName || data.actor?.email || "Unknown"
+              )}</span>${
+                data.actor?.displayName && data.actor?.email
+                  ? `<span class="audit-email">${escapeAuditHtml(data.actor.email)}</span>`
+                  : ""
+              }<span class="audit-role">${escapeAuditHtml(
+                data.actor?.role
+              )}</span></td><td class="audit-record"><strong>${escapeAuditHtml(
+                data.entityType
+              )}</strong>${escapeAuditHtml(data.entityId)}</td><td class="audit-change">${escapeAuditHtml(
+                auditSummary(data)
+              )}</td></tr>`
+          )
+          .join("")}</tbody></table>`;
       }
-      window.addEventListener("mandibook:access-ready", ({detail}) => {
+      window.addEventListener("mandibook:access-ready", ({ detail }) => {
         if (!detail || detail.role !== "admin" || unsubscribeAudit) return;
-        unsubscribeAudit = db.collection("auditLogs").orderBy("createdAt", "desc").limit(200).onSnapshot(snapshot => { allAuditEntries = snapshot.docs.map(doc => ({id:doc.id,data:doc.data()})); renderAudit(); }, error => { document.getElementById("audit-results").textContent = `Could not load audit history: ${error.message}`; });
+        unsubscribeAudit = db
+          .collection("auditLogs")
+          .orderBy("createdAt", "desc")
+          .limit(200)
+          .onSnapshot(
+            (snapshot) => {
+              allAuditEntries = snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+              renderAudit();
+            },
+            (error) => {
+              document.getElementById("audit-results").textContent = `Could not load audit history: ${error.message}`;
+            }
+          );
       });
-      ["audit-search","audit-action","audit-date"].forEach(id => document.getElementById(id).addEventListener("input", renderAudit));
-      window.addEventListener("pagehide", () => { if (unsubscribeAudit) unsubscribeAudit(); });
+      ["audit-search", "audit-action", "audit-date"].forEach((id) =>
+        document.getElementById(id).addEventListener("input", renderAudit)
+      );
+      window.addEventListener("pagehide", () => {
+        if (unsubscribeAudit) unsubscribeAudit();
+      });
     </script>
   </body>
 </html>

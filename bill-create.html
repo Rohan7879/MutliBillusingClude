@@ -5,9 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <meta name="robots" content="noindex, nofollow" />
     <title>New Bill — MandiBook</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf-autotable/3.5.23/jspdf.plugin.autotable.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
@@ -1291,7 +1291,24 @@
                   oninput="this.value=this.value.toUpperCase()"
                 />
                 <input type="hidden" name="customer_id" id="selected_customer_id" />
-                <button type="button" id="change-customer-btn" style="display:none;margin-top:6px;padding:4px 8px;border:0;border-radius:5px;background:#e7f3ff;color:#005a9e;font-size:11px;font-weight:700;cursor:pointer;">Change Party</button>
+                <button
+                  type="button"
+                  id="change-customer-btn"
+                  style="
+                    display: none;
+                    margin-top: 6px;
+                    padding: 4px 8px;
+                    border: 0;
+                    border-radius: 5px;
+                    background: #e7f3ff;
+                    color: #005a9e;
+                    font-size: 11px;
+                    font-weight: 700;
+                    cursor: pointer;
+                  "
+                >
+                  Change Party
+                </button>
                 <datalist id="customer_datalist"></datalist>
                 <div id="autocomplete-container"></div>
               </div>
@@ -1389,6 +1406,7 @@
                       name="loose_price"
                       id="loose_price_input"
                       step="any"
+                      min="0"
                       style="
                         width: 100%;
                         padding: 11px 13px;
@@ -1561,8 +1579,8 @@
                   <tr>
                     <td>વકલ ૧</td>
                     <td><input type="text" name="vakal_1_variety" placeholder="Variety" /></td>
-                    <td><input type="number" name="vakal_1_katta" placeholder="0" /></td>
-                    <td><input type="number" name="vakal_1_bhav" step="any" placeholder="0.00" /></td>
+                    <td><input type="number" name="vakal_1_katta" min="0" step="1" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_1_bhav" min="0" step="any" placeholder="0.00" /></td>
                     <td class="vakal-moisture-cell" style="display: none">
                       <input
                         type="number"
@@ -1587,8 +1605,8 @@
                   <tr>
                     <td>વકલ ૨</td>
                     <td><input type="text" name="vakal_2_variety" placeholder="Variety" /></td>
-                    <td><input type="number" name="vakal_2_katta" placeholder="0" /></td>
-                    <td><input type="number" name="vakal_2_bhav" step="any" placeholder="0.00" /></td>
+                    <td><input type="number" name="vakal_2_katta" min="0" step="1" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_2_bhav" min="0" step="any" placeholder="0.00" /></td>
                     <td class="vakal-moisture-cell" style="display: none">
                       <input
                         type="number"
@@ -1613,8 +1631,8 @@
                   <tr>
                     <td>વકલ ૩</td>
                     <td><input type="text" name="vakal_3_variety" placeholder="Variety" /></td>
-                    <td><input type="number" name="vakal_3_katta" placeholder="0" /></td>
-                    <td><input type="number" name="vakal_3_bhav" step="any" placeholder="0.00" /></td>
+                    <td><input type="number" name="vakal_3_katta" min="0" step="1" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_3_bhav" min="0" step="any" placeholder="0.00" /></td>
                     <td class="vakal-moisture-cell" style="display: none">
                       <input
                         type="number"
@@ -1639,8 +1657,8 @@
                   <tr>
                     <td>વકલ ૪</td>
                     <td><input type="text" name="vakal_4_variety" placeholder="Variety" /></td>
-                    <td><input type="number" name="vakal_4_katta" placeholder="0" /></td>
-                    <td><input type="number" name="vakal_4_bhav" step="any" placeholder="0.00" /></td>
+                    <td><input type="number" name="vakal_4_katta" min="0" step="1" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_4_bhav" min="0" step="any" placeholder="0.00" /></td>
                     <td class="vakal-moisture-cell" style="display: none">
                       <input
                         type="number"
@@ -1665,8 +1683,8 @@
                   <tr>
                     <td>વકલ ૫</td>
                     <td><input type="text" name="vakal_5_variety" placeholder="Variety" /></td>
-                    <td><input type="number" name="vakal_5_katta" placeholder="0" /></td>
-                    <td><input type="number" name="vakal_5_bhav" step="any" placeholder="0.00" /></td>
+                    <td><input type="number" name="vakal_5_katta" min="0" step="1" placeholder="0" /></td>
+                    <td><input type="number" name="vakal_5_bhav" min="0" step="any" placeholder="0.00" /></td>
                     <td class="vakal-moisture-cell" style="display: none">
                       <input
                         type="number"

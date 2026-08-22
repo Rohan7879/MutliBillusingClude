@@ -97,8 +97,15 @@ function unlockCustomerSelection() {
   const village = document.querySelector('input[name="village"]');
   const id = document.getElementById("selected_customer_id");
   const changeBtn = document.getElementById("change-customer-btn");
-  if (name) { name.readOnly = false; name.value = ""; name.focus(); }
-  if (village) { village.readOnly = true; village.value = ""; }
+  if (name) {
+    name.readOnly = false;
+    name.value = "";
+    name.focus();
+  }
+  if (village) {
+    village.readOnly = true;
+    village.value = "";
+  }
   if (id) id.value = "";
   if (changeBtn) changeBtn.style.display = "none";
 }
@@ -163,7 +170,9 @@ async function setupAutocomplete() {
         filteredBrokers.forEach((broker) => {
           const item = document.createElement("div");
           // HTML format: BOLD Naam (Gaon ka naam)
-          item.innerHTML = `<strong>${broker.value}</strong> ${broker.address ? `(${broker.address})` : ""}`;
+          item.innerHTML = `<strong>${escapeHtml(broker.value)}</strong> ${
+            broker.address ? `(${escapeHtml(broker.address)})` : ""
+          }`;
 
           item.addEventListener("click", () => {
             // 1. Select karne par sirf Broker ka naam dabbe me jayega
@@ -216,7 +225,7 @@ async function setupAutocomplete() {
     suggestionsList.classList.add("autocomplete-items");
     filteredCustomers.forEach((customer) => {
       const item = document.createElement("div");
-      item.innerHTML = `<strong>${customer.name}</strong> (${customer.village})`;
+      item.innerHTML = `<strong>${escapeHtml(customer.name)}</strong> (${escapeHtml(customer.village)})`;
       item.addEventListener("click", () => {
         lockSelectedCustomer(customer);
         suggestionsBox.innerHTML = "";
@@ -508,7 +517,9 @@ function populateFormForEdit(data, options = {}) {
     }
   }
 
-  document.querySelector('button[type="submit"]').textContent = isCorrection ? "📝 Create Correction Bill" : "✏️ Update Bill";
+  document.querySelector('button[type="submit"]').textContent = isCorrection
+    ? "📝 Create Correction Bill"
+    : "✏️ Update Bill";
 
   // ── Phase 2: Edit mode visual feedback ──
   // Scroll the form into view and highlight it with an orange border
@@ -626,6 +637,16 @@ function evaluateCustomFormula(formula, vars) {
   }
 }
 
+// Defense-in-depth: the HTML min="0" attribute on rate/quantity fields
+// stops normal typing, but doesn't stop a bypassed/scripted form submit.
+// This clamps any negative value to 0 before it ever reaches a bill
+// total — so a negative Katta/Bhav/Price can never silently produce a
+// wrong (or fraudulently reduced) Final Total.
+function nonNegativeNumber(value) {
+  const n = Number(value);
+  return !isFinite(n) || n < 0 ? 0 : n;
+}
+
 function calculateBillData(formData) {
   let data = {}; // This object will hold all our results
 
@@ -678,7 +699,7 @@ function calculateBillData(formData) {
   if (isLooseSupply) {
     data["Bill Type"] = "Loose";
     const weight = Number(formData.get("weighbridge_weight")) || 0;
-    const price = Number(formData.get("loose_price")) || 0;
+    const price = nonNegativeNumber(formData.get("loose_price"));
     const katta_kasar = deductKasar ? customRound(weight * globalSettings.kasarPercentage) : 0;
     const wb_moisture_kg = deductWeighbridgeMoisture ? customRound(weight * (weighbridgeMoisturePct / 100)) : 0;
     net_vajan = customRound(weight - katta_kasar - wb_moisture_kg);
@@ -737,11 +758,31 @@ function calculateBillData(formData) {
     data["Bardan Weight"] = Bardan;
 
     const vakals = [
-      { katta: Number(formData.get("vakal_1_katta")) || 0, bhav: Number(formData.get("vakal_1_bhav")) || 0, variety: formData.get("vakal_1_variety") || "" },
-      { katta: Number(formData.get("vakal_2_katta")) || 0, bhav: Number(formData.get("vakal_2_bhav")) || 0, variety: formData.get("vakal_2_variety") || "" },
-      { katta: Number(formData.get("vakal_3_katta")) || 0, bhav: Number(formData.get("vakal_3_bhav")) || 0, variety: formData.get("vakal_3_variety") || "" },
-      { katta: Number(formData.get("vakal_4_katta")) || 0, bhav: Number(formData.get("vakal_4_bhav")) || 0, variety: formData.get("vakal_4_variety") || "" },
-      { katta: Number(formData.get("vakal_5_katta")) || 0, bhav: Number(formData.get("vakal_5_bhav")) || 0, variety: formData.get("vakal_5_variety") || "" },
+      {
+        katta: nonNegativeNumber(formData.get("vakal_1_katta")),
+        bhav: nonNegativeNumber(formData.get("vakal_1_bhav")),
+        variety: formData.get("vakal_1_variety") || "",
+      },
+      {
+        katta: nonNegativeNumber(formData.get("vakal_2_katta")),
+        bhav: nonNegativeNumber(formData.get("vakal_2_bhav")),
+        variety: formData.get("vakal_2_variety") || "",
+      },
+      {
+        katta: nonNegativeNumber(formData.get("vakal_3_katta")),
+        bhav: nonNegativeNumber(formData.get("vakal_3_bhav")),
+        variety: formData.get("vakal_3_variety") || "",
+      },
+      {
+        katta: nonNegativeNumber(formData.get("vakal_4_katta")),
+        bhav: nonNegativeNumber(formData.get("vakal_4_bhav")),
+        variety: formData.get("vakal_4_variety") || "",
+      },
+      {
+        katta: nonNegativeNumber(formData.get("vakal_5_katta")),
+        bhav: nonNegativeNumber(formData.get("vakal_5_bhav")),
+        variety: formData.get("vakal_5_variety") || "",
+      },
     ];
 
     // ── VALIDATION: Vakal bags cannot exceed total bharela bags ──
@@ -859,7 +900,7 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
       // ek single "price" nikalne ke liye average rate (₹ per 20kg) nikalte
       // hain. Loose type mein loose_price seedha use hota hai.
       const avgPricePer20Kg = isLooseSupply
-        ? Number(formData.get("loose_price")) || 0
+        ? nonNegativeNumber(formData.get("loose_price"))
         : net_vajan > 0
         ? customRound((total / net_vajan) * 20)
         : 0;
@@ -1071,7 +1112,10 @@ async function collectData() {
     const correctionOf = form.dataset.correctionOf || "";
     let correctionSource = null;
     if (correctionOf) {
-      const sourceBill = await billsCollection.doc(correctionOf).get({ source: "server" }).catch(() => billsCollection.doc(correctionOf).get());
+      const sourceBill = await billsCollection
+        .doc(correctionOf)
+        .get({ source: "server" })
+        .catch(() => billsCollection.doc(correctionOf).get());
       if (!sourceBill.exists) throw new Error("VALIDATION_ERROR: Original bill for this correction was not found.");
       correctionSource = sourceBill.data();
       if (correctionSource.locked !== true && correctionSource.workflowStatus !== "locked") {
@@ -1094,55 +1138,65 @@ async function collectData() {
 
     // Save or update the customer in the 'customers' collection
 
-    // --- UPDATED TRANSACTION LOGIC ---
-    const newSerialNo = await db.runTransaction(async (transaction) => {
-      const counterDoc = await transaction.get(counterRef);
+    // --- 🔒 ATOMIC: counter increment + bill creation + party balance,
+    // all in one transaction. Previously the counter/serial-number step
+    // was its own transaction, then billsCollection.add() ran separately,
+    // then the party-balance update ran as a THIRD separate step (only
+    // wrapped in its own try/catch that just logged a warning on
+    // failure). A crash/network drop between any of those could leave a
+    // bill created with the customer's balance never updated to match —
+    // same bug class already fixed for payments, now closed here too. ---
+    const billRef = billsCollection.doc();
+    const partyRef = customerId ? db.collection("parties").doc(customerId) : null;
 
-      if (!counterDoc.exists) {
-        // If the counter for the new year doesn't exist, create it and start at 1
-        transaction.set(counterRef, { currentNumber: 1 });
-        return 1;
-      } else {
-        // If the counter already exists, just increment it
-        const newCounterValue = counterDoc.data().currentNumber + 1;
-        transaction.update(counterRef, { currentNumber: newCounterValue });
-        return newCounterValue;
+    const { newSerialNo, balanceUpdated } = await db.runTransaction(async (transaction) => {
+      // READS FIRST (Firestore transactions require this)
+      const counterDoc = await transaction.get(counterRef);
+      const partyDoc = partyRef ? await transaction.get(partyRef) : null;
+
+      // COMPUTE
+      const newCounterValue = counterDoc.exists ? counterDoc.data().currentNumber + 1 : 1;
+      const currentMonth = String(now.getMonth() + 1).padStart(2, "0");
+      const paddedSerialNo = String(newCounterValue).padStart(5, "0");
+      const formattedBillNo = seriesPrefix
+        ? `${seriesPrefix}-${shortYear}${nextShortYear}-${paddedSerialNo}`
+        : `${shortYear}/${currentMonth}-${paddedSerialNo}`;
+
+      data["Serial No"] = formattedBillNo;
+      data["LinkedOrderId"] = formData.get("linked_order_id") || "";
+      data["LinkedSupplierIdx"] = formData.get("linked_supplier_idx") || "";
+      try {
+        data.OrderSupplierLinks = JSON.parse(formData.get("linked_order_supplier_links") || "[]");
+      } catch (_) {
+        data.OrderSupplierLinks = [];
       }
+      if (correctionOf) {
+        data.correctsBillId = correctionOf;
+        data["Corrects Bill No"] = correctionSource["Serial No"] || "";
+      }
+      data.workflowStatus = "draft";
+      data.locked = false;
+      data["createdAt"] = firebase.firestore.FieldValue.serverTimestamp();
+      data["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
+
+      // WRITES LAST
+      transaction.set(counterRef, { currentNumber: newCounterValue });
+      transaction.set(billRef, data);
+
+      let didUpdateBalance = false;
+      if (partyRef && partyDoc && partyDoc.exists) {
+        const currentBalance = Number(partyDoc.data().currentBalance || 0);
+        transaction.update(partyRef, {
+          currentBalance: roundCurrency(currentBalance + Number(data["Final Total"] || 0)),
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        didUpdateBalance = true;
+      }
+
+      return { newSerialNo: newCounterValue, balanceUpdated: didUpdateBalance };
     });
 
-    // --- MODIFIED BILL NUMBER FORMATTING ---
-    // Get the current month (1-12) and pad with a leading zero if needed
-    const currentMonth = String(now.getMonth() + 1).padStart(2, "0");
-
-    // Format the new bill number with the month (e.g., "25/09-00001")
-    const paddedSerialNo = String(newSerialNo).padStart(5, "0");
-    const formattedBillNo = seriesPrefix
-      ? `${seriesPrefix}-${shortYear}${nextShortYear}-${paddedSerialNo}`
-      : `${shortYear}/${currentMonth}-${paddedSerialNo}`;
-
-    data["Serial No"] = formattedBillNo;
-    // Save linked order reference if any
-    data["LinkedOrderId"] = formData.get("linked_order_id") || "";
-    data["LinkedSupplierIdx"] = formData.get("linked_supplier_idx") || "";
-    try {
-      data.OrderSupplierLinks = JSON.parse(formData.get("linked_order_supplier_links") || "[]");
-    } catch (_) {
-      data.OrderSupplierLinks = [];
-    }
-    if (correctionOf) {
-      data.correctsBillId = correctionOf;
-      data["Corrects Bill No"] = correctionSource["Serial No"] || "";
-    }
-    data.workflowStatus = "draft";
-    data.locked = false;
-    // Note: Date and Remarks are already set inside calculateBillData() above.
-    // Phase 2 (item #11): server-side timestamp for reliable chronological
-    // sorting in the ledger — the "Date" field above is a display string
-    // (DD/MM/YYYY) picked by the user and isn't safe to sort by directly.
-    data["createdAt"] = firebase.firestore.FieldValue.serverTimestamp();
-    data["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
-
-    const docRef = await billsCollection.add(data);
+    const docRef = billRef;
     await recordAudit(correctionOf ? "bill.correction_created" : "bill.created", "bill", docRef.id, {
       after: billAuditSnapshot(data),
       reason: correctionOf ? `Correction of bill ${data["Corrects Bill No"] || correctionOf}` : "",
@@ -1157,16 +1211,6 @@ async function collectData() {
           linkedBillNos: firebase.firestore.FieldValue.arrayUnion(data["Serial No"]), // Array mein save hoga
           updatedAt: Date.now(),
         });
-    }
-
-    // Keep Party Master cache in sync with new bills. All payment flows use
-    // this same helper/collection, so one party has one cached balance.
-    if (customerId) {
-      try {
-        await adjustPartyBalance(customerId, Number(data["Final Total"] || 0));
-      } catch (masterErr) {
-        console.warn("Party Master balance update failed (bill was still saved):", masterErr);
-      }
     }
 
     // ═══════════════════════════════════════════════════════════════════
@@ -1290,6 +1334,16 @@ async function updateData(docId) {
     // someone else saved a change to this same bill in the meantime — abort
     // rather than silently overwriting their edit.
     // ═══════════════════════════════════════════════════════════════════
+    //
+    // 🔒 ATOMIC: this transaction now ALSO reconciles the customer's cached
+    // balance (including the old-customer/new-customer split when the
+    // customer is changed on edit) — previously that ran as a separate
+    // step afterwards, only wrapped in a try/catch that logged a warning
+    // on failure. The customer-switch case was the riskiest: if the debit
+    // from the old customer succeeded but the credit to the new customer
+    // then failed, money effectively vanished from the ledger. Folding
+    // both into the same transaction as the bill write makes that
+    // impossible — everything commits together or nothing does.
     await db.runTransaction(async (transaction) => {
       const freshDoc = await transaction.get(billRef);
       if (!freshDoc.exists) throw new Error("NOT_FOUND: Original bill not found!");
@@ -1316,30 +1370,51 @@ async function updateData(docId) {
       // (already reads the form's date input + remarks textarea), so we
       // no longer force-overwrite Date here — only Serial No stays fixed.
 
+      // --- Party balance reconciliation reads (must happen before any
+      // writes, per Firestore transaction rules) ---
+      const oldCustomerId = originalData.customerId || "";
+      const newCustomerId = newData.customerId || oldCustomerId;
+      const oldTotal = Number(originalData["Final Total"] || 0);
+      const newTotal = Number(newData["Final Total"] || 0);
+      const sameCustomer = oldCustomerId && oldCustomerId === newCustomerId;
+
+      const oldPartyRef = oldCustomerId ? db.collection("parties").doc(oldCustomerId) : null;
+      const newPartyRef = !sameCustomer && newCustomerId ? db.collection("parties").doc(newCustomerId) : null;
+      const oldPartyDoc = oldPartyRef ? await transaction.get(oldPartyRef) : null;
+      const newPartyDoc = newPartyRef ? await transaction.get(newPartyRef) : null;
+
+      // --- Writes ---
       transaction.update(billRef, newData);
+
+      if (sameCustomer) {
+        if (oldPartyDoc && oldPartyDoc.exists) {
+          const currentBalance = Number(oldPartyDoc.data().currentBalance || 0);
+          transaction.update(oldPartyRef, {
+            currentBalance: roundCurrency(currentBalance + (newTotal - oldTotal)),
+            lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      } else {
+        if (oldPartyRef && oldPartyDoc && oldPartyDoc.exists) {
+          const currentBalance = Number(oldPartyDoc.data().currentBalance || 0);
+          transaction.update(oldPartyRef, {
+            currentBalance: roundCurrency(currentBalance - oldTotal),
+            lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+        if (newPartyRef && newPartyDoc && newPartyDoc.exists) {
+          const currentBalance = Number(newPartyDoc.data().currentBalance || 0);
+          transaction.update(newPartyRef, {
+            currentBalance: roundCurrency(currentBalance + newTotal),
+            lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+        }
+      }
     });
     await recordAudit("bill.updated", "bill", docId, {
       before: billAuditSnapshot(originalData),
       after: billAuditSnapshot({ ...originalData, ...newData }),
     });
-
-    // Reconcile the Party Master cache after every edit. If the customer was
-    // changed, remove the original amount from the old party and add the new
-    // amount to the newly selected party.
-    try {
-      const oldCustomerId = originalData.customerId || "";
-      const newCustomerId = newData.customerId || oldCustomerId;
-      const oldTotal = Number(originalData["Final Total"] || 0);
-      const newTotal = Number(newData["Final Total"] || 0);
-      if (oldCustomerId && oldCustomerId === newCustomerId) {
-        await adjustPartyBalance(oldCustomerId, newTotal - oldTotal);
-      } else {
-        await adjustPartyBalance(oldCustomerId, -oldTotal);
-        await adjustPartyBalance(newCustomerId, newTotal);
-      }
-    } catch (balanceError) {
-      console.warn("Party Master balance reconciliation failed after bill edit:", balanceError);
-    }
 
     // Calculate bags in the original bill
     let bagsInOriginalBill = 0;
@@ -1526,9 +1601,9 @@ async function checkAndSendWhatsApp(billData, billId) {
   }
 
   const companyName = window.companyProfile?.name || globalSettings?.companyName || "MandiBook";
-  const activeVakals = Array.from({ length: 5 }, (_, index) => Number(billData[`Vakal ${index + 1} Katta`] || 0)).filter(
-    (katta) => katta > 0
-  );
+  const activeVakals = Array.from({ length: 5 }, (_, index) =>
+    Number(billData[`Vakal ${index + 1} Katta`] || 0)
+  ).filter((katta) => katta > 0);
   const totalKatta = activeVakals.reduce((total, katta) => total + katta, 0);
   const vakalLine = totalKatta > 0 ? `Total Katta   : ${totalKatta} Katta (${activeVakals.length} Vakal)` : "";
   const finalAmount = Number(billData["Final Total"] || 0).toLocaleString("en-IN");
@@ -1590,8 +1665,9 @@ document.addEventListener("DOMContentLoaded", () => {
           if (enteredName) {
             const selectedParty = window.partiesMasterList.find(
               (party) =>
-                ["farmer", "vepari", "kisan", "customer", "buyer", "supplier"].includes((party.type || "").toLowerCase()) &&
-                (party.name || "").toLowerCase() === enteredName.toLowerCase()
+                ["farmer", "vepari", "kisan", "customer", "buyer", "supplier"].includes(
+                  (party.type || "").toLowerCase()
+                ) && (party.name || "").toLowerCase() === enteredName.toLowerCase()
             );
 
             if (!selectedParty) {
@@ -1732,7 +1808,7 @@ if (nameInput) {
     suggestionsList.classList.add("autocomplete-items");
     filteredCustomers.forEach((customer) => {
       const item = document.createElement("div");
-      item.innerHTML = `<strong>${customer.name}</strong> (${customer.village})`;
+      item.innerHTML = `<strong>${escapeHtml(customer.name)}</strong> (${escapeHtml(customer.village)})`;
       item.addEventListener("click", () => {
         lockSelectedCustomer(customer);
         suggestionsBox.innerHTML = "";
@@ -1790,7 +1866,9 @@ if (brokerInput && brokerSuggestionsBox) {
 
     filteredBrokers.forEach((broker) => {
       const item = document.createElement("div");
-      item.innerHTML = `<strong>${broker.value}</strong> ${broker.address ? `(${broker.address})` : ""}`;
+      item.innerHTML = `<strong>${escapeHtml(broker.value)}</strong> ${
+        broker.address ? `(${escapeHtml(broker.address)})` : ""
+      }`;
 
       item.addEventListener("click", () => {
         brokerInput.value = broker.value;

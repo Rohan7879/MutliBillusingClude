@@ -4,93 +4,183 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Access Pending — MandiBook</title>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-auth.js"></script>
-    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-firestore.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
     <script src="js/core/firebase-init.js"></script>
     <link rel="stylesheet" href="css/main.css" />
+    <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
     <style>
       body {
         min-height: 100vh;
+        margin: 0;
+        background: linear-gradient(180deg, #f4f8fc, #eef3f9);
         display: grid;
         place-items: center;
-        margin: 0;
-        background: #f4f7fb;
+        font-family: inherit;
       }
-      .card {
-        width: min(470px, calc(100% - 48px));
-        margin: 24px;
-        padding: 32px;
-        border-radius: 14px;
-        background: #fff;
-        box-shadow: 0 8px 25px #003d6e1a;
+      .ap-card {
+        width: min(520px, calc(100% - 40px));
+        margin: 28px;
+      }
+      .ap-header {
         text-align: center;
+        margin-bottom: 22px;
       }
-      .card h1 {
-        color: #005a9e;
+      .ap-logo {
+        width: 52px;
+        height: 52px;
+        border-radius: 12px;
+        margin-bottom: 14px;
+        box-shadow: 0 6px 16px #003d6e22;
       }
-      .card button {
-        border: 0;
-        border-radius: 7px;
-        background: #005a9e;
-        color: white;
-        padding: 11px 18px;
-        font-weight: 700;
-        cursor: pointer;
-      }
-      .contact-form {
-        margin: 24px 0 20px;
-        padding: 20px;
-        text-align: left;
-        border: 1px solid #dbe7f3;
-        border-radius: 10px;
-        background: #f8fbff;
-      }
-      .contact-form h2 {
+      .ap-header h1 {
         margin: 0 0 8px;
-        color: #173c5e;
-        font-size: 1.05rem;
+        color: #0d3a63;
+        font-size: 1.5rem;
+        letter-spacing: -0.02em;
       }
-      .contact-form p {
-        margin: 0 0 14px;
+      .ap-header p {
+        margin: 0;
         color: #5d7187;
-        font-size: 0.88rem;
-        line-height: 1.45;
+        font-size: 0.92rem;
+        line-height: 1.5;
+        max-width: 380px;
+        margin: 0 auto;
       }
-      .contact-form label {
+
+      .ap-section {
+        position: relative;
+        background: #fff;
+        border: 1px solid #e1eaf3;
+        border-radius: 14px;
+        padding: 22px 24px;
+        margin-bottom: 16px;
+        box-shadow: 0 4px 16px #003d6e0d;
+      }
+      .ap-section-head {
+        display: flex;
+        align-items: center;
+        gap: 10px;
+        margin-bottom: 4px;
+      }
+      .ap-section-icon {
+        width: 34px;
+        height: 34px;
+        border-radius: 9px;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        font-size: 17px;
+        flex-shrink: 0;
+      }
+      .ap-section-icon.step1 {
+        background: #fff2e0;
+      }
+      .ap-section-icon.step2 {
+        background: #e8f2ff;
+      }
+      .ap-section-head h2 {
+        margin: 0;
+        color: #173c5e;
+        font-size: 1rem;
+      }
+      .ap-section-sub {
+        margin: 4px 0 16px 44px;
+        color: #6d8098;
+        font-size: 0.82rem;
+        line-height: 1.5;
+      }
+
+      .ap-field {
+        margin-bottom: 14px;
+      }
+      .ap-field label {
         display: block;
-        margin: 12px 0 6px;
+        margin-bottom: 6px;
         color: #36516d;
         font-weight: 700;
-        font-size: 0.82rem;
-      }
-      .contact-form input {
-        width: 100%;
-        box-sizing: border-box;
-        padding: 11px;
-        border: 1px solid #bfd3e7;
-        border-radius: 7px;
-        font: inherit;
-      }
-      .contact-form button {
-        width: 100%;
-        margin-top: 16px;
-      }
-      .contact-status {
-        min-height: 18px;
-        margin: 9px 0 0;
-        color: #53718e;
         font-size: 0.8rem;
       }
+      .ap-field input {
+        width: 100%;
+        box-sizing: border-box;
+        padding: 11px 13px;
+        border: 1.5px solid #d9e3ee;
+        border-radius: 9px;
+        font: inherit;
+        transition: border-color 0.15s;
+      }
+      .ap-field input:focus {
+        outline: none;
+        border-color: #0877ca;
+      }
+      .ap-field input:disabled {
+        background: #f4f6f8;
+        color: #a4b2be;
+      }
+
+      .ap-btn {
+        width: 100%;
+        border: 0;
+        border-radius: 9px;
+        background: #075fa8;
+        color: #fff;
+        padding: 12px;
+        font-weight: 700;
+        font-size: 0.92rem;
+        cursor: pointer;
+        transition: background 0.15s;
+      }
+      .ap-btn:hover {
+        background: #06508e;
+      }
+      .ap-btn:disabled {
+        background: #b9c7d3;
+        cursor: not-allowed;
+      }
+
+      .ap-status {
+        min-height: 16px;
+        margin: 10px 0 0;
+        font-size: 0.82rem;
+        color: #5d7187;
+        line-height: 1.5;
+      }
+      .ap-status.error {
+        color: #c0392b;
+      }
+      .ap-status.success {
+        color: #1a7f4b;
+      }
+
+      .ap-email-display {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        padding: 12px 14px;
+        background: #f6f9fc;
+        border: 1.5px solid #e1eaf3;
+        border-radius: 9px;
+        margin-bottom: 14px;
+      }
+      .ap-email-display span.addr {
+        font-weight: 700;
+        color: #20364c;
+        font-size: 0.92rem;
+        word-break: break-all;
+      }
+
       .verify-badge {
         display: inline-flex;
         align-items: center;
-        gap: 3px;
-        padding: 2px 9px;
-        border-radius: 999px;
-        font-size: 0.72rem;
+        gap: 4px;
+        font-size: 0.74rem;
         font-weight: 800;
-        vertical-align: middle;
+        padding: 3px 10px;
+        border-radius: 999px;
+        white-space: nowrap;
       }
       .verify-badge.ok {
         background: #e3f6ea;
@@ -100,48 +190,217 @@
         background: #fff2df;
         color: #9a5b06;
       }
+
+      .ap-sent-panel {
+        display: flex;
+        gap: 12px;
+        align-items: flex-start;
+        border-radius: 10px;
+        padding: 14px 16px;
+        margin-top: 12px;
+      }
+      .ap-sent-panel.info {
+        background: #f0f9f3;
+        border: 1.5px solid #cdecd8;
+      }
+      .ap-sent-panel.done {
+        background: #e9f8ef;
+        border: 1.5px solid #b9e8c9;
+      }
+      .ap-sent-panel .icon {
+        font-size: 22px;
+        line-height: 1;
+      }
+      .ap-sent-panel p {
+        margin: 0;
+        color: #1a7f4b;
+        font-size: 0.85rem;
+        line-height: 1.55;
+      }
+      .ap-sent-panel p strong {
+        display: block;
+        margin-bottom: 3px;
+        font-size: 0.9rem;
+      }
+
+      /* Locked (step 2 before email is verified) */
+      .ap-section.locked {
+        opacity: 0.55;
+        pointer-events: none;
+        user-select: none;
+      }
+      .ap-lock-note {
+        display: flex;
+        align-items: center;
+        gap: 8px;
+        background: #fff8ec;
+        border: 1.5px solid #f4e3bd;
+        color: #9a6b06;
+        border-radius: 9px;
+        padding: 10px 13px;
+        font-size: 0.8rem;
+        font-weight: 700;
+        margin-bottom: 16px;
+      }
+
+      .ap-footer {
+        text-align: center;
+        margin-top: 18px;
+      }
+      .ap-footer p {
+        margin: 0 0 12px;
+        color: #6d8098;
+        font-size: 0.84rem;
+      }
+      .ap-footer button {
+        border: 1.5px solid #dbe4ec;
+        background: #fff;
+        color: #5d7187;
+        padding: 9px 20px;
+        border-radius: 9px;
+        font-weight: 700;
+        font-size: 0.84rem;
+        cursor: pointer;
+      }
+
+      .ap-waiting {
+        text-align: center;
+        padding: 34px 26px;
+      }
+      .ap-waiting-icon {
+        font-size: 40px;
+        margin-bottom: 12px;
+        animation: ap-pulse 1.8s ease-in-out infinite;
+      }
+      .ap-waiting h2 {
+        margin: 0 0 8px;
+        color: #173c5e;
+        font-size: 1.1rem;
+      }
+      .ap-waiting p {
+        margin: 0;
+        color: #6d8098;
+        font-size: 0.86rem;
+        line-height: 1.6;
+        max-width: 360px;
+        margin: 0 auto;
+      }
+      @keyframes ap-pulse {
+        0%,
+        100% {
+          opacity: 1;
+        }
+        50% {
+          opacity: 0.5;
+        }
+      }
     </style>
   </head>
   <body>
-    <main class="card">
-      <h1>Access pending</h1>
-      <p>Your account is signed in, but an Admin must approve it before company data is available.</p>
-      <form class="contact-form" id="contact-form">
-        <h2>Complete your staff details</h2>
-        <p>Admin approval ke liye aapka name aur mobile number Staff Access list mein save hoga.</p>
-        <label for="staff-name">Full name</label>
-        <input id="staff-name" autocomplete="name" minlength="2" required placeholder="Your full name" />
-        <label for="staff-mobile">Mobile number</label>
-        <input
-          id="staff-mobile"
-          autocomplete="tel"
-          inputmode="numeric"
-          maxlength="10"
-          required
-          placeholder="10-digit mobile number"
-        />
-        <button type="submit">Save name &amp; mobile</button>
-        <p id="contact-status" class="contact-status"></p>
-      </form>
-      <div class="contact-form">
-        <h2>Verify your email <span id="email-badge"></span></h2>
-        <p>Admin approval se pehle email verify karna zaroori hai — isse galat/typo email save nahi hoti.</p>
-        <p style="color: #c0392b; font-size: 0.78rem">
-          ⚠️ Sirf apni khud ki email daalo — kisi doosre staff ki email mat daalo.
+    <main class="ap-card">
+      <div class="ap-header">
+        <img class="ap-logo" src="assets/logo.jpg" alt="MandiBook" />
+        <h1>Almost there</h1>
+        <p>
+          Aapka account sign in ho gaya hai. Pehle email confirm karo — uske baad apni details bhar ke Admin approval ke
+          liye ready ho jaoge.
         </p>
-        <label for="staff-email">Email address</label>
-        <input id="staff-email" type="email" autocomplete="email" required placeholder="you@example.com" />
-        <button type="button" id="email-verify-btn">Send verification link</button>
-        <p id="email-status" class="contact-status"></p>
       </div>
-      <p>Please contact the MandiBook owner. You will be redirected automatically once approved.</p>
-      <button onclick="logoutUser()">Logout</button>
+
+      <!-- STEP 1: Email — must be verified before step 2 unlocks -->
+      <div class="ap-section" id="email-section">
+        <div class="ap-section-head">
+          <div class="ap-section-icon step1">✉️</div>
+          <h2>Email confirm karo <span id="email-badge"></span></h2>
+        </div>
+        <p class="ap-section-sub" id="email-section-sub">
+          Aap jis email se sign in hue ho, usi pe hum ek confirmation link bhejenge — koi typing nahi, galti ka chance
+          nahi.
+        </p>
+
+        <div id="email-known-view" style="display: none">
+          <div class="ap-email-display">
+            <span class="addr" id="ap-current-email">—</span>
+          </div>
+          <button type="button" id="email-verify-btn" class="ap-btn">Send verification link</button>
+        </div>
+
+        <div id="email-missing-view" style="display: none">
+          <div class="ap-field">
+            <label for="ap-typed-email">Email address</label>
+            <input id="ap-typed-email" type="email" autocomplete="email" placeholder="you@example.com" />
+          </div>
+          <button type="button" id="email-set-btn" class="ap-btn">Send verification link</button>
+        </div>
+
+        <div id="email-status-wrap"></div>
+      </div>
+
+      <!-- STEP 2: Name/mobile — locked until step 1 is verified -->
+      <form class="ap-section" id="contact-form">
+        <div class="ap-section-head">
+          <div class="ap-section-icon step2">👤</div>
+          <h2>Apni details bataiye</h2>
+        </div>
+        <p class="ap-section-sub">Yeh Staff Access list mein Admin ko dikhega.</p>
+        <p class="ap-lock-note" id="ap-lock-note">🔒 Pehle upar email verify karo, uske baad yeh khulega</p>
+        <div class="ap-field">
+          <label for="staff-name">Full name</label>
+          <input id="staff-name" autocomplete="name" minlength="2" required placeholder="Your full name" />
+        </div>
+        <div class="ap-field">
+          <label for="staff-mobile">Mobile number</label>
+          <input
+            id="staff-mobile"
+            autocomplete="tel"
+            inputmode="numeric"
+            maxlength="10"
+            required
+            placeholder="10-digit mobile number"
+          />
+        </div>
+        <button type="submit" class="ap-btn">Save details</button>
+        <p id="contact-status" class="ap-status"></p>
+      </form>
+
+      <!-- Shown once everything is submitted — replaces both sections above -->
+      <div class="ap-section ap-waiting" id="ap-waiting-panel" style="display: none">
+        <div class="ap-waiting-icon">⏳</div>
+        <h2>Sab kuch ho gaya!</h2>
+        <p>
+          Aapki email verify ho gayi hai aur details save ho gayi hain. Ab bas Admin ke approve karne ka wait karo —
+          hote hi yeh page apne aap company data pe le jaayega.
+        </p>
+      </div>
+
+      <div class="ap-footer">
+        <p>
+          Approve hote hi aap automatically redirect ho jaoge. Kuch der ho rahi hai to MandiBook owner se contact
+          karein.
+        </p>
+        <button onclick="logoutUser()">Logout</button>
+      </div>
     </main>
+
     <script>
       let pendingUser = null;
       let pendingProfile = {};
+      let pollTimer = null;
       const contactForm = document.getElementById("contact-form");
       const status = document.getElementById("contact-status");
+
+      function showWaitingState() {
+        document.getElementById("email-section").style.display = "none";
+        contactForm.style.display = "none";
+        document.querySelector(".ap-footer p").style.display = "none";
+        document.getElementById("ap-waiting-panel").style.display = "block";
+      }
+
+      function detailsAlreadySaved() {
+        const name = pendingProfile.displayName || "";
+        const digitsOnly = String(pendingProfile.mobileNumber || "").replace(/\D/g, "");
+        return name.trim().length >= 2 && digitsOnly.length >= 10;
+      }
 
       firebase.auth().onAuthStateChanged(async (user) => {
         if (!user) return;
@@ -152,19 +411,82 @@
         document.getElementById("staff-mobile").value = String(
           pendingProfile.mobileNumber || user.phoneNumber || ""
         ).replace(/^\+91/, "");
-        document.getElementById("staff-email").value = pendingProfile.email || user.email || "";
-        refreshEmailBadge();
+        // Coming back to this page after already finishing both steps in
+        // an earlier visit — skip straight to the waiting state instead
+        // of re-showing already-completed forms.
+        if (user.emailVerified && detailsAlreadySaved()) {
+          showWaitingState();
+          return;
+        }
+        renderEmailStep();
+        startVerifyPolling();
       });
 
-      function refreshEmailBadge() {
+      // Verifying happens by clicking a link in another tab (the inbox),
+      // so this tab has no way to know the instant it happens. Poll
+      // quietly every few seconds and unlock step 2 automatically the
+      // moment it's confirmed — no manual "refresh" needed from the user.
+      function startVerifyPolling() {
+        if (pollTimer) return;
+        pollTimer = setInterval(async () => {
+          if (!pendingUser || pendingUser.emailVerified) return;
+          try {
+            await pendingUser.reload();
+            pendingUser = firebase.auth().currentUser;
+            if (pendingUser.emailVerified) {
+              clearInterval(pollTimer);
+              renderEmailStep();
+            }
+          } catch (e) {
+            /* transient — ignore, next tick retries */
+          }
+        }, 4000);
+      }
+
+      function setStep2Locked(locked) {
+        const section = contactForm;
+        const note = document.getElementById("ap-lock-note");
+        section.classList.toggle("locked", locked);
+        note.style.display = locked ? "flex" : "none";
+      }
+
+      function renderEmailStep() {
         const badge = document.getElementById("email-badge");
-        const currentEmail = pendingUser.email || pendingProfile.email || "";
-        if (currentEmail && pendingUser.emailVerified) {
+        const knownView = document.getElementById("email-known-view");
+        const missingView = document.getElementById("email-missing-view");
+        const sub = document.getElementById("email-section-sub");
+
+        if (pendingUser.emailVerified) {
           badge.innerHTML = `<span class="verify-badge ok">✓ Verified</span>`;
-        } else if (currentEmail) {
+          knownView.style.display = "none";
+          missingView.style.display = "none";
+          sub.textContent = "Email confirm ho gayi hai.";
+          document.getElementById(
+            "email-status-wrap"
+          ).innerHTML = `<div class="ap-sent-panel done"><span class="icon">✅</span><p><strong>Email verified!</strong>Ab neeche apni details bhar do — Admin approval ke liye ready ho jaoge.</p></div>`;
+          setStep2Locked(false);
+          return;
+        }
+
+        setStep2Locked(true);
+        if (pendingUser.email) {
+          // Normal case: account already has an email (Google sign-in
+          // always has one; email/password too) — show it read-only, no
+          // typing allowed, so no one can accidentally verify a
+          // different person's address.
           badge.innerHTML = `<span class="verify-badge pending">⏳ Unverified</span>`;
+          knownView.style.display = "block";
+          missingView.style.display = "none";
+          document.getElementById("ap-current-email").textContent = pendingUser.email;
         } else {
-          badge.innerHTML = "";
+          // Rare case: this sign-in method genuinely gave no email at
+          // all (e.g. a phone-only sign-in). Only here do we allow
+          // typing one in, since there's nothing to display otherwise.
+          badge.innerHTML = `<span class="verify-badge pending">⏳ Not set</span>`;
+          knownView.style.display = "none";
+          missingView.style.display = "block";
+          sub.textContent =
+            "Is account mein koi email nahi hai — apni email daalo, hum usi pe confirmation link bhejenge.";
         }
       }
 
@@ -175,11 +497,13 @@
         const digits = document.getElementById("staff-mobile").value.replace(/\D/g, "");
         const mobileKey = `91${digits}`;
         if (displayName.length < 2 || !/^\d{10}$/.test(digits)) {
+          status.className = "ap-status error";
           status.textContent = "Full name aur valid 10-digit mobile number required hai.";
           return;
         }
         const button = contactForm.querySelector("button");
         button.disabled = true;
+        status.className = "ap-status";
         status.textContent = "Saving…";
         try {
           const userRef = db.collection("users").doc(pendingUser.uid);
@@ -202,9 +526,10 @@
           });
           await batch.commit();
           pendingProfile = { ...pendingProfile, displayName, mobileNumber: `+91${digits}`, mobileKey };
-          status.textContent = "Saved. Admin ko Staff Access mein ab aapke details dikh rahe hain.";
+          showWaitingState();
         } catch (error) {
           console.error("Could not save staff contact details", error);
+          status.className = "ap-status error";
           status.textContent =
             error.code === "permission-denied"
               ? "Ye mobile number kisi doosre MandiBook account me already registered hai. Alag number use karein."
@@ -214,68 +539,68 @@
         }
       });
 
-      // ── Email verification — same real-ownership-proof pattern as
-      // my-profile.html: Firebase emails a link to the new address, and
-      // the email only actually changes once that link is clicked. Doing
-      // this at the very first login (right here, before Admin approval)
-      // means every approved staff member's email is guaranteed real. ──
+      // ── Case A: account already has an email — plain "confirm this
+      // address" link, no typing, no risk of confirming someone else's
+      // inbox by mistake. ──
       document.getElementById("email-verify-btn").addEventListener("click", async () => {
         const btn = document.getElementById("email-verify-btn");
-        const emailStatus = document.getElementById("email-status");
-        const newEmail = document.getElementById("staff-email").value.trim().toLowerCase();
-        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(newEmail)) {
-          emailStatus.textContent = "Valid email address daalein.";
-          return;
-        }
-        // Same email, just unverified (common for Email/Password sign-ups)
-        // → plain verification email to the CURRENT address, not a
-        // change-email flow (verifyBeforeUpdateEmail with the same address
-        // it already has can silently fail).
-        if (newEmail === (pendingUser.email || "").toLowerCase()) {
-          if (pendingUser.emailVerified) {
-            emailStatus.textContent = "Yeh email already verified hai.";
-            return;
-          }
-          btn.disabled = true;
-          emailStatus.textContent = "Bhej rahe hain...";
-          try {
-            await pendingUser.sendEmailVerification();
-            emailStatus.textContent = `Verification link ${newEmail} pe bhej diya. Inbox check karo aur link pe click karo.`;
-          } catch (e) {
-            emailStatus.textContent = "Nahi ho paya: " + e.message;
-          } finally {
-            btn.disabled = false;
-          }
-          return;
-        }
+        const wrap = document.getElementById("email-status-wrap");
+        if (!pendingUser.email) return;
         btn.disabled = true;
-        emailStatus.textContent = "Bhej rahe hain...";
+        wrap.innerHTML = `<p class="ap-status">Bhej rahe hain...</p>`;
         try {
-          await pendingUser.verifyBeforeUpdateEmail(newEmail);
-          emailStatus.textContent = `Verification link ${newEmail} pe bhej diya. Inbox check karo aur link pe click karo.`;
+          await pendingUser.sendEmailVerification();
+          wrap.innerHTML = `<div class="ap-sent-panel info"><span class="icon">📩</span><p><strong>Link bhej diya!</strong>${pendingUser.email} ka inbox check karo aur link pe click karo — yeh page apne aap "Verified" ho jaayega, kuch refresh nahi karna.</p></div>`;
+        } catch (e) {
+          wrap.innerHTML = `<p class="ap-status error">Nahi ho paya: ${e.message}</p>`;
+        } finally {
+          btn.disabled = false;
+        }
+      });
+
+      // ── Case B: account genuinely has no email yet (rare — e.g.
+      // phone-only sign-in). This is the ONLY situation where typing is
+      // allowed, since there's no existing address to protect. ──
+      async function sendTypedEmailVerification(typed, wrap, btn) {
+        try {
+          await pendingUser.verifyBeforeUpdateEmail(typed);
+          wrap.innerHTML = `<div class="ap-sent-panel info"><span class="icon">📩</span><p><strong>Link bhej diya!</strong>${typed} ka inbox check karo aur link pe click karo — yeh page apne aap "Verified" ho jaayega, kuch refresh nahi karna.</p></div>`;
         } catch (e) {
           if (e.code === "auth/requires-recent-login") {
-            emailStatus.textContent = "Security check chal raha hai...";
+            wrap.innerHTML = `<p class="ap-status">Security check chal raha hai...</p>`;
             try {
               const providerId = (pendingUser.providerData[0] || {}).providerId;
               if (providerId === "google.com") {
                 await pendingUser.reauthenticateWithPopup(new firebase.auth.GoogleAuthProvider());
-                await pendingUser.verifyBeforeUpdateEmail(newEmail);
-                emailStatus.textContent = `Verification link ${newEmail} pe bhej diya. Inbox check karo aur link pe click karo.`;
+                await pendingUser.verifyBeforeUpdateEmail(typed);
+                wrap.innerHTML = `<div class="ap-sent-panel info"><span class="icon">📩</span><p><strong>Link bhej diya!</strong>${typed} ka inbox check karo aur link pe click karo — yeh page apne aap "Verified" ho jaayega, kuch refresh nahi karna.</p></div>`;
               } else {
                 throw e;
               }
             } catch (e2) {
-              emailStatus.textContent = "Ek baar Logout karke dobara login karo, phir email verify try karo.";
+              wrap.innerHTML = `<p class="ap-status error">Ek baar Logout karke dobara login karo, phir try karo.</p>`;
             }
           } else if (e.code === "auth/email-already-in-use") {
-            emailStatus.textContent = "Yeh email kisi doosre account mein already use ho rahi hai.";
+            wrap.innerHTML = `<p class="ap-status error">Yeh email kisi doosre account mein already use ho rahi hai.</p>`;
           } else {
-            emailStatus.textContent = "Nahi ho paya: " + e.message;
+            wrap.innerHTML = `<p class="ap-status error">Nahi ho paya: ${e.message}</p>`;
           }
         } finally {
           btn.disabled = false;
         }
+      }
+
+      document.getElementById("email-set-btn").addEventListener("click", async () => {
+        const btn = document.getElementById("email-set-btn");
+        const wrap = document.getElementById("email-status-wrap");
+        const typed = document.getElementById("ap-typed-email").value.trim().toLowerCase();
+        if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(typed)) {
+          wrap.innerHTML = `<p class="ap-status error">Valid email address daalein.</p>`;
+          return;
+        }
+        btn.disabled = true;
+        wrap.innerHTML = `<p class="ap-status">Bhej rahe hain...</p>`;
+        await sendTypedEmailVerification(typed, wrap, btn);
       });
     </script>
   </body>

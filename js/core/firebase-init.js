@@ -245,6 +245,7 @@ async function recordAudit(action, entityType, entityId, { before = null, after 
     actor: {
       uid: user.uid,
       email: normaliseEmail(user.email),
+      displayName: (window.currentUserProfile && window.currentUserProfile.displayName) || user.displayName || "",
       role: (window.currentUserProfile && window.currentUserProfile.role) || "unknown",
     },
     createdAt: firebase.firestore.FieldValue.serverTimestamp(),
