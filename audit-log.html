@@ -211,6 +211,15 @@
         font-size: 0.9rem;
         margin-bottom: 3px;
       }
+      .audit-record small {
+        display: block;
+        max-width: 150px;
+        overflow: hidden;
+        color: #8aa0b6;
+        font-size: 0.72rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
       .audit-record-id {
         display: block;
         max-width: 150px;
@@ -262,6 +271,29 @@
         margin: 0;
         color: #075fa8;
       }
+      .audit-detail-meta {
+        margin: 7px 0 18px;
+        color: #6b8094;
+      }
+      .audit-detail-info {
+        display: grid;
+        gap: 10px;
+        margin: 0 0 20px;
+      }
+      .audit-detail-info div {
+        display: grid;
+        grid-template-columns: 112px 1fr;
+        gap: 10px;
+        padding: 9px 0;
+        border-bottom: 1px solid #e5edf4;
+      }
+      .audit-detail-info dt {
+        color: #71859a;
+        font-size: 0.78rem;
+        font-weight: 800;
+        text-transform: uppercase;
+      }
+      .audit-detail-info dd { margin: 0; color: #2a455e; word-break: break-word; }
       .audit-detail-close {
         float: right;
         padding: 5px 9px;
@@ -354,92 +386,98 @@
       <div class="audit-detail-panel"><button id="audit-detail-close" class="audit-detail-close" aria-label="Close audit details">✕</button><div id="audit-detail-content"></div></div>
     </div>
     <script>
-      let allAuditEntries = [],
-        unsubscribeAudit = null;
-      const escapeAuditHtml = (value) =>
-        String(value || "").replace(
-          /[&<>\"']/g,
-          (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char])
-        );
-      const formatAuditDate = (timestamp) =>
-        timestamp && timestamp.toDate ? timestamp.toDate().toLocaleString("en-IN") : "Syncing…";
-      const dateKey = (timestamp) =>
-        timestamp && timestamp.toDate ? timestamp.toDate().toISOString().slice(0, 10) : "";
-      function auditSummary(entry) {
-        const before = entry.before || {};
-        const after = entry.after || {};
+      let allAuditEntries = [], unsubscribeAudit = null;
+      const escapeAuditHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
+      const formatAuditDate = (timestamp) => timestamp?.toDate ? timestamp.toDate().toLocaleString("en-IN") : "Syncing…";
+      const dateKey = (timestamp) => timestamp?.toDate ? timestamp.toDate().toISOString().slice(0, 10) : "";
+      const formatCurrency = (value) => Number.isFinite(Number(value)) ? `₹${Number(value).toLocaleString("en-IN")}` : String(value ?? "—");
+      const actionLabel = (action) => String(action || "activity").replace(/[._-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
+      function actorFor(entry) {
+        const actor = entry.actor || {};
+        return { name: actor.displayName || actor.email || "Legacy record", email: actor.email || "Actor details were not stored", role: actor.role || "legacy" };
+      }
+      function recordFor(entry) {
+        const before = entry.before || {}, after = entry.after || {};
         const serial = after.serialNo || before.serialNo || "";
-        const total = after.finalTotal ?? before.finalTotal;
-        return (
-          [serial && `Bill ${serial}`, total !== undefined && `₹${Number(total).toLocaleString("en-IN")}`, entry.reason]
-            .filter(Boolean)
-            .join(" · ") || "—"
-        );
+        return `${entry.entityType || "record"}${serial ? ` · ${serial}` : ""}`;
+      }
+      function auditSummary(entry) {
+        const before = entry.before || {}, after = entry.after || {};
+        const serial = after.serialNo || before.serialNo || "";
+        const total = after.finalTotal ?? before.finalTotal ?? after.amount ?? before.amount;
+        return [serial && `Bill ${serial}`, total !== undefined && formatCurrency(total), entry.reason].filter(Boolean).join(" · ") || "No description saved";
+      }
+      function changedFields(entry) {
+        const before = entry.before || {}, after = entry.after || {};
+        return [...new Set([...Object.keys(before), ...Object.keys(after)])].filter((key) => JSON.stringify(before[key]) !== JSON.stringify(after[key]));
+      }
+      function fieldLabel(key) { return String(key).replace(/([A-Z])/g, " $1").replace(/^./, (char) => char.toUpperCase()); }
+      function displayValue(key, value) {
+        if (value === undefined) return "Not set";
+        if (value === null) return "Empty";
+        if (["finalTotal", "amountPaid", "amountDue", "amount", "freight", "brokerCommission"].includes(key)) return formatCurrency(value);
+        if (typeof value === "boolean") return value ? "Yes" : "No";
+        if (typeof value === "object") return JSON.stringify(value);
+        return String(value);
+      }
+      function filteredEntries() {
+        const search = document.getElementById("audit-search").value.trim().toLowerCase();
+        const action = document.getElementById("audit-action").value;
+        const selectedDate = document.getElementById("audit-date").value;
+        return allAuditEntries.filter(({ data }) => {
+          const actor = actorFor(data);
+          const haystack = `${data.action || ""} ${actor.name} ${actor.email} ${recordFor(data)} ${auditSummary(data)}`.toLowerCase();
+          return (!search || haystack.includes(search)) && (!action || data.action === action) && (!selectedDate || dateKey(data.createdAt) === selectedDate);
+        });
+      }
+      function renderStats(rows) {
+        const entityCount = (type) => rows.filter(({ data }) => data.entityType === type).length;
+        const users = new Set(rows.map(({ data }) => actorFor(data).email).filter((email) => email !== "Actor details were not stored"));
+        document.getElementById("audit-stats").innerHTML = [["Activity", rows.length], ["Bills", entityCount("bill")], ["Payments", entityCount("payment")], ["Known users", users.size]].map(([label, value]) => `<div class="audit-stat"><strong class="audit-stat-value">${value}</strong><span class="audit-stat-label">${label}</span></div>`).join("");
+      }
+      function renderActionOptions() {
+        const select = document.getElementById("audit-action"), selected = select.value;
+        const actions = [...new Set(allAuditEntries.map(({ data }) => data.action).filter(Boolean))].sort();
+        select.innerHTML = `<option value="">All actions</option>${actions.map((action) => `<option value="${escapeAuditHtml(action)}">${escapeAuditHtml(actionLabel(action))}</option>`).join("")}`;
+        select.value = actions.includes(selected) ? selected : "";
       }
       function renderAudit() {
-        const search = document.getElementById("audit-search").value.trim().toLowerCase();
-        const actionType = document.getElementById("audit-action").value;
-        const selectedDate = document.getElementById("audit-date").value;
-        const rows = allAuditEntries.filter(({ data }) => {
-          const haystack = `${data.action || ""} ${data.actor?.displayName || ""} ${
-            data.actor?.email || ""
-          } ${auditSummary(data)}`.toLowerCase();
-          return (
-            (!search || haystack.includes(search)) &&
-            (!actionType || String(data.action || "").startsWith(actionType + ".")) &&
-            (!selectedDate || dateKey(data.createdAt) === selectedDate)
-          );
-        });
-        const target = document.getElementById("audit-results");
-        if (!rows.length) {
-          target.textContent = "No audit entries match these filters.";
-          return;
-        }
-        target.innerHTML = `<table class="audit-table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Record</th><th>Change</th></tr></thead><tbody>${rows
-          .map(
-            ({ data }) =>
-              `<tr><td>${escapeAuditHtml(
-                formatAuditDate(data.createdAt)
-              )}</td><td><span class="audit-action">${escapeAuditHtml(
-                data.action
-              )}</span></td><td><span class="audit-user">${escapeAuditHtml(
-                data.actor?.displayName || data.actor?.email || "Unknown"
-              )}</span>${
-                data.actor?.displayName && data.actor?.email
-                  ? `<span class="audit-email">${escapeAuditHtml(data.actor.email)}</span>`
-                  : ""
-              }<span class="audit-role">${escapeAuditHtml(
-                data.actor?.role
-              )}</span></td><td class="audit-record"><strong>${escapeAuditHtml(
-                data.entityType
-              )}</strong>${escapeAuditHtml(data.entityId)}</td><td class="audit-change">${escapeAuditHtml(
-                auditSummary(data)
-              )}</td></tr>`
-          )
-          .join("")}</tbody></table>`;
+        const rows = filteredEntries(), target = document.getElementById("audit-results");
+        renderStats(rows);
+        if (!rows.length) { target.innerHTML = '<div class="audit-empty">No audit entries match these filters.</div>'; return; }
+        target.innerHTML = `<table class="audit-table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Record</th><th>Change</th><th></th></tr></thead><tbody>${rows.map(({ id, data }) => {
+          const actor = actorFor(data);
+          return `<tr><td>${escapeAuditHtml(formatAuditDate(data.createdAt))}</td><td><span class="audit-action action-${escapeAuditHtml(String(data.action || "").split(".")[0])}">${escapeAuditHtml(actionLabel(data.action))}</span></td><td><span class="audit-user">${escapeAuditHtml(actor.name)}</span><span class="audit-email">${escapeAuditHtml(actor.email)}</span><span class="audit-role">${escapeAuditHtml(actor.role)}</span></td><td class="audit-record"><strong>${escapeAuditHtml(recordFor(data))}</strong><small>${escapeAuditHtml(data.entityId || "No record ID")}</small></td><td class="audit-change">${escapeAuditHtml(auditSummary(data))}</td><td><button class="audit-view-btn" type="button" data-audit-id="${escapeAuditHtml(id)}">View</button></td></tr>`;
+        }).join("")}</tbody></table>`;
+        target.querySelectorAll(".audit-view-btn").forEach((button) => button.addEventListener("click", () => showAuditDetail(button.dataset.auditId)));
+      }
+      function showAuditDetail(id) {
+        const entry = allAuditEntries.find((item) => item.id === id)?.data;
+        if (!entry) return;
+        const actor = actorFor(entry), before = entry.before || {}, after = entry.after || {};
+        const diffs = changedFields(entry);
+        const changes = diffs.length ? `<table class="audit-diff"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>${diffs.map((key) => `<tr><td><strong>${escapeAuditHtml(fieldLabel(key))}</strong></td><td class="audit-before">${escapeAuditHtml(displayValue(key, before[key]))}</td><td class="audit-after">${escapeAuditHtml(displayValue(key, after[key]))}</td></tr>`).join("")}</tbody></table>` : '<p class="audit-empty">This historical entry does not contain before/after field values.</p>';
+        document.getElementById("audit-detail-content").innerHTML = `<h2 id="audit-detail-title">${escapeAuditHtml(actionLabel(entry.action))}</h2><p class="audit-detail-meta">${escapeAuditHtml(formatAuditDate(entry.createdAt))} · ${escapeAuditHtml(recordFor(entry))}</p><dl class="audit-detail-info"><div><dt>User</dt><dd>${escapeAuditHtml(actor.name)}<br><small>${escapeAuditHtml(actor.email)} · ${escapeAuditHtml(actor.role)}</small></dd></div><div><dt>Record ID</dt><dd>${escapeAuditHtml(entry.entityId || "Not recorded")}</dd></div>${entry.reason ? `<div><dt>Reason</dt><dd>${escapeAuditHtml(entry.reason)}</dd></div>` : ""}</dl><h3>Changed fields</h3>${changes}`;
+        document.getElementById("audit-detail-overlay").classList.add("open");
+      }
+      function closeAuditDetail() { document.getElementById("audit-detail-overlay").classList.remove("open"); }
+      function exportAuditCsv() {
+        const rows = filteredEntries();
+        const csv = [["When", "Action", "User", "Email", "Role", "Record", "Record ID", "Change"], ...rows.map(({ data }) => { const actor = actorFor(data); return [formatAuditDate(data.createdAt), data.action || "", actor.name, actor.email, actor.role, recordFor(data), data.entityId || "", auditSummary(data)]; })].map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n");
+        const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); link.download = `mandibook-audit-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
       }
       window.addEventListener("mandibook:access-ready", ({ detail }) => {
         if (!detail || detail.role !== "admin" || unsubscribeAudit) return;
-        unsubscribeAudit = db
-          .collection("auditLogs")
-          .orderBy("createdAt", "desc")
-          .limit(200)
-          .onSnapshot(
-            (snapshot) => {
-              allAuditEntries = snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
-              renderAudit();
-            },
-            (error) => {
-              document.getElementById("audit-results").textContent = `Could not load audit history: ${error.message}`;
-            }
-          );
+        unsubscribeAudit = db.collection("auditLogs").orderBy("createdAt", "desc").limit(200).onSnapshot((snapshot) => { allAuditEntries = snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() })); renderActionOptions(); renderAudit(); }, (error) => { document.getElementById("audit-results").textContent = `Could not load audit history: ${error.message}`; });
       });
-      ["audit-search", "audit-action", "audit-date"].forEach((id) =>
-        document.getElementById(id).addEventListener("input", renderAudit)
-      );
-      window.addEventListener("pagehide", () => {
-        if (unsubscribeAudit) unsubscribeAudit();
-      });
+      document.getElementById("audit-search").addEventListener("input", renderAudit);
+      document.getElementById("audit-action").addEventListener("change", renderAudit);
+      document.getElementById("audit-date").addEventListener("change", renderAudit);
+      document.getElementById("audit-clear").addEventListener("click", () => { document.getElementById("audit-search").value = ""; document.getElementById("audit-action").value = ""; document.getElementById("audit-date").value = ""; renderAudit(); });
+      document.getElementById("audit-export").addEventListener("click", exportAuditCsv);
+      document.getElementById("audit-detail-close").addEventListener("click", closeAuditDetail);
+      document.getElementById("audit-detail-overlay").addEventListener("click", (event) => { if (event.target.id === "audit-detail-overlay") closeAuditDetail(); });
+      window.addEventListener("pagehide", () => { if (unsubscribeAudit) unsubscribeAudit(); });
     </script>
   </body>
 </html>
