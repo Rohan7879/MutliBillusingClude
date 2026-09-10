@@ -406,5 +406,30 @@ console.log("\n=== 6. users.update — self metadata refresh now includes email 
   );
 }
 
+console.log("\n=== 7. Negative-value guards — nonNegativeNumber() / clampPercent() ===\n");
+const { nonNegativeNumber, clampPercent } = require("./rules-simulator");
+
+check("nonNegativeNumber: normal positive value passes through", nonNegativeNumber("500") === 500, true);
+check(
+  "nonNegativeNumber: negative value clamped to 0 (the exact bug from the screenshot)",
+  nonNegativeNumber("-1") === 0,
+  true
+);
+check("nonNegativeNumber: empty string clamped to 0", nonNegativeNumber("") === 0, true);
+check("nonNegativeNumber: non-numeric junk clamped to 0", nonNegativeNumber("abc") === 0, true);
+check("nonNegativeNumber: zero stays zero", nonNegativeNumber("0") === 0, true);
+check("clampPercent: normal 0-100 value passes through", clampPercent("12.5") === 12.5, true);
+check("clampPercent: negative percent clamped to 0", clampPercent("-5") === 0, true);
+check("clampPercent: over-100 percent clamped to 100", clampPercent("150") === 100, true);
+
+console.log("\n=== 8. disasterRecoveryRestore() — admin-only backup-restore bypass ===\n");
+const { disasterRecoveryRestore } = require("./rules-simulator");
+check("LEGIT: admin can use the restore bypass", disasterRecoveryRestore({ profile: admin }), true);
+check("ATTACK: manager cannot use the restore bypass", disasterRecoveryRestore({ profile: manager }), false);
+check("ATTACK: accountant cannot use the restore bypass", disasterRecoveryRestore({ profile: accountant }), false);
+check("ATTACK: biller cannot use the restore bypass", disasterRecoveryRestore({ profile: biller }), false);
+check("ATTACK: viewer cannot use the restore bypass", disasterRecoveryRestore({ profile: viewer }), false);
+check("ATTACK: unauthenticated cannot use the restore bypass", disasterRecoveryRestore({ profile: noProfile }), false);
+
 console.log(`\n=== RESULT: ${pass} passed, ${fail} failed (out of ${pass + fail}) ===\n`);
 process.exit(fail > 0 ? 1 : 0);

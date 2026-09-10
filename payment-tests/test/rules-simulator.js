@@ -114,6 +114,21 @@ function usersSelfUpdate({ requesterUid, targetUid, isAdmin, before, after }) {
   return isAdmin || (requesterUid === targetUid && hasOnly(changedKeys, selfAllowed));
 }
 
+function nonNegativeNumber(value) {
+  const n = Number(value);
+  return !isFinite(n) || n < 0 ? 0 : n;
+}
+function clampPercent(value) {
+  const n = Number(value);
+  if (!isFinite(n) || n < 0) return 0;
+  return n > 100 ? 100 : n;
+}
+
+// --- disasterRecoveryRestore() bypass, added for JSON backup restore ---
+function disasterRecoveryRestore({ profile }) {
+  return anyRole(profile, ["admin"]);
+}
+
 module.exports = {
   billPaymentUpdater,
   paymentsCreate,
@@ -121,5 +136,8 @@ module.exports = {
   ordersUpdate,
   billEditor,
   usersSelfUpdate,
+  nonNegativeNumber,
+  clampPercent,
+  disasterRecoveryRestore,
   anyRole,
 };
