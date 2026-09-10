@@ -1,6 +1,5 @@
 let partiesList = [];
 let billsSummaryMap = {}; // Feature 5: Party-wise bill counts
-let ledgerBalanceByPartyId = {};
 let currentFilterType = "All";
 
 document.addEventListener("DOMContentLoaded", async () => {
@@ -28,36 +27,25 @@ document.addEventListener("DOMContentLoaded", async () => {
   document.getElementById("cancelBtn").addEventListener("click", resetForm);
 });
 
-// Feature 5: Calculate bill count and business stats for each party from Firestore
+// Feature 5: Calculate bill count for each party from Firestore. Balance
+// itself is NOT recomputed here anymore — see the fix note in drawTable()
+// below for why.
 async function fetchBillsSummary() {
   try {
-    const [snap, paymentsSnap] = await Promise.all([db.collection("bills").get(), db.collection("payments").get()]);
+    const snap = await db.collection("bills").get();
     billsSummaryMap = {};
-    ledgerBalanceByPartyId = {};
     snap.forEach((doc) => {
       const data = doc.data();
       if (data.deleted === true) return;
 
-      // Count for customer/farmer
       const cust = data["Customer Name"] || data.customer_name;
       if (cust) {
         billsSummaryMap[cust] = (billsSummaryMap[cust] || 0) + 1;
       }
-      if (data.customerId) {
-        ledgerBalanceByPartyId[data.customerId] =
-          (ledgerBalanceByPartyId[data.customerId] || 0) + Number(data["Final Total"] || 0);
-      }
-      // Count for broker
       const brk = data["Broker"] || data.broker;
       if (brk) {
         billsSummaryMap[brk] = (billsSummaryMap[brk] || 0) + 1;
       }
-    });
-    paymentsSnap.forEach((doc) => {
-      const payment = doc.data();
-      if (payment.deleted === true || !payment.customerId) return;
-      ledgerBalanceByPartyId[payment.customerId] =
-        (ledgerBalanceByPartyId[payment.customerId] || 0) - Number(payment.totalCredit || 0);
     });
   } catch (e) {
     console.warn("Could not fetch bills summary:", e);
@@ -247,13 +235,24 @@ function drawTable(data) {
       let flagTag = p.isBlacklisted
         ? `<span class="px-1.5 py-0.5 ml-2 bg-red-100 text-red-700 text-[10px] font-bold rounded">🚩 DEFAULTER</span>`
         : "";
-      const liveBalance = ledgerBalanceByPartyId[rawParty.id];
-      const hasLiveLedgerBalance = rawParty.type === "Farmer" || rawParty.type === "Vepari";
-      const balanceToShow = hasLiveLedgerBalance ? Number(liveBalance || 0) : Number(rawParty.opBal || 0);
+      // Live balance: read currentBalance directly — this is the single
+      // field every payment/bill transaction (savePayment, bill create/
+      // edit, bulk mark-paid, delete/restore) keeps authoritative via
+      // Firestore transactions. Previously this page re-summed every bill
+      // and payment in the whole system from scratch on every load AND
+      // only did so for type Farmer/Vepari — any other billable type
+      // (Customer/Buyer/Supplier/Kisan, which bill-form.js's own customer-
+      // matching logic treats as billable) was stuck showing the static
+      // opening balance forever, never reflecting real payment activity.
+      const billableTypes = ["farmer", "vepari", "kisan", "customer", "buyer", "supplier"];
+      const hasLiveLedgerBalance = billableTypes.includes((rawParty.type || "").toLowerCase());
+      const balanceToShow = hasLiveLedgerBalance ? Number(rawParty.currentBalance || 0) : Number(rawParty.opBal || 0);
       const balColor = balanceToShow > 0 ? "text-red-600" : "text-green-600";
       const balAmount =
         balanceToShow !== 0
-          ? `₹${Math.abs(balanceToShow).toLocaleString("en-IN")} <span class="text-[10px]">${balanceToShow > 0 ? "Dr" : "Cr"}</span>`
+          ? `₹${Math.abs(balanceToShow).toLocaleString("en-IN")} <span class="text-[10px]">${
+              balanceToShow > 0 ? "Dr" : "Cr"
+            }</span>`
           : "-";
 
       // Feature 5: Business Summary Badge (Total bills linked)

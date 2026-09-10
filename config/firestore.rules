@@ -196,8 +196,8 @@ service cloud.firestore {
     match /bills/{billId} {
       allow read: if active();
       allow create: if anyRole(['admin', 'manager', 'biller'])
-        && request.resource.data.get('locked', false) == false
-        && request.resource.data.get('workflowStatus', 'draft') == 'draft';
+          && request.resource.data.get('locked', false) == false
+          && request.resource.data.get('workflowStatus', 'draft') == 'draft';
       allow update: if billEditor() || billRestorer() || billApprover() || billLocker() || billPaymentUpdater();
       allow delete: if admin() && !billHasPayment();
     }

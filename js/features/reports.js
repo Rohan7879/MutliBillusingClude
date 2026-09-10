@@ -85,13 +85,65 @@ function showTable(title, headers, rows, footers = []) {
   const container = document.getElementById("report-table-container");
   container.style.display = "block";
   document.getElementById("report-title").textContent = title;
-  document.getElementById("report-thead").innerHTML = `<tr>${headers.map((h) => `<th>${h}</th>`).join("")}</tr>`;
+  document.getElementById("report-thead").innerHTML = `<tr>${headers
+    .map((h) => `<th>${escapeHtml(h)}</th>`)
+    .join("")}</tr>`;
+  // Cells that are pre-built HTML (colored status spans etc.) start with
+  // "<span" — everything else is raw data (customer/village/broker names)
+  // and must be escaped before going into innerHTML.
+  const cell = (c) => (typeof c === "string" && c.trim().startsWith("<span") ? c : escapeHtml(c));
   document.getElementById("report-tbody").innerHTML = rows
-    .map((r) => `<tr>${r.map((c) => `<td>${c}</td>`).join("")}</tr>`)
+    .map((r) => `<tr>${r.map((c) => `<td>${cell(c)}</td>`).join("")}</tr>`)
     .join("");
   document.getElementById("report-tfoot").innerHTML = footers.length
-    ? `<tr>${footers.map((f) => `<td>${f}</td>`).join("")}</tr>`
+    ? `<tr>${footers.map((f) => `<td>${cell(f)}</td>`).join("")}</tr>`
     : "";
+}
+
+// ── CHART ─────────────────────────────────────────────────────────────────────
+let reportChartInstance = null;
+const CHART_COLORS = ["#005a9e", "#28a745", "#e8590c", "#d6336c", "#6f42c1", "#0ea5e9", "#f4a507", "#16a085"];
+
+function showChart(title, type, labels, datasetLabel, values) {
+  const container = document.getElementById("report-chart-container");
+  const canvas = document.getElementById("report-chart");
+  if (!labels.length || typeof Chart === "undefined") {
+    container.style.display = "none";
+    return;
+  }
+  container.style.display = "block";
+  document.getElementById("report-chart-title").textContent = title;
+  if (reportChartInstance) reportChartInstance.destroy();
+
+  const isPie = type === "pie";
+  reportChartInstance = new Chart(canvas, {
+    type,
+    data: {
+      labels,
+      datasets: [
+        {
+          label: datasetLabel,
+          data: values,
+          backgroundColor: isPie ? CHART_COLORS : "#005a9e",
+          borderColor: "#005a9e",
+          borderWidth: type === "line" ? 2 : 0,
+          tension: 0.3,
+          fill: type === "line" ? "start" : undefined,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      indexAxis: type === "bar" && labels.length > 8 ? "y" : "x",
+      plugins: { legend: { display: isPie } },
+      scales: isPie ? {} : { y: { beginAtZero: true } },
+    },
+  });
+}
+
+function hideChart() {
+  document.getElementById("report-chart-container").style.display = "none";
 }
 
 // ── 1. DAILY ──────────────────────────────────────────────────────────────────
@@ -125,6 +177,14 @@ function daily(bills) {
     "",
     fmtR(totals.reduce((s, d) => s + d.amount, 0)),
   ]);
+  const sortedEntries = Object.entries(byDate).sort();
+  showChart(
+    "Amount Trend",
+    "line",
+    sortedEntries.map(([d]) => d),
+    "Amount (₹)",
+    sortedEntries.map(([, d]) => d.amount)
+  );
 }
 
 // ── 2. SUPPLIER ───────────────────────────────────────────────────────────────
@@ -152,6 +212,16 @@ function supplier(bills) {
     "",
     fmtR(Object.values(bySupplier).reduce((s, d) => s + d.amount, 0)),
   ]);
+  const top = Object.entries(bySupplier)
+    .sort((a, b) => b[1].amount - a[1].amount)
+    .slice(0, 10);
+  showChart(
+    "Top Suppliers by Amount",
+    "bar",
+    top.map(([n]) => n),
+    "Amount (₹)",
+    top.map(([, d]) => d.amount)
+  );
 }
 
 // ── 3. PRODUCT ────────────────────────────────────────────────────────────────
@@ -177,6 +247,16 @@ function product(bills) {
     { val: fmtR(Object.values(byProduct).reduce((s, d) => s + d.amount, 0)), label: "Total Amount" },
   ]);
   showTable("Product Report", ["Product", "Bills", "Bags", "Weight", "Amount"], rows);
+  const top = Object.entries(byProduct)
+    .sort((a, b) => b[1].amount - a[1].amount)
+    .slice(0, 10);
+  showChart(
+    "Amount by Product",
+    "bar",
+    top.map(([n]) => n),
+    "Amount (₹)",
+    top.map(([, d]) => d.amount)
+  );
 }
 
 // ── 4. BROKER ─────────────────────────────────────────────────────────────────
@@ -208,6 +288,16 @@ function broker(bills) {
     "",
     fmtR(Object.values(byBroker).reduce((s, d) => s + d.commission, 0)),
   ]);
+  const top = Object.entries(byBroker)
+    .sort((a, b) => b[1].commission - a[1].commission)
+    .slice(0, 10);
+  showChart(
+    "Top Brokers by Commission",
+    "bar",
+    top.map(([n]) => n),
+    "Commission (₹)",
+    top.map(([, d]) => d.commission)
+  );
 }
 
 // ── 5. VILLAGE ────────────────────────────────────────────────────────────────
@@ -228,6 +318,16 @@ function village(bills) {
     { val: fmtR(Object.values(byVillage).reduce((s, d) => s + d.amount, 0)), label: "Total Amount" },
   ]);
   showTable("Village Report", ["Village", "Bills", "Weight", "Amount"], rows);
+  const top = Object.entries(byVillage)
+    .sort((a, b) => b[1].amount - a[1].amount)
+    .slice(0, 10);
+  showChart(
+    "Amount by Village",
+    "bar",
+    top.map(([n]) => n),
+    "Amount (₹)",
+    top.map(([, d]) => d.amount)
+  );
 }
 
 // ── 6. VEHICLE ────────────────────────────────────────────────────────────────
@@ -248,6 +348,16 @@ function vehicle(bills) {
     { val: bills.length, label: "Total Trips" },
   ]);
   showTable("Vehicle Report", ["Vehicle No", "Trips", "Suppliers", "Amount"], rows);
+  const top = Object.entries(byVehicle)
+    .sort((a, b) => b[1].count - a[1].count)
+    .slice(0, 10);
+  showChart(
+    "Trips by Vehicle",
+    "bar",
+    top.map(([n]) => n),
+    "Trips",
+    top.map(([, d]) => d.count)
+  );
 }
 
 // ── 7. MONTHLY ────────────────────────────────────────────────────────────────
@@ -285,6 +395,17 @@ function monthly(bills) {
     "",
     fmtR(Object.values(byMonth).reduce((s, d) => s + d.amount, 0)),
   ]);
+  const sortedEntries = Object.entries(byMonth).sort();
+  showChart(
+    "Monthly Amount Trend",
+    "line",
+    sortedEntries.map(([key]) => {
+      const [y, m] = key.split("-");
+      return `${months[Number(m)]} ${y}`;
+    }),
+    "Amount (₹)",
+    sortedEntries.map(([, d]) => d.amount)
+  );
 }
 
 // ── 8. PAYMENT ────────────────────────────────────────────────────────────────
@@ -313,6 +434,11 @@ function payment(bills) {
     { val: `<span style="color:#dc3545;">${fmtR(totalDue)}</span>`, label: "Total Due" },
   ]);
   showTable("Payment Report", ["Bill No", "Date", "Supplier", "Total", "Paid", "Balance", "Status"], rows);
+  showChart("Payment Status Split", "pie", ["Paid", "Partial", "Unpaid"], "Bills", [
+    paid.length,
+    partial.length,
+    unpaid.length,
+  ]);
 }
 
 // ── EXPORT EXCEL ──────────────────────────────────────────────────────────────

@@ -164,55 +164,107 @@ async function markSelectedBillsAsPaid() {
 
   if (result.isConfirmed) {
     showLoading("Updating bills and recording payments...");
+    let failedCount = 0;
+    let alreadyPaidCount = 0;
 
     try {
       const selectedIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
       const billsToUpdate = allBillsForList.filter((billDoc) => selectedIds.includes(billDoc.id));
 
       for (const billDoc of billsToUpdate) {
-        const billData = billDoc.data();
         const billId = billDoc.id;
-        const totalAmount = billData["Final Total"] || 0;
+        try {
+          // 🔒 ATOMIC — bill update + payment record + party balance, all
+          // in one transaction per bill. Previously this bulk action did
+          // two separate awaited writes per bill (bill, then payment doc)
+          // with NO transaction and — more importantly — never touched
+          // the customer's cached balance at all, so bulk-marking bills
+          // paid silently left every affected customer's Ledger/Party
+          // Master balance wrong. Each bill gets its own transaction (not
+          // one transaction for the whole batch) so one bill failing
+          // doesn't roll back bills that already succeeded, while each
+          // individual bill is still fully all-or-nothing.
+          const billRef = billsCollection.doc(billId);
+          const paymentRef = db.collection("payments").doc();
 
-        // 1. Bill ko Paid mark karo
-        await billsCollection.doc(billId).update({
-          paymentStatus: "Paid",
-          amountPaid: totalAmount,
-          amountDue: 0,
-        });
+          const paymentCreated = await db.runTransaction(async (transaction) => {
+            const freshBillDoc = await transaction.get(billRef);
+            if (!freshBillDoc.exists) throw new Error("Bill not found");
+            const billData = freshBillDoc.data();
+            const currentPaid = Number(billData.amountPaid || 0);
+            const finalTotal = Number(billData["Final Total"] || 0);
+            const remainingDue = finalTotal - currentPaid;
+            if (remainingDue <= 0.01) return false; // already fully paid — no payment/audit should be created
 
-        // 2. 🚀 NAYA: Payments collection mein AAJ KI DATE ke sath entry save karo
-        const paymentRef = await db.collection("payments").add({
-          customerName: billData["Customer Name"] || "",
-          customerVillage: billData["Village"] || "N/A",
-          customerId: billData.customerId || null,
-          cashAmount: totalAmount,
-          deductionAmount: 0,
-          totalCredit: totalAmount,
-          paymentDate: firebase.firestore.Timestamp.fromDate(new Date()), // 👈 Aaj ki date save hogi
-          appliedToBills: [billId],
-          reason: result.value.trim(),
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-        await recordAudit("payment.created", "payment", paymentRef.id, {
-          before: billAuditSnapshot(billData),
-          after: {
-            billId,
-            serialNo: billData["Serial No"] || "",
-            cashAmount: totalAmount,
-            amountPaid: totalAmount,
-            amountDue: 0,
-            paymentStatus: "Paid",
-          },
-          reason: result.value.trim(),
-        });
+            const partyRef = billData.customerId ? db.collection("parties").doc(billData.customerId) : null;
+            const partyDoc = partyRef ? await transaction.get(partyRef) : null;
+
+            transaction.update(billRef, {
+              paymentStatus: "Paid",
+              amountPaid: finalTotal,
+              amountDue: 0,
+              lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+
+            transaction.set(paymentRef, {
+              customerName: billData["Customer Name"] || "",
+              customerVillage: billData["Village"] || "N/A",
+              customerId: billData.customerId || null,
+              cashAmount: remainingDue,
+              deductionAmount: 0,
+              totalCredit: remainingDue,
+              paymentDate: firebase.firestore.Timestamp.fromDate(new Date()),
+              appliedToBills: [billId],
+              reason: result.value.trim(),
+              createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+            });
+
+            if (partyRef && partyDoc && partyDoc.exists) {
+              const currentBalance = Number(partyDoc.data().currentBalance || 0);
+              transaction.update(partyRef, {
+                currentBalance: roundCurrency(currentBalance - remainingDue),
+                lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+            }
+            return true;
+          });
+
+          if (paymentCreated) {
+            await recordAudit("payment.created", "payment", paymentRef.id, {
+              before: billAuditSnapshot(billDoc.data()),
+              after: {
+                billId,
+                serialNo: billDoc.data()["Serial No"] || "",
+                paymentStatus: "Paid",
+              },
+              reason: result.value.trim(),
+            });
+          } else {
+            alreadyPaidCount++;
+          }
+        } catch (billError) {
+          console.error(`Could not mark bill ${billId} as paid:`, billError);
+          failedCount++;
+        }
       }
 
-      Swal.fire(
-        "Success!",
-        `${selectedCheckboxes.length} bill(s) have been marked as Paid with today's date.`,
-        "success"
-      );
+      const updatedCount = selectedCheckboxes.length - failedCount - alreadyPaidCount;
+      if (failedCount === 0 && alreadyPaidCount === 0) {
+        Swal.fire(
+          "Success!",
+          `${selectedCheckboxes.length} bill(s) have been marked as Paid with today's date.`,
+          "success"
+        );
+      } else {
+        Swal.fire(
+          "Partially completed",
+          `${updatedCount} bill(s) marked Paid.${alreadyPaidCount ? ` ${alreadyPaidCount} already paid tha, isliye duplicate payment nahi banaya.` : ""}${
+            failedCount ? ` ${failedCount} failed — inmein koi half-update nahi hua.` : ""
+          }`,
+          "warning"
+        );
+      }
+      showBillListView();
     } catch (error) {
       console.error("Error marking bills as paid:", error);
       Swal.fire("Error", "Could not update the bills.", "error");
@@ -222,7 +274,69 @@ async function markSelectedBillsAsPaid() {
   }
 }
 // REMOVED: showBillCreationForm() — this was leftover from the old single-page
-// (index.html) architecture where the form and list lived on the same page and
+// ── BULK DELETE ─────────────────────────────────────────────────────────────
+// Reuses the already-safe softDeleteBill() from backup.js (atomic bill+balance
+// update, blocks locked bills and bills with a recorded payment) once per
+// selected bill — not a separate/parallel deletion path, so it inherits all
+// the same safety checks with zero duplicated logic.
+async function deleteSelectedBills() {
+  const selectedCheckboxes = document.querySelectorAll("#bill_list_view .bill-checkbox:checked");
+  if (selectedCheckboxes.length === 0) {
+    Swal.fire("No Bills Selected", "Please select one or more bills to delete.", "info");
+    return;
+  }
+
+  const result = await Swal.fire({
+    title: `Delete ${selectedCheckboxes.length} bill(s)?`,
+    text: "Locked bills and bills with a recorded payment will be skipped automatically — they can't be deleted this way.",
+    icon: "warning",
+    showCancelButton: true,
+    confirmButtonColor: "#dc3545",
+    confirmButtonText: "Yes, delete",
+  });
+  if (!result.isConfirmed) return;
+
+  showLoading("Deleting selected bills...");
+  const selectedIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
+  let deletedCount = 0;
+  let skippedCount = 0;
+
+  try {
+    for (const billId of selectedIds) {
+      // softDeleteBill() already shows its own error popup for a hard
+      // failure (e.g. permission/network) — here we only need to tell
+      // deleted apart from skipped-by-design (locked / has payment).
+      const ok = await softDeleteBillSilently(billId);
+      if (ok) deletedCount++;
+      else skippedCount++;
+    }
+    Swal.fire(
+      "Done",
+      `${deletedCount} bill(s) deleted.` +
+        (skippedCount > 0 ? ` ${skippedCount} skipped (locked or already paid).` : ""),
+      deletedCount > 0 ? "success" : "info"
+    );
+    showBillListView();
+  } finally {
+    hideLoading();
+  }
+}
+window.deleteSelectedBills = deleteSelectedBills;
+
+// softDeleteBill() (backup.js) shows its own Swal toast per call, which
+// would fire once per bill in a bulk operation — noisy. This calls the
+// same underlying logic but suppresses the individual popups, letting
+// deleteSelectedBills show one combined summary instead.
+async function softDeleteBillSilently(docId) {
+  const originalFire = Swal.fire;
+  Swal.fire = () => Promise.resolve({}); // temporarily no-op, restored below
+  try {
+    return await softDeleteBill(docId);
+  } finally {
+    Swal.fire = originalFire;
+  }
+}
+
 // were toggled via style.display. It had NO null-check on #bill_list_view /
 // #bill_creation_form, so calling it on bill-create.html (which no longer has
 // #bill_list_view) would throw "Cannot set properties of null". It also had
@@ -252,19 +366,28 @@ function renderBillList(docs) {
     const billDate = escapeHtml(bill["Date"]);
     const customerName = escapeHtml(bill["Customer Name"]);
     const billType = escapeHtml(bill["Bill Type"]);
-    const workflow = bill.locked === true || bill.workflowStatus === "locked" ? "🔒 Locked" : bill.workflowStatus === "approved" ? "✓ Approved" : "✎ Draft";
+    const workflow =
+      bill.locked === true || bill.workflowStatus === "locked"
+        ? "🔒 Locked"
+        : bill.workflowStatus === "approved"
+        ? "✓ Approved"
+        : "✎ Draft";
     row.innerHTML = `
      <td><input type="checkbox" class="bill-checkbox" value="${doc.id}" onchange="updateSelectionSummary()"></td>
       <td>${serialNo}</td>
       <td>${billDate}</td>
       <td>${customerName}</td>
       <td>${getStatusHtml(bill)}</td>
-      <td><strong style="color:${workflow.includes("Locked") ? "#343a40" : workflow.includes("Approved") ? "#6f42c1" : "#6c757d"};">${workflow}</strong></td>
+      <td><strong style="color:${
+        workflow.includes("Locked") ? "#343a40" : workflow.includes("Approved") ? "#6f42c1" : "#6c757d"
+      };">${workflow}</strong></td>
       <td>${billType}</td>
       <td>${formatNumber(bill["Final Total"])}</td>
       <td class="action-buttons">
           <button class="view-btn" data-id="${doc.id}">View</button>
-          <button class="edit-btn" data-id="${doc.id}" ${bill.paymentStatus === "Paid" || bill.locked === true ? "disabled" : ""}>Edit</button>
+          <button class="edit-btn" data-id="${doc.id}" ${
+      bill.paymentStatus === "Paid" || bill.locked === true ? "disabled" : ""
+    }>Edit</button>
           <button class="delete-btn" data-id="${doc.id}" data-serial="${serialNo}">Delete</button>
       </td>
     `;
@@ -322,11 +445,19 @@ async function deleteBill(docId, serialNo) {
     const hasRecordedPayment =
       bill && (Number(bill.amountPaid || 0) > 0 || ["Paid", "Partial", "Partially Paid"].includes(bill.paymentStatus));
     if (bill && (bill.locked === true || bill.workflowStatus === "locked")) {
-      Swal.fire("Delete blocked", "This bill is locked as a final accounting record. Create a correction bill if a change is needed.", "warning");
+      Swal.fire(
+        "Delete blocked",
+        "This bill is locked as a final accounting record. Create a correction bill if a change is needed.",
+        "warning"
+      );
       return;
     }
     if (hasRecordedPayment) {
-      Swal.fire("Delete blocked", "A partially or fully paid bill cannot be deleted. Keep it for payment and audit records.", "warning");
+      Swal.fire(
+        "Delete blocked",
+        "A partially or fully paid bill cannot be deleted. Keep it for payment and audit records.",
+        "warning"
+      );
       return;
     }
   } catch (error) {

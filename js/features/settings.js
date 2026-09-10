@@ -177,13 +177,18 @@ async function loadBillWorkflowSettings() {
   try {
     const doc = await billWorkflowRef.get();
     select.value = doc.exists && doc.data().printPolicy === "approved_only" ? "approved_only" : "allow_draft";
-    if (itemLabelSelect) itemLabelSelect.value = doc.exists && doc.data().itemLabelMode === "variety" ? "variety" : "vakal";
+    if (itemLabelSelect)
+      itemLabelSelect.value = doc.exists && doc.data().itemLabelMode === "variety" ? "variety" : "vakal";
   } catch (error) {
     console.warn("Could not load print policy; using current workflow.", error);
     select.value = "allow_draft";
     if (itemLabelSelect) itemLabelSelect.value = "vakal";
   }
-  if (status) status.textContent = select.value === "approved_only" ? "Only approved or locked bills can be printed." : "Draft bills can also be printed.";
+  if (status)
+    status.textContent =
+      select.value === "approved_only"
+        ? "Only approved or locked bills can be printed."
+        : "Draft bills can also be printed.";
 }
 
 async function saveBillWorkflowSettings() {
@@ -192,12 +197,19 @@ async function saveBillWorkflowSettings() {
   const status = document.getElementById("print-policy-status");
   if (!select) return;
   try {
-    await billWorkflowRef.set({
-      printPolicy: select.value,
-      itemLabelMode: itemLabelSelect?.value === "variety" ? "variety" : "vakal",
-      updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-    }, { merge: true });
-    if (status) status.textContent = select.value === "approved_only" ? "Only approved or locked bills can be printed." : "Draft bills can also be printed.";
+    await billWorkflowRef.set(
+      {
+        printPolicy: select.value,
+        itemLabelMode: itemLabelSelect?.value === "variety" ? "variety" : "vakal",
+        updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+      },
+      { merge: true }
+    );
+    if (status)
+      status.textContent =
+        select.value === "approved_only"
+          ? "Only approved or locked bills can be printed."
+          : "Draft bills can also be printed.";
     showToast("✅ Print policy saved.", "success");
   } catch (error) {
     console.error("Could not save print policy", error);
@@ -229,13 +241,18 @@ async function loadSecureShareLinks() {
       const expired = expiry && expiry.getTime() <= now;
       const state = share.revoked ? "Revoked" : expired ? "Expired" : "Active";
       const serialNo = share.bill?.["Serial No"] || share.billId || "Unknown bill";
-      const action = state === "Active"
-        ? `<button class="btn-save" style="background:#c0392b;padding:7px 12px;font-size:12px;" onclick="revokeSecureShareLink('${doc.id}')">Revoke</button>`
-        : `<span style="color:#6c757d;font-weight:700;">${state}</span>`;
-      return `<tr><td>${escapeSettingHtml(serialNo)}</td><td>${created ? created.toLocaleString("en-IN") : "—"}</td><td>${expiry ? expiry.toLocaleDateString("en-IN") : "—"}</td><td>${action}</td></tr>`;
+      const action =
+        state === "Active"
+          ? `<button class="btn-save" style="background:#c0392b;padding:7px 12px;font-size:12px;" onclick="revokeSecureShareLink('${doc.id}')">Revoke</button>`
+          : `<span style="color:#6c757d;font-weight:700;">${state}</span>`;
+      return `<tr><td>${escapeSettingHtml(serialNo)}</td><td>${
+        created ? created.toLocaleString("en-IN") : "—"
+      }</td><td>${expiry ? expiry.toLocaleDateString("en-IN") : "—"}</td><td>${action}</td></tr>`;
     });
     container.innerHTML = rows.length
-      ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:#475569;border-bottom:1px solid #e2e8f0;"><th style="padding:8px;">Bill</th><th>Created</th><th>Expires</th><th>Action</th></tr></thead><tbody>${rows.join("")}</tbody></table>`
+      ? `<table style="width:100%;border-collapse:collapse;font-size:13px;"><thead><tr style="text-align:left;color:#475569;border-bottom:1px solid #e2e8f0;"><th style="padding:8px;">Bill</th><th>Created</th><th>Expires</th><th>Action</th></tr></thead><tbody>${rows.join(
+          ""
+        )}</tbody></table>`
       : "No secure share links yet.";
   } catch (error) {
     console.error("Could not load secure share links.", error);
@@ -1416,4 +1433,299 @@ function showToast(msg, type = "success") {
     timer: 2500,
     timerProgressBar: true,
   });
+}
+
+// ═══════════════════════════════════════════════════════════════════════════
+// ⚠️ DANGER ZONE — Emergency Data Wipe (core_settings.html)
+// Admin-only (page itself is admin-gated by PAGE_ROLE_REQUIREMENTS). For
+// clearing out test/dummy data — never touches users/staff accounts, so
+// login access is never affected by this.
+// ═══════════════════════════════════════════════════════════════════════════
+document.addEventListener("DOMContentLoaded", () => {
+  const confirmInput = document.getElementById("dz-confirm-text");
+  const wipeBtn = document.getElementById("dz-wipe-btn");
+  if (!confirmInput || !wipeBtn) return; // not this page's first load pass, or already handled
+  const bills = document.getElementById("dz-bills");
+  const payments = document.getElementById("dz-payments");
+
+  // A payment is evidence for a bill. Never allow an operator to select a
+  // bill wipe without its payments, or a payment-only wipe that would leave
+  // a bill showing Paid with no payment evidence.
+  const syncDependentChoices = () => {
+    if (!bills || !payments) return;
+    if (bills.checked) {
+      payments.checked = true;
+      payments.disabled = true;
+      payments.parentElement.style.opacity = "0.65";
+    } else {
+      payments.disabled = false;
+      payments.parentElement.style.opacity = "1";
+    }
+  };
+  bills?.addEventListener("change", syncDependentChoices);
+  syncDependentChoices();
+
+  confirmInput.addEventListener("input", () => {
+    const ok = confirmInput.value.trim() === "DELETE ALL DATA";
+    wipeBtn.disabled = !ok;
+    wipeBtn.style.opacity = ok ? "1" : "0.5";
+    wipeBtn.style.cursor = ok ? "pointer" : "not-allowed";
+  });
+
+  wipeBtn.addEventListener("click", runEmergencyWipe);
+});
+
+// Deletes every document in a collection, respecting Firestore's 500-write
+// batch limit (chunked at 400 for safety margin). If a whole-batch commit
+// fails (e.g. one single doc violates a delete rule), falls back to
+// deleting that chunk one document at a time so ONE problem document can't
+// block everything else in the batch. Returns { deleted, skipped }.
+async function batchDeleteCollection(collectionRef) {
+  let deleted = 0;
+  let skipped = 0;
+  while (true) {
+    const snap = await collectionRef.limit(400).get();
+    if (snap.empty) break;
+    try {
+      const batch = db.batch();
+      snap.forEach((doc) => batch.delete(doc.ref));
+      await batch.commit();
+      deleted += snap.size;
+    } catch (batchError) {
+      // Something in this chunk is blocked — retry one at a time so the
+      // rest of the chunk still goes through.
+      for (const doc of snap.docs) {
+        try {
+          await doc.ref.delete();
+          deleted++;
+        } catch (docError) {
+          skipped++;
+        }
+      }
+      // If every doc in this chunk failed, stop — otherwise this becomes
+      // an infinite loop re-fetching the same stuck documents forever.
+      if (skipped >= snap.size) break;
+    }
+  }
+  return { deleted, skipped };
+}
+
+// When bills are wiped but Party Master is intentionally retained, its cached
+// live balance must return to the opening balance. Otherwise the deleted bills
+// disappear but old dues remain on every party card and ledger summary.
+async function resetRetainedPartyBalances() {
+  const snap = await db.collection("parties").get();
+  let updated = 0;
+  let skipped = 0;
+  for (let index = 0; index < snap.docs.length; index += 400) {
+    const chunk = snap.docs.slice(index, index + 400);
+    try {
+      const batch = db.batch();
+      chunk.forEach((doc) => {
+        const openingBalance = Number(doc.data().opBal || 0);
+        batch.update(doc.ref, {
+          currentBalance: Number.isFinite(openingBalance) ? roundCurrency(openingBalance) : 0,
+          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+      });
+      await batch.commit();
+      updated += chunk.length;
+    } catch (batchError) {
+      for (const doc of chunk) {
+        try {
+          const openingBalance = Number(doc.data().opBal || 0);
+          await doc.ref.update({
+            currentBalance: Number.isFinite(openingBalance) ? roundCurrency(openingBalance) : 0,
+            lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+          });
+          updated++;
+        } catch (error) {
+          skipped++;
+        }
+      }
+    }
+  }
+  return { updated, skipped };
+}
+
+async function runEmergencyWipe() {
+  const wipeBills = document.getElementById("dz-bills").checked;
+  const wipePayments = document.getElementById("dz-payments").checked;
+  const wipeOrders = document.getElementById("dz-orders").checked;
+  const wipeParties = document.getElementById("dz-parties").checked;
+
+  if (!wipeBills && !wipePayments && !wipeOrders && !wipeParties) {
+    Swal.fire("Kuch select nahi kiya", "Kam se kam ek collection select karo.", "info");
+    return;
+  }
+
+  if (wipePayments && !wipeBills) {
+    Swal.fire(
+      "Unsafe selection blocked",
+      "Payments ko akela delete nahi kiya ja sakta. Bills bhi select karo, taaki payment status aur evidence mismatch na ho.",
+      "warning"
+    );
+    return;
+  }
+  if (wipeParties && !wipeBills) {
+    Swal.fire(
+      "Unsafe selection blocked",
+      "Party Master tabhi delete kar sakte ho jab Bills bhi select ho—warna existing bills ke customer links toot jayenge.",
+      "warning"
+    );
+    return;
+  }
+
+  // Show what's about to be deleted, with real counts, before the final
+  // irreversible confirm — no one should click through this blind.
+  Swal.fire({ title: "Counting documents...", allowOutsideClick: false, didOpen: () => Swal.showLoading() });
+  const counts = {};
+  if (wipeBills) counts.bills = (await db.collection("bills").get()).size;
+  if (wipeBills || wipePayments) counts.payments = (await db.collection("payments").get()).size;
+  if (wipeOrders) counts.orders = (await db.collection("orders").get()).size;
+  if (wipeParties) counts.parties = (await db.collection("parties").get()).size;
+  Swal.close();
+
+  const summary = Object.entries(counts)
+    .map(([k, v]) => `<li><b>${v}</b> ${k}</li>`)
+    .join("");
+  const totalDocs = Object.values(counts).reduce((a, b) => a + b, 0);
+
+  if (totalDocs === 0) {
+    Swal.fire("Kuch nahi mila", "Selected collections already khaali hain.", "info");
+    return;
+  }
+
+  const finalConfirm = await Swal.fire({
+    icon: "warning",
+    title: "Yeh permanent hai — pakka?",
+    html: `Yeh permanently delete ho jayega, koi undo nahi:<ul style="text-align:left;display:inline-block;margin-top:8px">${summary}</ul>`,
+    showCancelButton: true,
+    confirmButtonColor: "#dc3545",
+    confirmButtonText: "Haan, sab delete karo",
+    cancelButtonText: "Cancel",
+  });
+  if (!finalConfirm.isConfirmed) return;
+
+  Swal.fire({
+    title: "Deleting...",
+    text: "Isse thoda time lag sakta hai.",
+    allowOutsideClick: false,
+    didOpen: () => Swal.showLoading(),
+  });
+
+  const results = {};
+  try {
+    // Payments first — no restrictions on their delete, and clears the
+    // way for bills (which can't be deleted while they show a payment).
+    if (wipeBills || wipePayments) {
+      results.payments = await batchDeleteCollection(db.collection("payments"));
+    }
+
+    if (wipeBills) {
+      // Bills that show a recorded payment can't be deleted directly
+      // (Firestore rule: !billHasPayment()) — reset each one's payment
+      // fields back to Unpaid first, THEN delete. Done one document at a
+      // time (not batched) because some bills may be blocked by a
+      // different rule (e.g. still in unapproved "Draft" workflow status
+      // — payment fields can't be touched until a bill is approved) and
+      // batching would let one such bill fail the whole chunk's reset.
+      let resetCount = 0;
+      let resetSkipped = 0;
+      const needsResetSnap = await db.collection("bills").where("amountPaid", ">", 0).get();
+      const statusSnaps = await Promise.all(
+        ["Paid", "Partial", "Partially Paid"].map((s) => db.collection("bills").where("paymentStatus", "==", s).get())
+      );
+      const toReset = new Map();
+      needsResetSnap.forEach((doc) => toReset.set(doc.id, doc));
+      statusSnaps.forEach((snap) => snap.forEach((doc) => toReset.set(doc.id, doc)));
+
+      for (const doc of toReset.values()) {
+        const billData = doc.data();
+        try {
+          // A bill still in unapproved "Draft" workflow can't have its
+          // payment fields touched (billApprovedForRelease() blocks it) —
+          // approve it first via the separate, already-permitted
+          // billApprover() action, then the payment reset below is
+          // allowed. Locked bills don't need this (they already satisfy
+          // billApprovedForRelease()).
+          //
+          // IMPORTANT: very old bills (from before this workflow feature
+          // existed) have NO workflowStatus/locked fields at all — they
+          // read as undefined here. The Firestore rule itself treats a
+          // missing workflowStatus as 'draft' via .get('workflowStatus',
+          // 'draft'), so this check must match that same default —
+          // checking strictly for the literal string "draft" (as the
+          // first version of this tool did) silently skipped every one
+          // of these old bills, since undefined !== "draft".
+          const effectiveStatus = billData.workflowStatus || "draft";
+          const isLocked = billData.locked === true || effectiveStatus === "locked";
+          if (effectiveStatus === "draft" && !isLocked) {
+            try {
+              await doc.ref.update({
+                workflowStatus: "approved",
+                approvedAt: firebase.firestore.FieldValue.serverTimestamp(),
+                approvedBy: (window.currentUserProfile && window.currentUserProfile.email) || "emergency-wipe",
+                lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+              });
+            } catch (approveError) {
+              console.warn("Could not prepare one bill for emergency deletion.", approveError.code);
+            }
+          }
+          const finalTotal = Number(billData["Final Total"] || 0);
+          await doc.ref.update({ amountPaid: 0, amountDue: finalTotal, paymentStatus: "Unpaid" });
+          resetCount++;
+        } catch (e) {
+          console.warn("Could not reset one bill for emergency deletion.", e.code);
+          resetSkipped++;
+        }
+      }
+      results.bills = await batchDeleteCollection(db.collection("bills"));
+      if (resetSkipped > 0) {
+        results.bills.resetSkipped = resetSkipped;
+      }
+      if (!wipeParties) {
+        results.partyBalances = await resetRetainedPartyBalances();
+      }
+    }
+
+    if (wipeOrders) {
+      results.orders = await batchDeleteCollection(db.collection("orders"));
+    }
+
+    if (wipeParties) {
+      results.parties = await batchDeleteCollection(db.collection("parties"));
+    }
+
+    Swal.close();
+    document.getElementById("dz-confirm-text").value = "";
+    document.getElementById("dz-wipe-btn").disabled = true;
+
+    const lines = Object.entries(results).map(([k, v]) => {
+      if (k === "partyBalances") {
+        return `${v.updated} retained party balance(s) reset to opening balance${v.skipped ? ` (${v.skipped} skipped)` : ""}`;
+      }
+      let line = `${v.deleted} ${k} deleted`;
+      if (v.skipped > 0) line += ` (${v.skipped} skipped — still locked or blocked)`;
+      if (v.resetSkipped > 0)
+        line += ` [${v.resetSkipped} unapproved-draft bills couldn't be un-paid, so weren't deleted either]`;
+      return line;
+    });
+    const anySkipped = Object.values(results).some((v) => v.skipped > 0 || v.resetSkipped > 0);
+
+    Swal.fire({
+      icon: anySkipped ? "warning" : "success",
+      title: anySkipped ? "Mostly done" : "Done",
+      html: lines.map((l) => `<div>${l}</div>`).join(""),
+    });
+  } catch (e) {
+    console.error("Emergency wipe error:", e);
+    Swal.fire(
+      "Ruk gaya beech mein",
+      "Kuch delete ho chuka hai, kuch reh gaya (error: " +
+        e.message +
+        "). Dobara try karo — jo pehle se delete ho chuka hai woh dobara nahi hoga, sirf baaki wala hoga.",
+      "warning"
+    );
+  }
 }

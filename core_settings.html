@@ -8,6 +8,7 @@
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
     <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/sweetalert2@11/dist/sweetalert2.min.css" />
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
@@ -1417,13 +1418,14 @@
       <div class="section-card">
         <div class="section-card-title"><span>💾 Backup & Restore</span></div>
         <div class="info-banner">ℹ️ Bills ko safely backup karo ya deleted bills restore karo.</div>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap">
+        <div id="last-backup-reminder" style="font-size: 13px; font-weight: 700; margin-bottom: 12px"></div>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px">
           <button
             onclick="downloadExcelBackup()"
             class="save-btn"
             style="flex: 1; background: linear-gradient(135deg, #28a745, #1e7e34)"
           >
-            📥 Download Excel Backup
+            📊 Download Excel Report
           </button>
           <button
             onclick="showDeletedBills()"
@@ -1433,6 +1435,71 @@
             🗑️ View Deleted Bills
           </button>
         </div>
+        <div style="display: flex; gap: 12px; flex-wrap: wrap; padding-top: 12px; border-top: 1px dashed #dee2e6">
+          <button
+            onclick="downloadFullJsonBackup()"
+            class="save-btn"
+            style="flex: 1; background: linear-gradient(135deg, #005a9e, #073763)"
+          >
+            🛡️ Download Full Backup (JSON)
+          </button>
+          <div
+            style="flex: 1; color: #5d3a86; border: 1px solid #d6c3ef; border-radius: 8px; padding: 12px; background: #faf7ff; font-size: 13px; font-weight: 700"
+          >
+            🔒 Restore safety: web restore is disabled. Keep the JSON file safe and contact the owner for a controlled recovery.
+          </div>
+        </div>
+        <p style="font-size: 12px; color: #6d8098; margin: 10px 0 0">
+          <b>Excel Report</b> — human-readable, sharing/review ke liye.
+          <b>Full Backup (JSON)</b> — bills + payments + orders + parties + settings ka complete recovery copy. Isme active aur archived dono bills included hote hain.
+        </p>
+      </div>
+
+      <!-- ⚠️ DANGER ZONE — Emergency Data Wipe -->
+      <div class="section-card" style="margin-top: 20px; border: 2px solid #dc3545; background: #fff5f5">
+        <div class="section-card-title" style="color: #dc3545">
+          <span>⚠️ Danger Zone — Emergency Data Wipe</span>
+        </div>
+        <div class="info-banner" style="background: #ffe3e3; color: #8a1f1f; border-color: #f5b5b5">
+          Yeh sirf test/dummy data saaf karne ke liye hai. Selected data <b>permanently delete</b> hoga — koi undo nahi
+          hai. Staff accounts aur login access iske andar kabhi touch nahi hote.
+        </div>
+
+        <div id="dz-checkboxes" style="margin: 16px 0; display: flex; flex-direction: column; gap: 8px">
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+            <input type="checkbox" id="dz-bills" checked /> Bills (aur unse judi payments automatically)
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+            <input type="checkbox" id="dz-payments" checked /> Payments
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+            <input type="checkbox" id="dz-orders" checked /> Orders
+          </label>
+          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
+            <input type="checkbox" id="dz-parties" /> Party Master (customers/farmers/brokers list)
+          </label>
+        </div>
+
+        <div style="margin-bottom: 14px">
+          <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #8a1f1f">
+            Confirm karne ke liye niche exactly type karo: <code>DELETE ALL DATA</code>
+          </label>
+          <input
+            type="text"
+            id="dz-confirm-text"
+            placeholder="DELETE ALL DATA"
+            autocomplete="off"
+            style="width: 100%; max-width: 320px; padding: 10px 12px; border: 1.5px solid #dc3545; border-radius: 8px; font-family: monospace"
+          />
+        </div>
+
+        <button
+          id="dz-wipe-btn"
+          disabled
+          style="background: #dc3545; color: #fff; border: none; padding: 12px 22px; border-radius: 8px; font-weight: 700; cursor: not-allowed; opacity: 0.5"
+        >
+          🗑️ Permanently Delete Selected Data
+        </button>
       </div>
 
       <!-- Theme Settings -->

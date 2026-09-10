@@ -211,13 +211,25 @@ async function showDeletedBills() {
 async function downloadExcelBackup() {
   showLoading();
   try {
-    // Fetch all and filter client-side — Firestore's where("deleted","!=",true)
-    // silently EXCLUDES documents that don't have a "deleted" field at all,
-    // which was wrongly dropping every bill saved before this feature
-    // existed out of the backup.
-    const snap = await billsCollection.orderBy("Date", "desc").get();
-    const rows = snap.docs
-      .filter((d) => d.data().deleted !== true)
+    if (typeof XLSX === "undefined") {
+      throw new Error("Excel export library did not load. Please check your internet connection and refresh the page.");
+    }
+    // Fetch WITHOUT orderBy("Date") — Firestore's orderBy silently EXCLUDES
+    // any document missing that field entirely from the results (same bug
+    // class as the where("deleted","!=",true) issue noted below). Sorting
+    // client-side instead means a bill with a missing/malformed Date still
+    // shows up in the backup (just sorted last) instead of vanishing.
+    const snap = await billsCollection.get();
+    function parseDDMMYYYY(s) {
+      const parts = String(s || "").split("/");
+      if (parts.length !== 3) return 0;
+      const [dd, mm, yyyy] = parts.map(Number);
+      if (!dd || !mm || !yyyy) return 0;
+      return new Date(yyyy, mm - 1, dd).getTime();
+    }
+    const afterDeletedFilter = snap.docs.filter((d) => d.data().deleted !== true);
+    const rows = afterDeletedFilter
+      .sort((a, b) => parseDDMMYYYY(b.data()["Date"]) - parseDDMMYYYY(a.data()["Date"]))
       .map((d) => {
         const b = d.data();
         return {
@@ -243,14 +255,99 @@ async function downloadExcelBackup() {
       });
 
     const wb = XLSX.utils.book_new();
-    const ws = XLSX.utils.json_to_sheet(rows);
+    // json_to_sheet([]) creates a genuinely blank worksheet. Supplying an
+    // explicit header ensures a useful Excel template is downloaded even
+    // when there are currently no active bills.
+    const columns = [
+      "Bill No",
+      "Date",
+      "Customer Name",
+      "Village",
+      "Vehicle No",
+      "Broker",
+      "Product",
+      "Bill Type",
+      "Weighbridge",
+      "Net Weight",
+      "Total Amount",
+      "Utrai",
+      "Freight",
+      "Final Total",
+      "Broker Commission",
+      "Payment Status",
+      "Amount Paid",
+      "Remarks",
+    ];
+    const ws = XLSX.utils.json_to_sheet(rows, { header: columns });
+    ws["!cols"] = columns.map((column) => ({ wch: Math.max(13, column.length + 2) }));
     XLSX.utils.book_append_sheet(wb, ws, "Bills");
+
+    const summaryRows = [
+      { Field: "Generated at", Value: new Date().toLocaleString("en-IN") },
+      { Field: "Active bills exported", Value: rows.length },
+      { Field: "Archived bills excluded", Value: snap.size - rows.length },
+      { Field: "Total bill documents read", Value: snap.size },
+      { Field: "Note", Value: rows.length ? "All active bills are in the Bills sheet." : "No active bills exist yet; the Bills sheet contains headers for verification." },
+    ];
+    const summarySheet = XLSX.utils.json_to_sheet(summaryRows, { header: ["Field", "Value"] });
+    summarySheet["!cols"] = [{ wch: 28 }, { wch: 95 }];
+    XLSX.utils.book_append_sheet(wb, summarySheet, "Backup Summary");
 
     const now = new Date();
     const fname = `MandiBook_Backup_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
       now.getDate()
     ).padStart(2, "0")}.xlsx`;
-    XLSX.writeFile(wb, fname);
+
+    // Manual Blob + explicit <a download> instead of XLSX.writeFile()'s
+    // own internal trigger — in some dev-server/local environments the
+    // browser doesn't honor the filename XLSX.writeFile() tries to set
+    // (saves it as a random UUID with no extension instead). This is the
+    // more robust, standard pattern and works reliably everywhere.
+    const wbOut = XLSX.write(wb, { bookType: "xlsx", type: "array" });
+    const blob = new Blob([wbOut], {
+      type: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+    });
+
+    // Prefer the native Save-As picker (Chrome/Edge) — the filename you
+    // set here is exactly what shows in the OS save dialog and what gets
+    // saved, with zero chance of a browser/extension silently renaming it
+    // to a random blob ID (which is what a plain <a download> click was
+    // doing in this environment). Falls back to the anchor-click method
+    // for browsers without this API (Firefox, Safari).
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fname,
+          types: [
+            {
+              description: "Excel Workbook",
+              accept: { "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet": [".xlsx"] },
+            },
+          ],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        Swal.fire({ icon: "success", title: "✅ Backup Downloaded!", text: fname, confirmButtonColor: "#005a9e" });
+        return;
+      } catch (pickerErr) {
+        if (pickerErr.name === "AbortError") {
+          // User cancelled the save dialog — not an error, just stop.
+          return;
+        }
+        console.warn("Save picker failed, falling back to direct download:", pickerErr);
+        // fall through to the <a download> method below
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fname;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
 
     Swal.fire({ icon: "success", title: "✅ Backup Downloaded!", text: fname, confirmButtonColor: "#005a9e" });
   } catch (e) {
@@ -268,6 +365,158 @@ async function downloadExcelBackup() {
   }
 }
 
+// ── JSON FULL BACKUP (controlled disaster-recovery export) ───────────────────
+// The Excel export above is a human-readable REPORT — good for reviewing/
+// sharing, but lossy for restore purposes (nested data like the Expenses
+// array, and dozens of raw per-Vakal fields, don't round-trip through a flat
+// spreadsheet). This captures the EXACT raw Firestore data for every
+// collection that matters, with original document IDs, so it can genuinely
+// reconstruct the business's data if something goes wrong. Restore is kept out
+// of the browser: Firestore rules cannot distinguish a genuine recovery from a
+// compromised admin browser session. Recovery must be a controlled owner task.
+function serialiseBackupValue(value) {
+  if (value instanceof firebase.firestore.Timestamp) {
+    return { __mandiBookType: "timestamp", seconds: value.seconds, nanoseconds: value.nanoseconds };
+  }
+  if (value instanceof firebase.firestore.GeoPoint) {
+    return { __mandiBookType: "geopoint", latitude: value.latitude, longitude: value.longitude };
+  }
+  if (value instanceof firebase.firestore.DocumentReference) {
+    return { __mandiBookType: "documentReference", path: value.path };
+  }
+  if (Array.isArray(value)) return value.map(serialiseBackupValue);
+  if (value && typeof value === "object") {
+    return Object.fromEntries(Object.entries(value).map(([key, item]) => [key, serialiseBackupValue(item)]));
+  }
+  return value;
+}
+
+async function sha256Hex(text) {
+  if (!window.crypto || !window.crypto.subtle) return "unavailable";
+  const bytes = new TextEncoder().encode(text);
+  const hash = await window.crypto.subtle.digest("SHA-256", bytes);
+  return Array.from(new Uint8Array(hash))
+    .map((byte) => byte.toString(16).padStart(2, "0"))
+    .join("");
+}
+
+async function downloadFullJsonBackup() {
+  showLoading("Preparing full backup...");
+  try {
+    const collectionsToBackup = ["bills", "payments", "parties", "orders", "settings"];
+    const backup = {
+      exportedAt: new Date().toISOString(),
+      exportedBy: (window.currentUserProfile && window.currentUserProfile.email) || "unknown",
+      format: "mandibook-firestore-backup",
+      version: 2,
+      collections: collectionsToBackup,
+    };
+
+    for (const col of collectionsToBackup) {
+      const snap = await db.collection(col).get();
+      backup[col] = snap.docs.map((d) => ({ id: d.id, data: serialiseBackupValue(d.data()) }));
+    }
+
+    const counts = collectionsToBackup.map((c) => `${backup[c].length} ${c}`).join(", ");
+    const confirmResult = await Swal.fire({
+      icon: "question",
+      title: "Full backup ready",
+      html: `Isme yeh sab hoga:<br><b>${counts}</b><br><br>Yeh file safe jagah rakho — isse poora business data restore ho sakta hai.`,
+      showCancelButton: true,
+      confirmButtonText: "Download karo",
+      cancelButtonText: "Cancel",
+    });
+    if (!confirmResult.isConfirmed) return;
+
+    const now = new Date();
+    const fname = `MandiBook_FullBackup_${now.getFullYear()}${String(now.getMonth() + 1).padStart(2, "0")}${String(
+      now.getDate()
+    ).padStart(2, "0")}.json`;
+    const backupPayload = JSON.stringify(backup, null, 2);
+    backup.integrity = { algorithm: "SHA-256", payloadHash: await sha256Hex(backupPayload) };
+    const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await window.showSaveFilePicker({
+          suggestedName: fname,
+          types: [{ description: "JSON Backup", accept: { "application/json": [".json"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(blob);
+        await writable.close();
+        await recordLastBackupTime();
+        Swal.fire({ icon: "success", title: "✅ Full Backup Downloaded!", text: fname, confirmButtonColor: "#005a9e" });
+        return;
+      } catch (pickerErr) {
+        if (pickerErr.name === "AbortError") return;
+        console.warn("Save picker failed, falling back:", pickerErr);
+      }
+    }
+
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    link.href = url;
+    link.download = fname;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    setTimeout(() => URL.revokeObjectURL(url), 1000);
+    await recordLastBackupTime();
+    Swal.fire({ icon: "success", title: "✅ Full Backup Downloaded!", text: fname, confirmButtonColor: "#005a9e" });
+  } catch (e) {
+    console.error("Full backup error:", e);
+    Swal.fire({ icon: "error", title: "Backup failed!", text: e.message });
+  } finally {
+    hideLoading();
+  }
+}
+
+// ── LAST BACKUP REMINDER ───────────────────────────────────────────────────────
+// Tracks when a (full) backup was last taken, so Settings can show a gentle
+// reminder if it's been a while — small, self-contained doc, admin-only.
+async function recordLastBackupTime() {
+  try {
+    await db
+      .collection("settings")
+      .doc("backupInfo")
+      .set(
+        {
+          lastBackupAt: firebase.firestore.FieldValue.serverTimestamp(),
+          lastBackupBy: (window.currentUserProfile && window.currentUserProfile.email) || "unknown",
+        },
+        { merge: true }
+      );
+  } catch (e) {
+    console.warn("Could not record last-backup timestamp:", e);
+  }
+}
+
+async function renderLastBackupReminder() {
+  const el = document.getElementById("last-backup-reminder");
+  if (!el) return;
+  try {
+    const doc = await db.collection("settings").doc("backupInfo").get();
+    if (!doc.exists || !doc.data().lastBackupAt) {
+      el.innerHTML = `⚠️ Abhi tak koi backup nahi liya gaya.`;
+      el.style.color = "#c0392b";
+      return;
+    }
+    const lastDate = doc.data().lastBackupAt.toDate();
+    const daysAgo = Math.floor((Date.now() - lastDate.getTime()) / (1000 * 60 * 60 * 24));
+    if (daysAgo === 0) {
+      el.innerHTML = `✅ Aaj backup liya gaya hai.`;
+      el.style.color = "#1a7f4b";
+    } else {
+      el.innerHTML = `Last backup: <b>${daysAgo} din pehle</b> (${lastDate.toLocaleDateString("en-IN")})`;
+      el.style.color = daysAgo > 14 ? "#c0392b" : "#5d7187";
+    }
+  } catch (e) {
+    console.warn("Could not load last-backup info:", e);
+  }
+}
+document.addEventListener("DOMContentLoaded", renderLastBackupReminder);
+
 // ── FIRESTORE RULES REMINDER ──────────────────────────────────────────────────
 // Soft-deleted bills are filtered by adding where("deleted","!=",true) to queries
 // Make sure bill-list.js and dashboard.js filter these out
@@ -276,3 +525,4 @@ window.softDeleteBill = softDeleteBill;
 window.restoreBill = restoreBill;
 window.showDeletedBills = showDeletedBills;
 window.downloadExcelBackup = downloadExcelBackup;
+window.downloadFullJsonBackup = downloadFullJsonBackup;

@@ -26,8 +26,15 @@
       }
       .audit-heading {
         padding: 28px 28px 22px;
-        background: linear-gradient(135deg, #f7fbff, #edf6ff);
+        background: linear-gradient(135deg, #f8fcff 0%, #e9f5ff 56%, #eef8f6 100%);
         border-bottom: 1px solid #dbe7f3;
+      }
+      .audit-heading-row,
+      .audit-toolbar {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 14px;
       }
       .audit-heading h1 {
         margin: 0;
@@ -40,9 +47,59 @@
         color: #526579;
         font-size: 1rem;
       }
+      .audit-export-btn,
+      .audit-clear-btn,
+      .audit-detail-btn {
+        border: 0;
+        border-radius: 9px;
+        font: inherit;
+        font-weight: 800;
+        cursor: pointer;
+        transition: transform 0.16s ease, box-shadow 0.16s ease;
+      }
+      .audit-export-btn {
+        flex: 0 0 auto;
+        padding: 10px 14px;
+        background: #075fa8;
+        color: #fff;
+        box-shadow: 0 7px 14px #075fa826;
+      }
+      .audit-export-btn:hover,
+      .audit-detail-btn:hover {
+        transform: translateY(-1px);
+      }
+      .audit-stats {
+        display: grid;
+        grid-template-columns: repeat(4, minmax(0, 1fr));
+        gap: 12px;
+        padding: 18px 28px;
+        background: #f8fbfe;
+        border-bottom: 1px solid #e6eef6;
+      }
+      .audit-stat {
+        padding: 13px 15px;
+        border: 1px solid #dbe7f3;
+        border-radius: 12px;
+        background: #fff;
+      }
+      .audit-stat-value {
+        display: block;
+        color: #075fa8;
+        font-size: 1.28rem;
+        font-weight: 900;
+      }
+      .audit-stat-label {
+        display: block;
+        margin-top: 3px;
+        color: #708398;
+        font-size: 0.76rem;
+        font-weight: 750;
+        text-transform: uppercase;
+        letter-spacing: 0.055em;
+      }
       .audit-filters {
         display: grid;
-        grid-template-columns: 1.25fr 0.8fr 0.8fr;
+        grid-template-columns: 1.25fr 0.9fr 0.8fr auto;
         gap: 12px;
         padding: 20px 28px;
         background: #fff;
@@ -102,6 +159,22 @@
         font-size: 0.82rem;
         font-weight: 800;
       }
+      .audit-action.action-bill {
+        background: #e8f4ff;
+        color: #0964ac;
+      }
+      .audit-action.action-payment {
+        background: #e7f8ed;
+        color: #15733a;
+      }
+      .audit-action.action-delete {
+        background: #fff0f0;
+        color: #bd3030;
+      }
+      .audit-action.action-approved {
+        background: #f0eaff;
+        color: #6842aa;
+      }
       .audit-change {
         font-size: 0.88rem;
         color: #516579;
@@ -138,6 +211,87 @@
         font-size: 0.9rem;
         margin-bottom: 3px;
       }
+      .audit-record-id {
+        display: block;
+        max-width: 150px;
+        overflow: hidden;
+        color: #8aa0b6;
+        font-size: 0.72rem;
+        text-overflow: ellipsis;
+        white-space: nowrap;
+      }
+      .audit-detail-btn {
+        padding: 7px 10px;
+        background: #eef6fd;
+        color: #075fa8;
+        font-size: 0.78rem;
+      }
+      .audit-clear-btn {
+        padding: 0 13px;
+        background: #f0f4f8;
+        color: #526579;
+      }
+      .audit-empty {
+        padding: 36px 12px;
+        color: #61768b;
+        text-align: center;
+      }
+      .audit-detail-overlay {
+        position: fixed;
+        z-index: 2000;
+        inset: 0;
+        display: none;
+        align-items: center;
+        justify-content: center;
+        padding: 18px;
+        background: rgba(17, 41, 67, 0.54);
+      }
+      .audit-detail-overlay.open {
+        display: flex;
+      }
+      .audit-detail-panel {
+        width: min(720px, 100%);
+        max-height: min(82vh, 760px);
+        overflow: auto;
+        padding: 24px;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 22px 70px rgba(7, 39, 71, 0.3);
+      }
+      .audit-detail-panel h2 {
+        margin: 0;
+        color: #075fa8;
+      }
+      .audit-detail-close {
+        float: right;
+        padding: 5px 9px;
+        border: 0;
+        border-radius: 7px;
+        background: #eff4f8;
+        color: #40566e;
+        cursor: pointer;
+        font-size: 1rem;
+      }
+      .audit-diff {
+        width: 100%;
+        margin-top: 18px;
+        border-collapse: collapse;
+      }
+      .audit-diff th,
+      .audit-diff td {
+        padding: 10px;
+        border-bottom: 1px solid #e5edf4;
+        text-align: left;
+        vertical-align: top;
+        word-break: break-word;
+      }
+      .audit-diff th {
+        color: #6a7e92;
+        font-size: 0.75rem;
+        text-transform: uppercase;
+      }
+      .audit-before { color: #a34545; }
+      .audit-after { color: #147446; }
       @media (max-width: 760px) {
         .audit-wrap {
           padding: 0 12px;
@@ -159,6 +313,20 @@
         .audit-table {
           min-width: 720px;
         }
+        .audit-stats {
+          grid-template-columns: repeat(2, minmax(0, 1fr));
+          padding: 14px 18px;
+        }
+        .audit-heading-row {
+          align-items: flex-start;
+        }
+        .audit-export-btn {
+          padding: 9px 11px;
+          font-size: 0.82rem;
+        }
+        .audit-clear-btn {
+          min-height: 43px;
+        }
       }
     </style>
   </head>
@@ -167,23 +335,24 @@
     <main class="audit-wrap">
       <section class="audit-card">
         <header class="audit-heading">
-          <h1>🛡️ Audit History</h1>
+          <div class="audit-heading-row"><h1>🛡️ Audit History</h1><button id="audit-export" class="audit-export-btn">⇩ Export CSV</button></div>
           <p>Protected, append-only trail for billing and financial actions.</p>
         </header>
+        <div id="audit-stats" class="audit-stats" aria-live="polite"></div>
         <div class="audit-filters">
           <input
             id="audit-search"
             placeholder="Search bill no., user or action…"
             aria-label="Search audit history"
-          /><select id="audit-action" aria-label="Filter by action">
-            <option value="">All actions</option>
-            <option value="bill">Bills</option>
-            <option value="payment">Payments</option></select
-          ><input id="audit-date" type="date" aria-label="Filter by date" />
+          /><select id="audit-action" aria-label="Filter by action"><option value="">All actions</option></select
+          ><input id="audit-date" type="date" aria-label="Filter by date" /><button id="audit-clear" class="audit-clear-btn" type="button">Clear</button>
         </div>
         <div class="audit-results-wrap"><div id="audit-results">Loading audit history…</div></div>
       </section>
     </main>
+    <div id="audit-detail-overlay" class="audit-detail-overlay" role="dialog" aria-modal="true" aria-labelledby="audit-detail-title">
+      <div class="audit-detail-panel"><button id="audit-detail-close" class="audit-detail-close" aria-label="Close audit details">✕</button><div id="audit-detail-content"></div></div>
+    </div>
     <script>
       let allAuditEntries = [],
         unsubscribeAudit = null;
