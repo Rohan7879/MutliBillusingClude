@@ -124,11 +124,6 @@ function clampPercent(value) {
   return n > 100 ? 100 : n;
 }
 
-// --- disasterRecoveryRestore() bypass, added for JSON backup restore ---
-function disasterRecoveryRestore({ profile }) {
-  return anyRole(profile, ["admin"]);
-}
-
 module.exports = {
   billPaymentUpdater,
   paymentsCreate,
@@ -138,6 +133,5 @@ module.exports = {
   usersSelfUpdate,
   nonNegativeNumber,
   clampPercent,
-  disasterRecoveryRestore,
   anyRole,
 };
