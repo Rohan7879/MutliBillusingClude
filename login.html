@@ -99,6 +99,43 @@
         line-height: 1.35;
       }
       .login-status.error { color: #b42318; }
+      #login-progress {
+        position: fixed;
+        inset: 0;
+        z-index: 9999;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        background: rgba(240, 244, 248, 0.88);
+        backdrop-filter: blur(5px);
+        opacity: 0;
+        visibility: hidden;
+        transition: opacity 0.2s ease, visibility 0.2s ease;
+      }
+      #login-progress.active { opacity: 1; visibility: visible; }
+      .login-progress-card {
+        width: min(100%, 330px);
+        padding: 30px 26px;
+        border-radius: 16px;
+        background: #fff;
+        box-shadow: 0 18px 45px rgba(0, 61, 110, 0.18);
+        text-align: center;
+        color: #163b63;
+      }
+      .login-spinner {
+        width: 52px;
+        height: 52px;
+        margin: 0 auto 18px;
+        border: 5px solid #dcecf8;
+        border-top-color: #005a9e;
+        border-right-color: #e67e22;
+        border-radius: 50%;
+        animation: loginSpin 0.85s linear infinite;
+      }
+      @keyframes loginSpin { to { transform: rotate(360deg); } }
+      #login-progress-message { margin: 0; font-weight: 700; line-height: 1.45; }
+      .login-progress-hint { margin: 9px 0 0; color: #5d738b; font-size: 0.82rem; line-height: 1.4; }
       .divider {
         display: flex;
         align-items: center;
@@ -139,6 +176,13 @@
     </style>
   </head>
   <body>
+    <div id="login-progress" role="status" aria-live="assertive" aria-hidden="true">
+      <div class="login-progress-card">
+        <div class="login-spinner" aria-hidden="true"></div>
+        <p id="login-progress-message">Please wait...</p>
+        <p class="login-progress-hint">MandiBook securely verify kar raha hai.</p>
+      </div>
+    </div>
     <form class="login-card" id="login-form">
       <h2>MandiBook Secure Login</h2>
       <input type="email" id="email" placeholder="Email Address" autocomplete="email" required />
@@ -167,6 +211,11 @@
         loginInProgress = busy;
         document.querySelector('#login-form button[type="submit"]').disabled = busy;
         document.getElementById("google-login-btn").disabled = busy;
+        const progress = document.getElementById("login-progress");
+        const progressMessage = document.getElementById("login-progress-message");
+        progress.classList.toggle("active", busy);
+        progress.setAttribute("aria-hidden", String(!busy));
+        if (message) progressMessage.textContent = message;
         if (message) setLoginStatus(message);
       }
       function startSlowAccessNotice() {
@@ -263,6 +312,7 @@
           return;
         }
         try {
+          setLoginBusy(true, "Password reset link bhej rahe hain...");
           await firebase.auth().sendPasswordResetEmail(email);
           Swal.fire({
             icon: "success",
@@ -283,6 +333,8 @@
               ? "Email address sahi format me likho."
               : "Reset link send nahi hua. Email address check karke dobara try karo.",
           });
+        } finally {
+          setLoginBusy(false);
         }
       });
 
@@ -304,13 +356,18 @@
           console.error("Google redirect sign-in failed", error);
           sessionStorage.removeItem("mandibook_google_sign_in");
           Swal.fire({ icon: "error", title: "Google sign-in failed", text: googleSignInMessage(error) });
+        } finally {
+          // A cancelled/failed redirect returns to this page; never leave an
+          // old progress screen over the form in that case.
+          if (!firebase.auth().currentUser) setLoginBusy(false);
         }
       }
       showRedirectSignInError();
 
       document.getElementById("google-login-btn").addEventListener("click", async () => {
         const button = document.getElementById("google-login-btn");
-        button.disabled = true;
+        if (loginInProgress) return;
+        setLoginBusy(true, "Google sign-in open ho raha hai...");
         button.textContent = "Opening Google...";
         try {
           const provider = new firebase.auth.GoogleAuthProvider();
@@ -326,8 +383,11 @@
             title: "Google sign-in failed",
             text: googleSignInMessage(error),
           });
+          setLoginBusy(false);
         } finally {
-          button.disabled = false;
+          // During a successful redirect this page is unloading. On a local
+          // failure, restore the controls so the user can try again.
+          if (!loginInProgress) button.disabled = false;
           button.textContent = "🔵 Continue with Google";
         }
       });

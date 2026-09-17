@@ -1110,6 +1110,25 @@ window.hideLoading = function () {
   }
 };
 
+// Firebase checks the signed-in staff profile before protected screens can
+// render. Show the same global loader for that backend work too, rather than
+// leaving the previous screen frozen while access is being verified.
+window.addEventListener("mandibook:access-checking", () => {
+  window.showLoader("Secure access verify ho raha hai...");
+});
+window.addEventListener("mandibook:access-ready", () => {
+  window.hideLoader();
+});
+window.addEventListener("mandibook:access-error", (event) => {
+  const message = event.detail?.message || "Access verify nahi ho paya. Internet check karein.";
+  const textEl = document.getElementById("globalLoaderText");
+  if (textEl) {
+    textEl.style.color = "#b42318";
+    textEl.textContent = message;
+  }
+  setTimeout(() => window.hideLoader(), 2200);
+});
+
 // Function for Settings Page Live Demo
 window.demoAndSaveLoader = function (themeId) {
   themeId = parseInt(themeId);
@@ -1184,21 +1203,18 @@ window.showLoader = function (textMsg) {
 
   if (l) l.classList.add("active");
 
-  // 🔥 15-SECOND FAILSAFE (ANTI-HANG SYSTEM) 🔥
+  // Keep the screen visibly active during slow requests.  The old failsafe
+  // hid the loader after 17.5 seconds even though Firestore could still be
+  // saving/loading in the background, which made the app look stuck.
   clearTimeout(window.loaderTimeout);
   window.loaderTimeout = setTimeout(() => {
-    // Agar 15 second baad bhi loader chal raha hai
     if (l && l.classList.contains("active")) {
       if (textEl) {
-        textEl.style.color = "#e74c3c"; // Alert ke liye Red color
-        textEl.innerText = "Network slow. Please try again.";
+        textEl.style.color = "#b45309";
+        textEl.innerText = "Network slow hai — MandiBook abhi bhi kaam kar raha hai...";
       }
-      // 2.5 seconds message dikhane ke baad loader hata do
-      setTimeout(() => {
-        window.hideLoader();
-      }, 2500);
     }
-  }, 15000); // 15000 ms = 15 Seconds
+  }, 15000);
 };
 
 window.hideLoader = function () {
