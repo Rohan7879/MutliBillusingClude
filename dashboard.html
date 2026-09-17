@@ -416,6 +416,105 @@
         flex-wrap: wrap;
         gap: 8px;
       }
+
+      /* ── DASHBOARD WORKSPACE REFRESH ── */
+      body {
+        background: #f4f8fc;
+      }
+      .page-wrapper.dashboard-workspace {
+        max-width: 1240px;
+        padding: 28px 22px 48px;
+      }
+      .dashboard-hero {
+        position: relative;
+        overflow: hidden;
+        display: grid;
+        grid-template-columns: minmax(0, 1fr) auto;
+        gap: 24px;
+        align-items: center;
+        margin-bottom: 18px;
+        padding: 30px 34px;
+        border-radius: 22px;
+        color: #fff;
+        background: radial-gradient(circle at 86% 20%, rgba(70, 177, 245, 0.38), transparent 28%),
+          linear-gradient(123deg, #06335e 0%, #075a9e 56%, #0876b9 100%);
+        box-shadow: 0 14px 34px rgba(0, 75, 130, 0.2);
+      }
+      .dashboard-hero::before,
+      .dashboard-hero::after {
+        content: "";
+        position: absolute;
+        border: 1px solid rgba(255, 255, 255, 0.15);
+        border-radius: 50%;
+        pointer-events: none;
+      }
+      .dashboard-hero::before { width: 260px; height: 260px; right: -95px; top: -132px; }
+      .dashboard-hero::after { width: 170px; height: 170px; right: 70px; bottom: -128px; }
+      .dashboard-eyebrow { margin: 0 0 7px; color: #bfe7ff; font-weight: 800; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
+      .dashboard-hero h1 { margin: 0; font-size: clamp(26px, 3vw, 37px); letter-spacing: -0.035em; }
+      .dashboard-hero p { margin: 9px 0 0; max-width: 610px; color: rgba(255, 255, 255, 0.84); font-size: 15px; }
+      .dashboard-hero-actions { position: relative; z-index: 1; display: flex; gap: 10px; flex-wrap: wrap; }
+      .dashboard-action {
+        display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 43px; padding: 0 17px;
+        border: 1px solid rgba(255,255,255,0.34); border-radius: 10px; color: #fff; text-decoration: none; font-size: 14px; font-weight: 800;
+        background: rgba(255,255,255,0.11); transition: transform .18s ease, background .18s ease;
+      }
+      .dashboard-action:hover { color: #fff; transform: translateY(-2px); background: rgba(255,255,255,0.2); }
+      .dashboard-action.primary { color: #063e6d; background: #fff; border-color: #fff; box-shadow: 0 5px 13px rgba(0,0,0,.13); }
+      .dashboard-action.primary:hover { color: #063e6d; background: #e9f7ff; }
+      #dashboard_sync_status { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 19px; padding: 7px 11px; border-radius: 999px; font-size: 12px; color: #1b6f45; background: #eaf8f0; }
+      #dashboard_sync_status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #23a566; box-shadow: 0 0 0 3px rgba(35,165,102,.13); }
+      .dashboard-filter-card { padding: 20px 22px; box-shadow: 0 8px 24px rgba(15, 71, 113, 0.07); }
+      .dashboard-filter-card .section-card-title { margin-bottom: 15px; border: 0; padding: 0; color: #173a5e; text-transform: none; letter-spacing: 0; font-size: 17px; }
+      .filter-description { margin: -10px 0 16px; color: #71839a; font-size: 13px; }
+      .filters-grid { gap: 9px; }
+      .filters-grid input[type="text"] { min-width: 245px; flex: 2; }
+      .filters-grid input[type="text"], .filters-grid input[type="date"], .filters-grid input[type="month"] { min-height: 42px; border-color: #d7e3ef; background: #fbfdff; }
+      .filter-btn { min-height: 42px; border-radius: 9px; background: #0969b2; }
+      .filter-btn:hover { background: #075792; }
+      .preset-btns { margin-top: 15px !important; padding-top: 14px; border-top: 1px solid #e9f0f6; }
+      .preset-btn { border-width: 1px; border-color: #d7e3ef; color: #46617c; background: #f9fbfd; }
+      .preset-btn.active, .preset-btn:hover { background: #e7f4ff; color: #075c9f; border-color: #99cbed; box-shadow: none; }
+      .dashboard-quick-actions { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 12px; margin: 20px 0; }
+      .quick-action { display: flex; align-items: center; gap: 12px; min-height: 66px; padding: 13px 15px; color: #1e405f; background: #fff; border: 1px solid #e0ebf4; border-radius: 13px; text-decoration: none; box-shadow: 0 4px 14px rgba(15,71,113,.045); transition: transform .18s ease, box-shadow .18s ease; }
+      .quick-action:hover { color: #075c9f; transform: translateY(-2px); box-shadow: 0 10px 21px rgba(15,71,113,.11); }
+      .quick-action-icon { display: grid; place-items: center; width: 37px; height: 37px; border-radius: 10px; font-size: 18px; background: #eaf5fd; }
+      .quick-action strong { display: block; font-size: 14px; }.quick-action small { display: block; margin-top: 3px; color: #8090a1; font-size: 12px; }
+      .kpi-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; }
+      .kpi-card { min-height: 126px; padding: 19px 17px 16px; text-align: left; border-radius: 15px; }
+      .kpi-card::after { content: ""; position: absolute; right: -20px; bottom: -37px; width: 100px; height: 100px; border-radius: 50%; background: rgba(0, 90, 158, 0.035); }
+      .kpi-label { position: relative; z-index: 1; margin-bottom: 13px; font-size: 12px; text-transform: uppercase; letter-spacing: .055em; }
+      .kpi-value { position: relative; z-index: 1; font-size: clamp(22px, 2.3vw, 29px); color: #123f67; }
+      .kpi-card:nth-child(n + 5) { min-height: 96px; padding-top: 16px; }
+      .kpi-card:nth-child(n + 5) .kpi-value { font-size: 22px; }
+      .dashboard-bills-card { padding: 22px; box-shadow: 0 8px 24px rgba(15,71,113,.07); }
+      .dashboard-bills-card .section-card-title { color: #173a5e; text-transform: none; letter-spacing: 0; font-size: 17px; }
+      .dashboard-bills-card .section-card-title small { display: block; margin: 3px 0 0; color: #7c8da0; font-weight: 600; font-size: 12px; }
+      .table-scroll { width: 100%; overflow-x: auto; padding: 0 2px 4px; }
+      .bill-list-table { min-width: 820px; border-spacing: 0 5px; }
+      .bill-list-table th { padding: 11px 12px; background: #eaf2f8; color: #59718a; font-size: 11px; }
+      .bill-list-table td { padding: 12px; border-color: #edf2f6; color: #29445e; }
+      .bill-list-table tbody tr:hover { transform: none; }
+      .view-btn { border-radius: 8px; background: #e7f4ff; color: #075c9f; box-shadow: none; }.view-btn:hover { color: #fff; background: #0969b2; box-shadow: none; }
+      .pagination-row { justify-content: flex-end; margin: 16px 2px 0; }.pagination-row span { color: #627b93; font-size: 13px; }
+      .dashboard-empty { padding: 38px 18px !important; text-align: center; color: #7b8da0 !important; font-weight: 600; }
+      @media (max-width: 900px) {
+        .page-wrapper.dashboard-workspace { padding: 18px 14px 100px; }
+        .dashboard-hero { grid-template-columns: 1fr; gap: 18px; padding: 24px 22px; border-radius: 18px; }
+        .dashboard-hero-actions { width: 100%; }.dashboard-action { flex: 1; }
+        .dashboard-quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+        .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
+        .dashboard-filter-card, .dashboard-bills-card { padding: 17px 14px; }
+        .filters-grid input[type="text"] { width: 100%; flex-basis: 100%; }
+      }
+      @media (max-width: 460px) {
+        .dashboard-hero h1 { font-size: 25px; }.dashboard-hero p { font-size: 13px; }
+        .dashboard-hero-actions { flex-direction: column; }.dashboard-action { width: 100%; }
+        .dashboard-quick-actions { gap: 8px; }.quick-action { min-height: 60px; padding: 10px; gap: 8px; }.quick-action-icon { width: 32px; height: 32px; font-size: 15px; }
+        .quick-action strong { font-size: 12px; }.quick-action small { display: none; }
+        .filters-grid input[type="date"] { width: calc(50% - 17px); }.filters-grid > span { font-size: 12px; }
+        .kpi-card { min-height: 106px; padding: 15px 12px; }.kpi-label { font-size: 10px; }.kpi-value { font-size: 20px; }
+      }
     </style>
     <link rel="stylesheet" href="css/themes.css" />
   </head>
@@ -423,12 +522,24 @@
     <!-- NAVBAR -->
     <div id="navbar-root"></div>
 
-    <div class="page-wrapper">
+    <div class="page-wrapper dashboard-workspace">
+      <section class="dashboard-hero" aria-labelledby="dashboard-title">
+        <div>
+          <p class="dashboard-eyebrow" id="dashboard-date-label">Business overview</p>
+          <h1 id="dashboard-title">Good day, <span id="dashboard-user-name">there</span></h1>
+          <p>Review your purchase activity, outstanding amount and recent bills from one secure workspace.</p>
+        </div>
+        <div class="dashboard-hero-actions">
+          <a class="dashboard-action primary" href="bill-create.html">＋ Create bill</a>
+          <a class="dashboard-action" href="bills.html">View all bills →</a>
+        </div>
+      </section>
       <div id="dashboard_sync_status"></div>
 
       <!-- FILTERS -->
-      <div class="section-card">
-        <div class="section-card-title"><span>🔍</span> Filters</div>
+      <div class="section-card dashboard-filter-card">
+        <div class="section-card-title"><span>🔍</span> Find bills</div>
+        <p class="filter-description">Search a customer or use a period to update every summary below.</p>
         <div class="filters-grid">
           <input type="text" id="search_input" placeholder="🔍 Search by name, village, or vehicle..." />
           <input type="date" id="start_date" />
@@ -448,13 +559,20 @@
           />
           <button class="filter-btn" id="month_filter_btn">By Month</button>
         </div>
-        <div class="preset-btns" style="margin-top: 12px">
-          <button class="preset-btn" id="today_btn">📅 Today</button>
-          <button class="preset-btn" id="last7days_btn">📅 Last 7 Days</button>
-          <button class="preset-btn" id="month_btn">📅 This Month</button>
-          <button class="preset-btn" id="year_btn">📅 This Year</button>
+        <div class="preset-btns" style="margin-top: 12px" aria-label="Quick date filters">
+          <button class="preset-btn" id="today_btn">Today</button>
+          <button class="preset-btn" id="last7days_btn">Last 7 days</button>
+          <button class="preset-btn active" id="month_btn">This month</button>
+          <button class="preset-btn" id="year_btn">This year</button>
         </div>
       </div>
+
+      <section class="dashboard-quick-actions" aria-label="Quick actions">
+        <a class="quick-action" href="bill-create.html"><span class="quick-action-icon">🧾</span><span><strong>Create bill</strong><small>Start a new purchase</small></span></a>
+        <a class="quick-action" href="bills.html"><span class="quick-action-icon">📚</span><span><strong>Browse bills</strong><small>Search all purchases</small></span></a>
+        <a class="quick-action" href="order-book.html"><span class="quick-action-icon">📦</span><span><strong>Orders</strong><small>Track order activity</small></span></a>
+        <a class="quick-action" href="ledger.html"><span class="quick-action-icon">₹</span><span><strong>Ledger</strong><small>Review balances</small></span></a>
+      </section>
 
       <!-- KPI CARDS -->
       <div class="kpi-grid">
@@ -489,9 +607,9 @@
       </div>
 
       <!-- BILL LIST -->
-      <div class="section-card" id="bill-list-section">
+      <div class="section-card dashboard-bills-card" id="bill-list-section">
         <div class="section-card-title">
-          <span>📋</span> Purchase Bills
+          <span>📋</span> <span>Recent purchase bills<small>Choose bills to print, or open one for complete details.</small></span>
           <button
             type="button"
             class="filter-btn"
@@ -502,6 +620,7 @@
           </button>
         </div>
 
+        <div class="table-scroll">
         <table class="bill-list-table">
           <thead>
             <tr>
@@ -517,6 +636,7 @@
           </thead>
           <tbody id="dashboard_bill_list_body"></tbody>
         </table>
+        </div>
 
         <div class="pagination-row">
           <button id="prev_page_btn" class="filter-btn">← Prev</button>

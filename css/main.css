@@ -983,6 +983,64 @@ button[type="submit"]:hover {
   }
 }
 
+/* ── App-style phone navigation ────────────────────────────────── */
+.mobile-bottom-nav { display: none; }
+@media (min-width: 901px) {
+  /* Desktop stays a single clean row; mobile has its own bottom navigation. */
+  .top-navbar { flex-wrap: nowrap; }
+  .navbar-links { flex-wrap: nowrap; }
+}
+@media (max-width: 900px) {
+  body { padding-bottom: 84px; }
+  .top-navbar { display: block; min-height: 0; padding: 0; }
+  .navbar-bar { display: flex; min-height: 60px; align-items: center; justify-content: space-between; padding: 0 14px; }
+  .navbar-links { display: none; padding: 10px 12px 14px; }
+  .navbar-links.open { display: block; }
+  .navbar-toggle { display: block; margin-left: 0; }
+  .mobile-bottom-nav {
+    position: fixed;
+    right: 10px;
+    bottom: max(9px, env(safe-area-inset-bottom));
+    left: 10px;
+    z-index: 1001;
+    display: flex;
+    align-items: stretch;
+    justify-content: space-around;
+    min-height: 60px;
+    padding: 5px;
+    border: 1px solid rgba(18, 67, 105, .12);
+    border-radius: 17px;
+    background: rgba(255,255,255,.96);
+    box-shadow: 0 12px 28px rgba(11, 49, 79, .2);
+    backdrop-filter: blur(12px);
+  }
+  .mobile-nav-link {
+    display: grid;
+    flex: 1;
+    min-width: 0;
+    place-items: center;
+    align-content: center;
+    gap: 2px;
+    padding: 4px 3px;
+    border: 0;
+    border-radius: 12px;
+    background: transparent;
+    color: #55718b;
+    font: inherit;
+    text-decoration: none;
+    cursor: pointer;
+  }
+  .mobile-nav-link > span { font-size: 1rem; line-height: 1; }
+  .mobile-nav-link small { overflow: hidden; max-width: 100%; font-size: .62rem; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+  .mobile-nav-link.active { color: #005a9e; background: #e5f3ff; }
+  .mobile-nav-link.active > span { transform: translateY(-1px); }
+  .mobile-nav-more { color: #48667f; }
+}
+@media (max-width: 360px) {
+  .mobile-bottom-nav { right: 7px; left: 7px; }
+  .mobile-nav-link small { font-size: .57rem; }
+}
+
 /* ══════════════════════════════
             PRINT STYLES
          ══════════════════════════════ */

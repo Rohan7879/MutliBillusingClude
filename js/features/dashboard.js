@@ -10,6 +10,7 @@ document.addEventListener("DOMContentLoaded", function () {
 });
 
 function initializeDashboard() {
+  updateDashboardWelcome();
   fetchAllBills();
   // Attach event listeners for filter buttons
   document.getElementById("today_btn").addEventListener("click", () => filterData("today"));
@@ -24,10 +25,35 @@ function initializeDashboard() {
   });
   document.getElementById("search_input").addEventListener("input", (event) => filterData(null, event.target.value));
 
+  document.querySelectorAll(".preset-btn").forEach((button) => {
+    button.addEventListener("click", () => {
+      document.querySelectorAll(".preset-btn").forEach((item) => item.classList.remove("active"));
+      button.classList.add("active");
+    });
+  });
+
   // Pagination event listeners
   document.getElementById("prev_page_btn").addEventListener("click", goToPreviousPage);
   document.getElementById("next_page_btn").addEventListener("click", goToNextPage);
 }
+
+function updateDashboardWelcome() {
+  const profile = window.currentUserProfile || {};
+  const authUser = firebase.auth().currentUser || {};
+  const rawName = profile.displayName || authUser.displayName || profile.email || authUser.email || "there";
+  const firstName = String(rawName).split(/[\s@]/)[0] || "there";
+  const nameElement = document.getElementById("dashboard-user-name");
+  if (nameElement) nameElement.textContent = firstName;
+
+  const dateElement = document.getElementById("dashboard-date-label");
+  if (dateElement) {
+    dateElement.textContent = new Intl.DateTimeFormat("en-IN", {
+      weekday: "long", month: "long", day: "numeric"
+    }).format(new Date());
+  }
+}
+
+window.addEventListener("mandibook:access-ready", updateDashboardWelcome);
 
 async function fetchAllBills() {
   try {
@@ -188,6 +214,12 @@ function renderBillList() {
   const end = start + itemsPerPage;
   const billsOnPage = currentlyDisplayedBills.slice(start, end);
 
+  if (billsOnPage.length === 0) {
+    tableBody.innerHTML = '<tr><td class="dashboard-empty" colspan="8">No bills match this filter yet.</td></tr>';
+    document.getElementById("select_all_bills").checked = false;
+    return;
+  }
+
   billsOnPage.forEach((bill) => {
     const row = document.createElement("tr");
     row.innerHTML = `
@@ -213,8 +245,10 @@ function toggleSelectAll(source) {
   recalculateKPIs();
 }
 function renderPaginationControls() {
-  const totalPages = Math.ceil(currentlyDisplayedBills.length / itemsPerPage);
-  document.getElementById("page_info").textContent = `Page ${currentPage} of ${totalPages}`;
+  const totalPages = Math.max(1, Math.ceil(currentlyDisplayedBills.length / itemsPerPage));
+  document.getElementById("page_info").textContent = currentlyDisplayedBills.length
+    ? `Page ${currentPage} of ${totalPages}`
+    : "No bills to show";
 
   document.getElementById("prev_page_btn").disabled = currentPage === 1;
   document.getElementById("next_page_btn").disabled = currentPage === totalPages;
@@ -306,7 +340,7 @@ function updateSyncTime() {
       2,
       "0"
     )}:${String(now.getSeconds()).padStart(2, "0")}`;
-    syncStatusElement.textContent = `Last synced: ${formattedTime}`;
+    syncStatusElement.textContent = `Live data synced at ${formattedTime}`;
   }
 }
 

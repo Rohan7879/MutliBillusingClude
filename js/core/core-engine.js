@@ -644,6 +644,21 @@ function renderNavbar() {
 
   const linksHtml = topLevelHtml + groupsHtml;
 
+  // Phone navigation intentionally keeps the daily actions one thumb away.
+  // Less-frequent pages (Accounts, Admin, profile and logout) remain under
+  // the top-right More menu instead of making a crowded bottom bar.
+  const mobileQuickHrefs = ["dashboard.html", "bills.html", "bill-create.html", "order-book.html"];
+  const mobileLinksHtml = mobileQuickHrefs
+    .map((href) => visibleItems.find((item) => item.href === href))
+    .filter(Boolean)
+    .map((item) => {
+      const isActive = item.href === currentFile;
+      return `<a class="mobile-nav-link${isActive ? " active" : ""}" href="${item.href}"${
+        isActive ? ' aria-current="page"' : ""
+      }><span aria-hidden="true">${item.icon}</span><small>${item.label}</small></a>`;
+    })
+    .join("");
+
   const connHtml =
     typeof checkFirebaseConnection === "function"
       ? `<button class="nav-conn" onclick="checkFirebaseConnection()">
@@ -665,8 +680,8 @@ function renderNavbar() {
       )} — click to edit your profile">
          👤 ${escapeHtml(profile.displayName || profile.email || "Signed in")}
          <span class="nav-role-pill nav-role-${escapeHtml(profile.role || "viewer")}">${escapeHtml(
-        profile.role || "viewer"
-      )}</span>
+         profile.role || "viewer"
+        )}</span>
        </a>`
     : "";
 
@@ -691,6 +706,10 @@ function renderNavbar() {
       <button class="navbar-toggle" id="navbar-toggle" aria-label="Menu" type="button">☰</button>
       <div class="navbar-links" id="navbar-links">${linksHtml}${connHtml}${userBadgeHtml}${logoutHtml}</div>
     </nav>`;
+  root.insertAdjacentHTML(
+    "beforeend",
+    `<nav class="mobile-bottom-nav" aria-label="Quick navigation">${mobileLinksHtml}<button type="button" class="mobile-nav-link mobile-nav-more" aria-expanded="false"><span aria-hidden="true">☰</span><small>More</small></button></nav>`
+  );
 
   // Hamburger toggle — chhoti screen par links ek dropdown ke peeche chhup
   // jaate hain, ☰ dabane par khulte hain (bade screen par ye button khud
@@ -699,11 +718,22 @@ function renderNavbar() {
   const linksPanel = document.getElementById("navbar-links");
   if (toggleBtn && linksPanel) {
     toggleBtn.addEventListener("click", () => {
-      linksPanel.classList.toggle("open");
+      const isOpen = linksPanel.classList.toggle("open");
+      root.querySelector(".mobile-nav-more")?.setAttribute("aria-expanded", String(isOpen));
     });
     // Kisi link pe click karte hi menu apne aap band ho jaye
     linksPanel.querySelectorAll("a.nav-link, a.nav-dropdown-item").forEach((a) => {
       a.addEventListener("click", () => linksPanel.classList.remove("open"));
+    });
+  }
+
+  const mobileMoreBtn = root.querySelector(".mobile-nav-more");
+  if (mobileMoreBtn && toggleBtn && linksPanel) {
+    mobileMoreBtn.addEventListener("click", () => {
+      const isOpen = linksPanel.classList.toggle("open");
+      toggleBtn.setAttribute("aria-expanded", String(isOpen));
+      mobileMoreBtn.setAttribute("aria-expanded", String(isOpen));
+      window.scrollTo({ top: 0, behavior: "smooth" });
     });
   }
 

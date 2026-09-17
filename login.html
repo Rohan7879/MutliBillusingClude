@@ -22,69 +22,129 @@
     <style>
       body {
         font-family: "Segoe UI", Tahoma, Geneva, Verdana, sans-serif;
-        background: #f0f4f8;
-        height: 100vh;
+        min-height: 100vh;
         display: flex;
         align-items: center;
         justify-content: center;
         margin: 0;
+        padding: 28px 18px;
+        box-sizing: border-box;
+        background:
+          radial-gradient(circle at 8% 8%, rgba(51, 143, 211, 0.2), transparent 30%),
+          radial-gradient(circle at 92% 92%, rgba(230, 126, 34, 0.13), transparent 28%),
+          linear-gradient(135deg, #edf5fc 0%, #f8fbfe 48%, #edf3f8 100%);
       }
-      .login-card {
+      .login-shell {
+        display: grid;
+        grid-template-columns: minmax(340px, 1fr) minmax(380px, 452px);
+        width: min(100%, 960px);
+        min-height: 590px;
+        overflow: hidden;
+        border: 1px solid rgba(135, 177, 211, 0.35);
+        border-radius: 24px;
         background: #fff;
-        padding: 40px;
-        border-radius: 12px;
-        box-shadow: 0 10px 25px rgba(0, 90, 158, 0.1);
-        width: 100%;
-        max-width: 350px;
-        text-align: center;
+        box-shadow: 0 25px 65px rgba(19, 68, 112, 0.16);
       }
-      .login-card h2 {
-        color: #005a9e;
-        margin-bottom: 25px;
+      .login-showcase {
+        position: relative;
+        overflow: hidden;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        padding: 44px;
+        color: #fff;
+        background: linear-gradient(145deg, #003e70 0%, #005a9e 52%, #0879b9 100%);
       }
+      .login-showcase::before {
+        content: "";
+        position: absolute;
+        width: 340px;
+        height: 340px;
+        top: -160px;
+        right: -170px;
+        border: 38px solid rgba(255,255,255,.09);
+        border-radius: 50%;
+      }
+      .login-showcase::after {
+        content: "";
+        position: absolute;
+        width: 210px;
+        height: 210px;
+        bottom: -115px;
+        left: -95px;
+        border: 30px solid rgba(230,126,34,.25);
+        border-radius: 50%;
+      }
+      .showcase-content, .showcase-footer { position: relative; z-index: 1; }
+      .showcase-logo { display: flex; align-items: center; gap: 12px; font-size: 1.2rem; font-weight: 800; }
+      .showcase-logo img { width: 43px; height: 43px; object-fit: cover; border: 2px solid rgba(255,255,255,.7); border-radius: 10px; background: #fff; }
+      .showcase-title { max-width: 355px; margin: 62px 0 15px; font-size: clamp(2rem, 3.3vw, 2.8rem); line-height: 1.1; letter-spacing: -.045em; }
+      .showcase-copy { max-width: 345px; margin: 0; color: rgba(255,255,255,.82); font-size: .96rem; line-height: 1.65; }
+      .showcase-points { display: grid; gap: 12px; margin: 31px 0 0; padding: 0; list-style: none; }
+      .showcase-points li { display: flex; gap: 10px; align-items: center; color: rgba(255,255,255,.94); font-size: .86rem; }
+      .showcase-check { display: inline-grid; width: 19px; height: 19px; place-items: center; border-radius: 50%; background: rgba(255,255,255,.15); color: #ffd687; font-size: .72rem; }
+      .showcase-footer { display: flex; align-items: center; gap: 8px; color: rgba(255,255,255,.68); font-size: .78rem; }
+      .login-card {
+        overflow: hidden;
+        background: #fff;
+        display: flex;
+        align-items: center;
+      }
+      .login-brand {
+        display: none;
+      }
+      .login-brand::after {
+        content: "";
+        position: absolute;
+        width: 180px;
+        height: 180px;
+        right: -78px;
+        bottom: -108px;
+        border: 28px solid rgba(255, 255, 255, 0.1);
+        border-radius: 50%;
+      }
+      .brand-row { display: flex; align-items: center; gap: 12px; position: relative; z-index: 1; }
+      .brand-logo { width: 42px; height: 42px; object-fit: cover; border-radius: 10px; border: 2px solid rgba(255,255,255,.72); background: #fff; }
+      .brand-name { margin: 0; font-size: 1.22rem; font-weight: 800; letter-spacing: -0.02em; }
+      .brand-tagline { margin: 12px 0 0; color: rgba(255,255,255,.84); font-size: .9rem; line-height: 1.45; position: relative; z-index: 1; }
+      .login-content { width: 100%; padding: 44px 42px; box-sizing: border-box; }
+      .login-card h2 { margin: 0; color: #163b63; font-size: 1.38rem; letter-spacing: -0.02em; }
+      .login-subtitle { margin: 8px 0 23px; color: #64748b; font-size: .88rem; line-height: 1.45; }
+      .form-group { margin-bottom: 16px; text-align: left; }
+      .form-group label { display: block; margin: 0 0 7px; color: #31516f; font-size: .82rem; font-weight: 750; }
+      .input-wrap { position: relative; }
+      .input-icon { position: absolute; left: 13px; top: 50%; transform: translateY(-50%); color: #7190aa; font-size: 1rem; pointer-events: none; }
       input {
         width: 100%;
-        padding: 12px;
-        margin-bottom: 15px;
-        border: 1.5px solid #dee2e6;
-        border-radius: 8px;
-        font-size: 15px;
+        padding: 13px 13px 13px 39px;
+        margin: 0;
+        background: #fbfdff;
+        border: 1.5px solid #d5e2ef;
+        border-radius: 10px;
+        font-size: .95rem;
+        color: #173a5d;
         box-sizing: border-box;
+        transition: border-color .2s, box-shadow .2s, background .2s;
       }
-      input:focus {
-        border-color: #005a9e;
-        outline: none;
-      }
+      input:focus { border-color: #1683c5; background: #fff; box-shadow: 0 0 0 4px rgba(22, 131, 197, .12); outline: none; }
       button {
         width: 100%;
-        padding: 14px;
-        background: #005a9e;
+        padding: 13px;
+        background: linear-gradient(135deg, #005a9e, #0074b8);
         color: #fff;
         border: none;
-        border-radius: 8px;
-        font-size: 16px;
+        border-radius: 10px;
+        font-size: .95rem;
         font-weight: bold;
         cursor: pointer;
-        transition: 0.2s;
+        transition: transform .18s, box-shadow .18s, background .18s;
+        box-shadow: 0 8px 16px rgba(0, 90, 158, .18);
       }
-      button:hover {
-        background: #003d6e;
-      }
-      .login-help {
-        display: block;
-        width: auto;
-        margin: 16px auto 0;
-        padding: 0;
-        background: transparent;
-        color: #005a9e;
-        font-size: 14px;
-        font-weight: 700;
-        text-decoration: underline;
-      }
-      .login-help:hover {
-        background: transparent;
-        color: #003d6e;
-      }
+      button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 11px 20px rgba(0, 90, 158, .24); }
+      button:disabled { cursor: wait; opacity: .66; box-shadow: none; }
+      .form-actions { display: flex; justify-content: flex-end; margin: -5px 0 18px; }
+      .login-help { display: inline-block; width: auto; margin: 0; padding: 0; background: transparent; box-shadow: none; color: #006bac; font-size: .8rem; font-weight: 700; text-decoration: none; }
+      .login-help:hover { background: transparent; color: #003d6e; box-shadow: none; transform: none; text-decoration: underline; }
       .login-note {
         margin: 14px 0 0;
         color: #6c757d;
@@ -173,6 +233,38 @@
       .install-app:hover {
         background: #e7f3ff;
       }
+      .security-note { display: flex; align-items: flex-start; gap: 8px; margin: 20px 0 0; color: #6c7f92; font-size: .76rem; line-height: 1.45; text-align: left; }
+      .security-note span { color: #137050; }
+      @media (max-width: 460px) {
+        body { padding: 16px; }
+        .login-content { padding: 25px 23px; }
+      }
+      @media (max-width: 780px) {
+        .login-shell { display: block; min-height: 0; max-width: 430px; border-radius: 20px; }
+        .login-showcase { display: none; }
+        .login-card { display: block; }
+        .login-brand {
+          display: block;
+          position: relative;
+          overflow: hidden;
+          padding: 25px 24px 22px;
+          background: linear-gradient(120deg, #004b84, #006bac 62%, #147db9);
+          color: #fff;
+        }
+        .login-brand::after {
+          display: block;
+          width: 132px;
+          height: 132px;
+          right: -64px;
+          bottom: -80px;
+          border-width: 22px;
+        }
+        .brand-logo { border-color: rgba(255,255,255,.72); }
+        .brand-name { color: #fff; }
+        .brand-tagline { display: block; margin-top: 9px; font-size: .82rem; }
+        .login-content { padding: 27px 24px 28px; }
+        .login-card h2 { font-size: 1.3rem; }
+      }
     </style>
   </head>
   <body>
@@ -183,21 +275,49 @@
         <p class="login-progress-hint">MandiBook securely verify kar raha hai.</p>
       </div>
     </div>
-    <form class="login-card" id="login-form">
-      <h2>MandiBook Secure Login</h2>
-      <input type="email" id="email" placeholder="Email Address" autocomplete="email" required />
-      <input type="password" id="password" placeholder="Password" autocomplete="current-password" required />
-      <button type="submit">Login</button>
-      <button type="button" class="login-help" id="forgot-password-btn">Forgot password?</button>
-      <div class="divider">or</div>
-      <button type="button" class="google-login" id="google-login-btn">🔵 Continue with Google</button>
-      <button type="button" class="install-app" id="install-app-btn" hidden>📲 Install MandiBook App</button>
-      <p id="login-status" class="login-status" aria-live="polite"></p>
-      <p class="login-note">
-        Only approved staff can access company records after signing in. New staff will complete their contact details
-        before Admin approval.
-      </p>
-    </form>
+    <main class="login-shell">
+      <aside class="login-showcase" aria-label="MandiBook highlights">
+        <div class="showcase-content">
+          <div class="showcase-logo"><img src="assets/logo.jpg" alt="" /><span>MandiBook</span></div>
+          <h1 class="showcase-title">Your business, clear and in control.</h1>
+          <p class="showcase-copy">One secure workspace for bills, orders, accounts and the daily decisions that keep your mandi moving.</p>
+          <ul class="showcase-points">
+            <li><span class="showcase-check">✓</span>Role-based secure access</li>
+            <li><span class="showcase-check">✓</span>Live bills and payment records</li>
+            <li><span class="showcase-check">✓</span>Built for your team, on every device</li>
+          </ul>
+        </div>
+        <div class="showcase-footer"><span>●</span> Secure company workspace</div>
+      </aside>
+      <form class="login-card" id="login-form">
+        <header class="login-brand">
+          <div class="brand-row">
+            <img class="brand-logo" src="assets/logo.jpg" alt="MandiBook" />
+            <p class="brand-name">MandiBook</p>
+          </div>
+          <p class="brand-tagline">Secure billing and business operations, in one place.</p>
+        </header>
+        <section class="login-content" aria-labelledby="login-heading">
+          <h2 id="login-heading">Welcome back</h2>
+          <p class="login-subtitle">Sign in to continue to your company workspace.</p>
+          <div class="form-group">
+            <label for="email">Email address</label>
+            <div class="input-wrap"><span class="input-icon" aria-hidden="true">✉</span><input type="email" id="email" placeholder="name@company.com" autocomplete="email" required /></div>
+          </div>
+          <div class="form-group">
+            <label for="password">Password</label>
+            <div class="input-wrap"><span class="input-icon" aria-hidden="true">●</span><input type="password" id="password" placeholder="Enter your password" autocomplete="current-password" required /></div>
+          </div>
+          <div class="form-actions"><button type="button" class="login-help" id="forgot-password-btn">Forgot password?</button></div>
+          <button type="submit">Sign in securely</button>
+          <div class="divider">or continue with</div>
+          <button type="button" class="google-login" id="google-login-btn">🔵 Continue with Google</button>
+          <button type="button" class="install-app" id="install-app-btn" hidden>📲 Install MandiBook App</button>
+          <p id="login-status" class="login-status" aria-live="polite"></p>
+          <p class="security-note"><span aria-hidden="true">●</span>Only approved staff can access company records. New staff accounts need Admin approval.</p>
+        </section>
+      </form>
+    </main>
 
     <script>
       let loginInProgress = false;
@@ -340,6 +460,8 @@
 
       function googleSignInMessage(error) {
         const message = String(error?.message || "").toLowerCase();
+        if (message.includes("redirect_uri_mismatch"))
+          return "Google OAuth redirect setup match nahi ho raha. Google Cloud OAuth Client mein https://ganesh-agri-new.web.app/__/auth/handler aur https://ganesh-agri-new.firebaseapp.com/__/auth/handler dono exact add hone chahiye.";
         if (error?.code === "auth/unauthorized-domain")
           return "Is website ka domain Firebase Authorized domains mein add nahi hai. Live URL use karo, ya local test ke liye 127.0.0.1 add karo.";
         if (message.includes("database is closing") || message.includes("indexeddb"))
