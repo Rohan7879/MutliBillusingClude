@@ -188,6 +188,8 @@
 
     <script>
       let pfUser = null;
+      const escapeProfileHtml = (value) =>
+        String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
 
       firebase.auth().onAuthStateChanged((user) => {
         if (!user) {
@@ -389,7 +391,7 @@
               const confirmResult = await Swal.fire({
                 icon: "warning",
                 title: "Yeh kisi aur ki email hai!",
-                html: `<b>${newEmail}</b> already <b>${otherName}</b> ke staff account se linked hai.<br><br>Agar aap yeh yahan verify karte ho, to <b>aapki apni login-email badal jaayegi</b> — ${otherName} ka account verify <u>nahi</u> hoga.<br><br>Kya aap sach mein aage badhna chahte ho?`,
+                html: `<b>${escapeProfileHtml(newEmail)}</b> already <b>${escapeProfileHtml(otherName)}</b> ke staff account se linked hai.<br><br>Agar aap yeh yahan verify karte ho, to <b>aapki apni login-email badal jaayegi</b> — ${escapeProfileHtml(otherName)} ka account verify <u>nahi</u> hoga.<br><br>Kya aap sach mein aage badhna chahte ho?`,
                 showCancelButton: true,
                 confirmButtonText: "Haan, mujhe pata hai",
                 cancelButtonText: "Cancel",

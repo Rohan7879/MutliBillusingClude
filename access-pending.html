@@ -434,6 +434,11 @@
             await pendingUser.reload();
             pendingUser = firebase.auth().currentUser;
             if (pendingUser.emailVerified) {
+              // Refresh the ID token before any Firestore contact write. The
+              // security rules use this Firebase Auth claim, so the browser
+              // cannot unlock the form merely by changing page state.
+              await pendingUser.getIdToken(true);
+              await syncVerifiedEmailMetadata();
               clearInterval(pollTimer);
               renderEmailStep();
             }
@@ -441,6 +446,17 @@
             /* transient — ignore, next tick retries */
           }
         }, 4000);
+      }
+
+      async function syncVerifiedEmailMetadata() {
+        if (!pendingUser?.emailVerified || !pendingUser.email) return;
+        await db.collection("users").doc(pendingUser.uid).update({
+          email: String(pendingUser.email).trim().toLowerCase(),
+          emailVerified: true,
+          lastSignInAt: firebase.firestore.FieldValue.serverTimestamp(),
+          updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
+        });
+        pendingProfile = { ...pendingProfile, email: pendingUser.email, emailVerified: true };
       }
 
       function setStep2Locked(locked) {
@@ -493,6 +509,24 @@
       contactForm.addEventListener("submit", async (event) => {
         event.preventDefault();
         if (!pendingUser) return;
+        try {
+          await pendingUser.reload();
+          pendingUser = firebase.auth().currentUser;
+          if (pendingUser?.emailVerified) {
+            await pendingUser.getIdToken(true);
+            await syncVerifiedEmailMetadata();
+          }
+        } catch (error) {
+          status.className = "ap-status error";
+          status.textContent = "Verification status check nahi ho paya. Network check karke dobara try karein.";
+          return;
+        }
+        if (!pendingUser?.emailVerified) {
+          status.className = "ap-status error";
+          status.textContent = "Pehle apni email verification complete karein, phir contact details save karein.";
+          renderEmailStep();
+          return;
+        }
         const displayName = document.getElementById("staff-name").value.trim();
         const digits = document.getElementById("staff-mobile").value.replace(/\D/g, "");
         const mobileKey = `91${digits}`;

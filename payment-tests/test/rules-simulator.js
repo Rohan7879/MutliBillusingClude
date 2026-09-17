@@ -108,10 +108,23 @@ function billEditor({ profile, before, after }) {
 }
 
 // --- users.update — self metadata refresh (includes new 'email' field) ---
-function usersSelfUpdate({ requesterUid, targetUid, isAdmin, before, after }) {
+function usersSelfUpdate({ requesterUid, targetUid, isAdmin, authEmail = "", authEmailVerified = false, before, after, directoryUid = null }) {
   const changedKeys = diffKeys(before, after);
-  const selfAllowed = ["displayName", "mobileNumber", "mobileKey", "providerIds", "lastSignInAt", "updatedAt", "email"];
-  return isAdmin || (requesterUid === targetUid && hasOnly(changedKeys, selfAllowed));
+  const selfAllowed = ["displayName", "mobileNumber", "mobileKey", "lastSignInAt", "updatedAt", "email", "emailVerified"];
+  const mobileKey = get(after, "mobileKey", "");
+  const mobileNumber = get(after, "mobileNumber", "");
+  const validMobile =
+    (mobileKey === "" && mobileNumber === "") ||
+    (/^91\d{10}$/.test(mobileKey) && mobileNumber === `+${mobileKey}` && directoryUid === requesterUid);
+  return (
+    isAdmin ||
+    (requesterUid === targetUid &&
+      hasOnly(changedKeys, selfAllowed) &&
+      authEmailVerified === true &&
+      get(after, "email", "") === authEmail &&
+      get(after, "emailVerified", false) === true &&
+      validMobile)
+  );
 }
 
 function nonNegativeNumber(value) {

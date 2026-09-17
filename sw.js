@@ -1,7 +1,7 @@
 // MandiBook PWA service worker. It caches only static app resources; business
 // pages and Firebase data always use the network so a shared phone never shows
 // a stale signed-in screen or accounting data while offline.
-const STATIC_CACHE = "mandibook-static-v1";
+const STATIC_CACHE = "mandibook-static-v2";
 const STATIC_PATHS = [
   "/manifest.webmanifest",
   "/assets/logo.jpg",

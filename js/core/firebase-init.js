@@ -1,7 +1,10 @@
 // firebase-init.js
 const firebaseConfig = {
   apiKey: "AIzaSyDcXQP5bqH6hZwDVRkpeB7PJfBYRqwhsAA",
-  authDomain: "ganesh-agri-new.firebaseapp.com",
+  // The installed PWA is served from this Firebase Hosting domain. Keeping
+  // authDomain on the same origin avoids third-party-storage blocks during
+  // Google redirect sign-in on Android Chrome.
+  authDomain: "ganesh-agri-new.web.app",
   projectId: "ganesh-agri-new",
   storageBucket: "ganesh-agri-new.firebasestorage.app",
   messagingSenderId: "929079364229",
@@ -20,11 +23,17 @@ let idleSessionTimer = null;
 const IDLE_SESSION_TIMEOUT_MS = 30 * 60 * 1000;
 window.currentUserProfile = null;
 
-db.enablePersistence().catch((err) => {
-  if (err.code !== "failed-precondition" && err.code !== "unimplemented") {
-    console.warn("Offline persistence could not be enabled:", err);
-  }
-});
+// Login is intentionally kept free of Firestore's IndexedDB cache setup.
+// Starting that cache while an OAuth redirect is storing the Auth session can
+// trigger transient browser-storage shutdown errors on local/dev sessions.
+const initialPage = window.location.pathname.split("/").pop() || "index.html";
+if (initialPage !== "login.html") {
+  db.enablePersistence().catch((err) => {
+    if (err.code !== "failed-precondition" && err.code !== "unimplemented") {
+      console.warn("Offline persistence could not be enabled:", err);
+    }
+  });
+}
 
 function normaliseEmail(email) {
   return String(email || "")
@@ -37,9 +46,7 @@ function isOwner(user) {
 }
 
 function signInMetadata(user) {
-  const providerIds = (user.providerData || []).map((provider) => provider.providerId).filter(Boolean);
   const fields = {
-    providerIds,
     lastSignInAt: firebase.firestore.FieldValue.serverTimestamp(),
     updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
   };
@@ -70,6 +77,10 @@ function newProfileFields(user) {
 function redirectTo(path) {
   const current = window.location.pathname.split("/").pop() || "index.html";
   if (current !== path) window.location.replace(path);
+}
+
+function emitAccessStatus(name, detail = {}) {
+  window.dispatchEvent(new CustomEvent(name, { detail }));
 }
 
 function stopIdleSessionTimer() {
@@ -120,13 +131,14 @@ async function ensureUserProfile(user) {
         { merge: true }
       );
     }
-    // Keep the staff directory current after every successful Firebase sign-in.
-    // Google supplies name/email, while a phone-linked provider may supply mobile.
+    // Keep Auth-backed staff metadata current after every successful sign-in.
+    // Only Firebase Auth email/verification values are synchronized here;
+    // provider identities remain managed by Firebase Auth itself.
     // This is NOT awaited: it's background housekeeping (lastSignInAt,
     // providerIds, email backfill) that the page doesn't need to wait on.
     // Previously this blocked here before the onSnapshot listener below was
     // even set up — meaning every page load waited on this extra Firestore
-    // round trip before the navbar could render its real (role-based)
+    // round trip before the navbar could render its real role-based
     // links. onSnapshot() below still gives us the freshest profile data
     // regardless of whether this write has landed yet.
     profileRef.set(signInMetadata(user), { merge: true }).catch((e) => {
@@ -206,6 +218,7 @@ firebase.auth().onAuthStateChanged(async (user) => {
   if (isPublicSharedBill) return;
 
   try {
+    emitAccessStatus("mandibook:access-checking");
     await ensureUserProfile(user);
     unsubscribeUserAccess = db
       .collection("users")
@@ -214,11 +227,13 @@ firebase.auth().onAuthStateChanged(async (user) => {
         (snapshot) => applyAccessProfile(user, snapshot.exists ? snapshot.data() : null),
         (error) => {
           console.error("Could not verify staff access:", error);
+          emitAccessStatus("mandibook:access-error", { message: "Staff access verify nahi ho paya. Internet check karke dobara try karein." });
           if (!isLoginPage && !isPendingPage) redirectTo("access-pending.html");
         }
       );
   } catch (error) {
     console.error("Could not create or verify staff profile:", error);
+    emitAccessStatus("mandibook:access-error", { message: "Staff profile load nahi hua. Internet check karke dobara try karein." });
     if (!isLoginPage && !isPendingPage) redirectTo("access-pending.html");
   }
 });

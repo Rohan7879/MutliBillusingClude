@@ -358,50 +358,77 @@ console.log("\n=== 5. bills.update — billEditor() can no longer touch payment 
   );
 }
 
-console.log("\n=== 6. users.update — self metadata refresh now includes email backfill ===\n");
+console.log("\n=== 6. users.update — Auth-bound self metadata ===\n");
 
 {
-  const before = { displayName: "Ramesh", email: "", providerIds: ["phone"] };
-  const after = { displayName: "Ramesh", email: "ramesh@gmail.com", providerIds: ["phone", "google.com"] };
+  const before = { displayName: "Ramesh", email: "", emailVerified: false, mobileNumber: "", mobileKey: "" };
+  const after = { displayName: "Ramesh", email: "ramesh@gmail.com", emailVerified: true, mobileNumber: "", mobileKey: "" };
   check(
-    "LEGIT: phone-first user links Google, email backfills on self-update",
-    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, before, after }),
+    "LEGIT: verified Auth email backfills on self-update",
+    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, authEmail: "ramesh@gmail.com", authEmailVerified: true, before, after }),
     true
   );
 }
 {
-  const before = { displayName: "Ramesh", email: "", providerIds: ["phone"], lastSignInAt: "t0" };
-  const after = { displayName: "Ramesh", email: "", providerIds: ["phone"], lastSignInAt: "t1" };
+  const before = { displayName: "Ramesh", email: "ramesh@gmail.com", emailVerified: true, mobileNumber: "+917080904510", mobileKey: "917080904510", lastSignInAt: "t0" };
+  const after = { ...before, lastSignInAt: "t1" };
   check(
-    "LEGIT: routine phone-only sign-in refresh, email stays empty (not touched)",
-    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, before, after }),
+    "LEGIT: verified user refreshes sign-in metadata",
+    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, authEmail: "ramesh@gmail.com", authEmailVerified: true, directoryUid: "u1", before, after }),
     true
   );
 }
 {
-  const before = { displayName: "Ramesh", email: "ramesh@gmail.com" };
-  const after = { displayName: "Ramesh", email: "ramesh@gmail.com", role: "admin" };
+  const before = { displayName: "Ramesh", email: "ramesh@gmail.com", emailVerified: true, mobileNumber: "", mobileKey: "" };
+  const after = { ...before, role: "admin" };
   check(
     "ATTACK: user tries to smuggle a role change into their own metadata self-update",
-    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, before, after }),
+    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, authEmail: "ramesh@gmail.com", authEmailVerified: true, before, after }),
     false
   );
 }
 {
-  const before = { displayName: "Ramesh", email: "ramesh@gmail.com" };
-  const after = { displayName: "Ramesh", email: "someone-else@gmail.com" };
+  const before = { displayName: "Ramesh", email: "ramesh@gmail.com", emailVerified: true, mobileNumber: "", mobileKey: "" };
+  const after = { ...before, mobileNumber: "+917080904510", mobileKey: "917080904510" };
   check(
-    "LEGIT: self-update of own email field is still allowed (Auth-sourced value)",
-    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, before, after }),
+    "LEGIT: mobile update has matching owned directory entry",
+    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, authEmail: "ramesh@gmail.com", authEmailVerified: true, directoryUid: "u1", before, after }),
     true
   );
 }
 {
-  const before = { displayName: "Ramesh", email: "ramesh@gmail.com" };
-  const after = { displayName: "Ramesh", email: "hacked@evil.com" };
+  const before = { displayName: "Ramesh", email: "ramesh@gmail.com", emailVerified: true, mobileNumber: "", mobileKey: "" };
+  const after = { ...before, email: "hacked@evil.com" };
+  check(
+    "ATTACK: user tries to replace their Auth email in Firestore",
+    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, authEmail: "ramesh@gmail.com", authEmailVerified: true, before, after }),
+    false
+  );
+}
+{
+  const before = { displayName: "Ramesh", email: "ramesh@gmail.com", emailVerified: true, mobileNumber: "+917080904510", mobileKey: "917080904510" };
+  const after = { ...before, mobileNumber: "+919999999999" };
+  check(
+    "ATTACK: mobile display number cannot differ from its directory key",
+    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, authEmail: "ramesh@gmail.com", authEmailVerified: true, directoryUid: "u1", before, after }),
+    false
+  );
+}
+{
+  const before = { displayName: "Ramesh", email: "ramesh@gmail.com", emailVerified: true, mobileNumber: "", mobileKey: "" };
+  const after = { ...before, displayName: "Changed name" };
+  check(
+    "ATTACK: unverified Auth account cannot save staff details",
+    usersSelfUpdate({ requesterUid: "u1", targetUid: "u1", isAdmin: false, authEmail: "ramesh@gmail.com", authEmailVerified: false, before, after }),
+    false
+  );
+}
+{
+  const before = { displayName: "Ramesh", email: "ramesh@gmail.com", emailVerified: true, mobileNumber: "", mobileKey: "" };
+  const after = { ...before, displayName: "Changed name" };
   check(
     "ATTACK: a DIFFERENT user tries to update someone else's profile",
-    usersSelfUpdate({ requesterUid: "attacker", targetUid: "u1", isAdmin: false, before, after }),
+    usersSelfUpdate({ requesterUid: "attacker", targetUid: "u1", isAdmin: false, authEmail: "ramesh@gmail.com", authEmailVerified: true, before, after }),
     false
   );
 }

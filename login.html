@@ -91,6 +91,14 @@
         font-size: 12px;
         line-height: 1.45;
       }
+      .login-status {
+        min-height: 18px;
+        margin: 12px 0 0;
+        color: #41617d;
+        font-size: 0.82rem;
+        line-height: 1.35;
+      }
+      .login-status.error { color: #b42318; }
       .divider {
         display: flex;
         align-items: center;
@@ -140,6 +148,7 @@
       <div class="divider">or</div>
       <button type="button" class="google-login" id="google-login-btn">🔵 Continue with Google</button>
       <button type="button" class="install-app" id="install-app-btn" hidden>📲 Install MandiBook App</button>
+      <p id="login-status" class="login-status" aria-live="polite"></p>
       <p class="login-note">
         Only approved staff can access company records after signing in. New staff will complete their contact details
         before Admin approval.
@@ -147,7 +156,46 @@
     </form>
 
     <script>
-      function loginUser() {
+      let loginInProgress = false;
+      let slowAccessTimer = null;
+      function setLoginStatus(message, isError = false) {
+        const status = document.getElementById("login-status");
+        status.textContent = message;
+        status.classList.toggle("error", isError);
+      }
+      function setLoginBusy(busy, message = "") {
+        loginInProgress = busy;
+        document.querySelector('#login-form button[type="submit"]').disabled = busy;
+        document.getElementById("google-login-btn").disabled = busy;
+        if (message) setLoginStatus(message);
+      }
+      function startSlowAccessNotice() {
+        clearTimeout(slowAccessTimer);
+        slowAccessTimer = setTimeout(() => {
+          setLoginStatus("Network slow hai—staff access verify ho raha hai. Please page close ya refresh mat karein.");
+        }, 7000);
+      }
+      function finishAccessNotice() {
+        clearTimeout(slowAccessTimer);
+        slowAccessTimer = null;
+      }
+
+      window.addEventListener("mandibook:access-checking", () => {
+        setLoginBusy(true, "Login ho gaya. Staff access verify ho raha hai...");
+        startSlowAccessNotice();
+      });
+      window.addEventListener("mandibook:access-ready", ({ detail }) => {
+        finishAccessNotice();
+        if (!detail) setLoginStatus("Account approval/contact details check ho raha hai...");
+      });
+      window.addEventListener("mandibook:access-error", ({ detail }) => {
+        finishAccessNotice();
+        setLoginBusy(false);
+        setLoginStatus(detail?.message || "Staff access check nahi ho paya. Internet check karke dobara try karein.", true);
+      });
+
+      async function loginUser() {
+        if (loginInProgress) return;
         const email = document.getElementById("email").value.trim();
         const password = document.getElementById("password").value;
 
@@ -167,38 +215,35 @@
           return;
         }
 
-        // Firebase Login Function
-        firebase
-          .auth()
-          .signInWithEmailAndPassword(email, password)
-          .then((userCredential) => {
-            localStorage.removeItem("mandibook_login_failures");
-            localStorage.removeItem("mandibook_login_cooldown_until");
-            Swal.fire({ icon: "success", title: "Login Successful", showConfirmButton: false, timer: 1500 }).then(
-              () => {
-                window.location.href = "index.html"; // Login ke baad Dashboard par bhejo
-              }
-            );
-          })
-          .catch((error) => {
-            const failures = Number(localStorage.getItem("mandibook_login_failures") || 0) + 1;
-            if (failures >= 5) {
-              localStorage.setItem("mandibook_login_failures", "0");
-              localStorage.setItem("mandibook_login_cooldown_until", String(Date.now() + 60 * 1000));
-            } else {
-              localStorage.setItem("mandibook_login_failures", String(failures));
-            }
-            const invalidCredentials =
-              ["auth/wrong-password", "auth/user-not-found", "auth/invalid-credential"].includes(error.code) ||
-              String(error.message || "").includes("INVALID_LOGIN_CREDENTIALS");
-            Swal.fire({
-              icon: "error",
-              title: "Login Failed",
-              text: invalidCredentials
-                ? "Email/password galat hai, ya is email ka Firebase account abhi bana nahi hai."
-                : error.message,
-            });
+        setLoginBusy(true, "Signing in...");
+        try {
+          await firebase.auth().signInWithEmailAndPassword(email, password);
+          localStorage.removeItem("mandibook_login_failures");
+          localStorage.removeItem("mandibook_login_cooldown_until");
+          // firebase-init.js now owns the only redirect. It waits for the
+          // real staff profile result rather than racing a fixed 1.5s timer.
+          setLoginStatus("Login ho gaya. Staff access verify ho raha hai...");
+          startSlowAccessNotice();
+        } catch (error) {
+          const failures = Number(localStorage.getItem("mandibook_login_failures") || 0) + 1;
+          if (failures >= 5) {
+            localStorage.setItem("mandibook_login_failures", "0");
+            localStorage.setItem("mandibook_login_cooldown_until", String(Date.now() + 60 * 1000));
+          } else {
+            localStorage.setItem("mandibook_login_failures", String(failures));
+          }
+          const invalidCredentials =
+            ["auth/wrong-password", "auth/user-not-found", "auth/invalid-credential"].includes(error.code) ||
+            String(error.message || "").includes("INVALID_LOGIN_CREDENTIALS");
+          setLoginBusy(false);
+          Swal.fire({
+            icon: "error",
+            title: "Login Failed",
+            text: invalidCredentials
+              ? "Email/password galat hai, ya is email ka Firebase account abhi bana nahi hai."
+              : error.message,
           });
+        }
       }
 
       document.getElementById("login-form").addEventListener("submit", (event) => {
@@ -241,6 +286,28 @@
         }
       });
 
+      function googleSignInMessage(error) {
+        const message = String(error?.message || "").toLowerCase();
+        if (error?.code === "auth/unauthorized-domain")
+          return "Is website ka domain Firebase Authorized domains mein add nahi hai. Live URL use karo, ya local test ke liye 127.0.0.1 add karo.";
+        if (message.includes("database is closing") || message.includes("indexeddb"))
+          return "Chrome ka Firebase local storage reset ho raha tha. Page ko close karke live website par dobara Google sign-in try karo.";
+        if (error?.code === "auth/popup-blocked")
+          return "Browser ne Google window block kar di. Popups allow karke dobara try karo.";
+        return "Google sign-in complete nahi hua. Internet check karke dobara try karo.";
+      }
+
+      async function showRedirectSignInError() {
+        try {
+          await firebase.auth().getRedirectResult();
+        } catch (error) {
+          console.error("Google redirect sign-in failed", error);
+          sessionStorage.removeItem("mandibook_google_sign_in");
+          Swal.fire({ icon: "error", title: "Google sign-in failed", text: googleSignInMessage(error) });
+        }
+      }
+      showRedirectSignInError();
+
       document.getElementById("google-login-btn").addEventListener("click", async () => {
         const button = document.getElementById("google-login-btn");
         button.disabled = true;
@@ -248,18 +315,16 @@
         try {
           const provider = new firebase.auth.GoogleAuthProvider();
           provider.setCustomParameters({ prompt: "select_account" });
-          await firebase.auth().signInWithPopup(provider);
-          // firebase-init.js verifies the staff profile and redirects either
-          // to the app or to Access Pending after the popup completes.
+          // Redirect sign-in is more reliable than a popup for Android/PWA
+          // installs and prevents local browser popup/IndexedDB races.
+          sessionStorage.setItem("mandibook_google_sign_in", "1");
+          await firebase.auth().signInWithRedirect(provider);
         } catch (error) {
           console.error("Google sign-in failed", error);
-          const cancelled = error.code === "auth/popup-closed-by-user" || error.code === "auth/cancelled-popup-request";
           Swal.fire({
-            icon: cancelled ? "info" : "error",
-            title: cancelled ? "Google sign-in cancelled" : "Google sign-in failed",
-            text: cancelled
-              ? "Aapne Google window close kar di."
-              : "Google sign-in enable aur authorised domain check karke dobara try karo.",
+            icon: "error",
+            title: "Google sign-in failed",
+            text: googleSignInMessage(error),
           });
         } finally {
           button.disabled = false;

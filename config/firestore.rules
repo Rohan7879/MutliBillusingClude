@@ -30,6 +30,40 @@ service cloud.firestore {
       return active() && profile().data.role in roles;
     }
 
+    function authEmailVerified() {
+      return signedIn() && request.auth.token.email_verified == true;
+    }
+
+    function validSelfMobile(uid) {
+      let mobileKey = request.resource.data.get('mobileKey', '');
+      let mobileNumber = request.resource.data.get('mobileNumber', '');
+      return (mobileKey == '' && mobileNumber == '')
+        || (mobileKey.size() == 12
+          && mobileKey.matches('91[0-9]{10}')
+          && mobileNumber == '+' + mobileKey
+          && existsAfter(/databases/$(database)/documents/mobileDirectory/$(mobileKey))
+          && getAfter(/databases/$(database)/documents/mobileDirectory/$(mobileKey)).data.uid == uid);
+    }
+
+    function selfProfileMetadataUpdate(uid) {
+      return signedIn() && request.auth.uid == uid
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['displayName', 'mobileNumber', 'mobileKey', 'lastSignInAt', 'updatedAt', 'email', 'emailVerified'])
+        // Contact details may be collected only after the actual Firebase
+        // Auth email-verification claim is present (not a browser UI flag).
+        && authEmailVerified()
+        // Auth-derived fields must exactly match the signed-in user's token.
+        && request.resource.data.get('email', '') == request.auth.token.email
+        && request.resource.data.get('emailVerified', false) == true
+        && validSelfMobile(uid);
+    }
+
+    function adminStaffUpdate() {
+      return admin()
+        && request.resource.data.diff(resource.data).affectedKeys()
+          .hasOnly(['role', 'status', 'updatedAt']);
+    }
+
     function billHasPayment() {
       return resource.data.get('amountPaid', 0) > 0
         || resource.data.get('paymentStatus', 'Unpaid') in ['Paid', 'Partial', 'Partially Paid'];
@@ -147,17 +181,15 @@ service cloud.firestore {
       allow create: if ownerEmail() && request.auth.uid == uid
           || (signedIn() && request.auth.uid == uid
               && request.resource.data.status == 'pending'
-              && request.resource.data.role == 'viewer');
-      // A user may refresh only their own contact/sign-in metadata. Role,
-      // status and company scope remain Admin-controlled.
-      allow update: if admin()
-          || (signedIn() && request.auth.uid == uid
-              && request.resource.data.diff(resource.data).affectedKeys()
-                .hasOnly(['displayName', 'mobileNumber', 'mobileKey', 'providerIds', 'lastSignInAt', 'updatedAt', 'email', 'emailVerified'])
-              && (request.resource.data.get('mobileKey', '') == resource.data.get('mobileKey', '')
-                || (request.resource.data.get('mobileKey', '').size() == 12
-                  && existsAfter(/databases/$(database)/documents/mobileDirectory/$(request.resource.data.mobileKey))
-                  && getAfter(/databases/$(database)/documents/mobileDirectory/$(request.resource.data.mobileKey)).data.uid == uid)));
+              && request.resource.data.role == 'viewer'
+              && request.resource.data.get('email', '') == request.auth.token.email
+              && request.resource.data.get('emailVerified', false) == authEmailVerified()
+              && request.resource.data.get('mobileNumber', '') == ''
+              && request.resource.data.get('mobileKey', '') == '');
+      // Auth identity fields are never browser-trusted: their values must
+      // match Firebase Auth's signed token. Admin may approve/revoke and set
+      // roles, but cannot edit another account's login email from Firestore.
+      allow update: if adminStaffUpdate() || selfProfileMetadataUpdate(uid);
       allow delete: if admin();
     }
 
@@ -185,11 +217,20 @@ service cloud.firestore {
       allow update, delete: if admin();
     }
 
-    // Audit evidence is append-only. Only an Admin may review it; each
-    // creator record must identify the same Firebase user making the request.
+    // Audit evidence is append-only. A browser can only append the fixed
+    // event shapes used by the app, tied to its own current staff profile.
+    // A server-side trigger is required for cryptographic-grade audit proof.
     match /auditLogs/{auditId} {
       allow read: if admin();
-      allow create: if active() && request.resource.data.actor.uid == request.auth.uid;
+      allow create: if active()
+        && request.resource.data.keys().hasOnly(['action', 'entityType', 'entityId', 'before', 'after', 'reason', 'actor', 'createdAt'])
+        && request.resource.data.action in ['bill.shared', 'bill.share_revoked', 'bill.deleted', 'bill.restored', 'bill.created', 'bill.correction_created', 'bill.updated', 'bill.approved', 'bill.locked', 'payment.created', 'staff.access_updated']
+        && request.resource.data.entityType in ['bill', 'payment', 'staff']
+        && request.resource.data.actor.uid == request.auth.uid
+        && request.resource.data.actor.email == profile().data.get('email', '')
+        && request.resource.data.actor.displayName == profile().data.get('displayName', '')
+        && request.resource.data.actor.role == profile().data.role
+        && request.resource.data.createdAt == request.time;
       allow update, delete: if false;
     }
 
@@ -222,7 +263,10 @@ service cloud.firestore {
     match /payments/{paymentId} {
       allow read: if active();
       allow create: if anyRole(['admin', 'accountant']) && validPaymentDoc();
-      allow update, delete: if anyRole(['admin', 'accountant']);
+      // Payments are immutable after creation. Reversals must be entered as
+      // a new counter-entry so bill/party balances retain their evidence.
+      allow update: if false;
+      allow delete: if false;
     }
 
     match /{collection}/{document} {

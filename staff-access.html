@@ -243,11 +243,7 @@
         target.innerHTML = `<table class="staff-table"><thead><tr><th>Email</th><th>Name</th><th>Mobile</th><th>Sign-in</th><th>Last sign-in</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows
           .map(
             ({ id, data }) =>
-              `<tr><td><input class="staff-email-input" id="email-${id}" type="email" value="${esc(
-                data.email
-              )}" data-original="${esc(data.email)}" placeholder="staff@example.com" aria-label="Email for ${esc(
-                data.displayName || id
-              )}" />${
+              `<tr><td><span class="staff-email">${esc(data.email || "—")}</span>${
                 data.email
                   ? data.emailVerified
                     ? `<span class="email-verify-badge verified">✓ Verified</span>`
@@ -272,25 +268,20 @@
       async function saveStaff(uid) {
         const role = document.getElementById(`role-${uid}`).value;
         const status = document.getElementById(`status-${uid}`).value;
-        const emailInput = document.getElementById(`email-${uid}`);
-        const email = emailInput.value.trim().toLowerCase();
-        const emailChanged = email !== (emailInput.dataset.original || "").toLowerCase();
-        if (email && !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-          Swal.fire({
-            icon: "error",
-            title: "Invalid email",
-            text: "Please enter a valid email address or leave it blank.",
-          });
-          return;
-        }
         try {
+          const userRef = db.collection("users").doc(uid);
+          const beforeDoc = await userRef.get();
+          if (!beforeDoc.exists) throw new Error("Staff profile no longer exists.");
+          const before = beforeDoc.data();
           const payload = { role, status, updatedAt: firebase.firestore.FieldValue.serverTimestamp() };
-          if (email) payload.email = email;
-          // Admin typing an email in is not the same as the owner
-          // confirming it via the verification link in My Profile — don't
-          // let a stale "Verified" badge carry over to a different email.
-          if (emailChanged) payload.emailVerified = false;
-          await db.collection("users").doc(uid).update(payload);
+          await userRef.update(payload);
+          if (typeof recordAudit === "function") {
+            await recordAudit("staff.access_updated", "staff", uid, {
+              before: { email: before.email || "", displayName: before.displayName || "", role: before.role || "viewer", status: before.status || "pending" },
+              after: { email: before.email || "", displayName: before.displayName || "", role, status },
+              reason: "Staff access updated by Admin",
+            });
+          }
           Swal.fire({ icon: "success", title: "Staff access updated", timer: 1200, showConfirmButton: false });
         } catch (error) {
           Swal.fire({ icon: "error", title: "Could not update staff", text: error.message });
