@@ -11,11 +11,13 @@
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
-    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/firebase-init.js?v=14"></script>
     <script src="js/core/utils.js"></script>
-    <script src="js/core/core-engine.js"></script>
+    <script src="js/core/core-engine.js?v=14"></script>
     <script src="js/features/themes.js" defer></script>
-    <script src="js/features/reports.js" defer></script>
+    <script src="js/core/workspace-ui.js?v=14" defer></script>
+    <script src="js/features/reports.js?v=14" defer></script>
+    <script src="js/core/pwa.js?v=14" defer></script>
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/themes.css" />
     <link rel="icon" href="assets/logo.jpg" />
@@ -172,72 +174,145 @@
           grid-template-columns: repeat(2, 1fr);
         }
       }
+
+      /* Reports workspace refresh */
+      body { background: #f4f8fc; }
+      .reports-workspace { max-width: 1240px; padding: 30px 20px 48px; }
+      .reports-hero {
+        display: flex; align-items: center; justify-content: space-between; gap: 24px;
+        padding: 30px 34px; margin-bottom: 20px; border-radius: 22px;
+        color: #fff; background: radial-gradient(circle at 86% 18%, rgba(76, 169, 255, .48), transparent 30%), linear-gradient(125deg, #063968, #0570b7);
+        box-shadow: 0 16px 38px rgba(0, 74, 130, .18);
+      }
+      .reports-kicker { margin: 0 0 7px; color: #a9d9ff; font-size: 11px; font-weight: 800; text-transform: uppercase; letter-spacing: 1.4px; }
+      .reports-hero h1 { margin: 0; font-size: clamp(25px, 3vw, 36px); letter-spacing: -.7px; }
+      .reports-hero p:last-child { max-width: 650px; margin: 8px 0 0; color: #e0f1ff; line-height: 1.55; }
+      .reports-hero-meta { display: flex; flex-wrap: wrap; justify-content: flex-end; gap: 8px; }
+      .reports-hero-meta span { padding: 8px 11px; border: 1px solid rgba(255,255,255,.28); border-radius: 999px; background: rgba(0, 35, 72, .19); font-size: 12px; font-weight: 750; white-space: nowrap; }
+      .reports-control-card, .report-panel { border: 1px solid #d7e6f4; border-radius: 18px; box-shadow: 0 10px 26px rgba(22, 76, 120, .07); }
+      .reports-control-card { padding: 24px; }
+      .reports-control-card .sc-title, .report-panel .sc-title { color: #173f63; font-size: 13px; border-color: #e8f0f7; text-transform: none; letter-spacing: 0; }
+      .reports-control-card .sc-title small { display:block; margin-top:4px; color:#73879c; font-size:12px; font-weight:600; text-transform:none; letter-spacing:0; }
+      .report-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; margin-bottom: 24px; }
+      .report-card { min-height: 126px; padding: 17px 12px; border: 1px solid #d8e4ee; border-radius: 15px; text-align: left; background: #fff; box-shadow: 0 4px 12px rgba(23, 68, 107, .03); }
+      .report-card:hover { transform: translateY(-3px); border-color: #5caae0; box-shadow: 0 10px 20px rgba(0, 90, 158, .13); }
+      .report-card.active { border-color: #0875bf; color: #fff; background: linear-gradient(135deg, #075e9c, #087fc4); box-shadow: 0 12px 21px rgba(0, 90, 158, .22); }
+      .report-card .rc-icon { margin-bottom: 10px; font-size: 24px; }
+      .report-card .rc-name { color: #234766; font-size: 14px; }
+      .report-card.active .rc-name { color: #fff; }
+      .report-card .rc-detail { display: block; margin-top: 5px; color: #71869b; font-size: 11px; font-weight: 600; line-height: 1.35; }
+      .report-card.active .rc-detail { color: #d8efff; }
+      .report-filter-bar { display: flex; align-items: end; justify-content: space-between; gap: 18px; padding: 16px; border-radius: 14px; background: #f5f9fd; border: 1px solid #e0ebf4; }
+      .filter-row { margin:0; gap:9px; }
+      .filter-row label { display:block; margin:0 0 5px; color:#56718b; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.55px; }
+      .filter-row .date-field { min-width:150px; }
+      .filter-row input { width:100%; box-sizing:border-box; padding:11px 12px; border-color:#ccddea; border-radius:10px; background:#fff; }
+      .filter-btn, .export-btn { padding: 11px 15px; border-radius: 10px; }
+      .export-btn { background: #fff; color:#16724a; border:1px solid #a9d5bd; }
+      .summary-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 14px; margin: 0 0 18px; }
+      .summary-card { text-align:left; border:1px solid #dbe7f1; border-radius:16px; padding:16px 17px; background:#fff; box-shadow:0 7px 16px rgba(40, 84, 121, .05); }
+      .summary-card:nth-child(2n) { background:#f7fbff; }
+      .summary-val { color:#075b99; font-size:1.5em; }
+      .summary-lbl { color:#75869a; }
+      .report-panel { padding:24px; }
+      .report-table { min-width:680px; }
+      .report-table th { background:#eaf3fa; color:#46627c; padding:12px; font-size:11px; }
+      .report-table td { padding:13px 12px; color:#294861; }
+      .report-table tbody tr:hover td { background:#f2f9ff; }
+      .report-table tfoot td { background:#e5f3ff; }
+      @media (max-width: 800px) { .report-grid,.summary-grid { grid-template-columns:repeat(2,minmax(0,1fr)); } .reports-hero { padding:25px; align-items:flex-start; flex-direction:column; } .reports-hero-meta { justify-content:flex-start; } .report-filter-bar { align-items:stretch; flex-direction:column; } }
+      @media (max-width: 520px) { .reports-workspace { padding:18px 13px 36px; } .reports-hero { border-radius:17px; padding:21px; } .reports-hero h1 { font-size:26px; } .reports-control-card,.report-panel { padding:16px; border-radius:15px; } .report-grid { gap:9px; } .report-card { min-height:112px; padding:13px 11px; } .filter-row { display:grid; grid-template-columns:1fr 1fr; width:100%; } .filter-row button { grid-column:span 2; } .summary-grid { gap:9px; } }
     </style>
+    <link rel="stylesheet" href="css/workspaces.css?v=14" />
   </head>
-  <body>
+  <body class="workspace-page">
     <div id="navbar-root"></div>
-    <div class="pg">
+    <main class="pg reports-workspace">
+      <section class="reports-hero">
+        <div>
+          <p class="reports-kicker">Analytics workspace</p>
+          <h1>Business reports</h1>
+          <p>Choose a view, select your date range, and export the exact figures you need for review or sharing.</p>
+        </div>
+        <div class="reports-hero-meta"><span id="reports-sync-status" aria-live="polite">Loading report…</span><span>↥ Excel ready</span></div>
+      </section>
       <!-- Report Type Selector -->
-      <div class="sc">
-        <div class="sc-title">📈 Reports</div>
+      <section class="sc reports-control-card">
+        <div class="sc-title"><div>Choose report <small>Switch views without losing your selected date range.</small></div></div>
         <div class="report-grid">
           <div class="report-card active" id="rc-daily" onclick="selectReport('daily')">
             <div class="rc-icon">📅</div>
             <div class="rc-name">Daily</div>
+            <span class="rc-detail">Day-wise business</span>
           </div>
           <div class="report-card" id="rc-supplier" onclick="selectReport('supplier')">
             <div class="rc-icon">👤</div>
             <div class="rc-name">Supplier</div>
+            <span class="rc-detail">Party contribution</span>
           </div>
           <div class="report-card" id="rc-product" onclick="selectReport('product')">
             <div class="rc-icon">🌾</div>
             <div class="rc-name">Product</div>
+            <span class="rc-detail">Product performance</span>
           </div>
           <div class="report-card" id="rc-broker" onclick="selectReport('broker')">
             <div class="rc-icon">🤝</div>
             <div class="rc-name">Broker</div>
+            <span class="rc-detail">Commission overview</span>
           </div>
           <div class="report-card" id="rc-village" onclick="selectReport('village')">
             <div class="rc-icon">🏘️</div>
             <div class="rc-name">Village</div>
+            <span class="rc-detail">Area-wise sales</span>
           </div>
           <div class="report-card" id="rc-vehicle" onclick="selectReport('vehicle')">
             <div class="rc-icon">🚛</div>
             <div class="rc-name">Vehicle</div>
+            <span class="rc-detail">Transport tracking</span>
           </div>
           <div class="report-card" id="rc-monthly" onclick="selectReport('monthly')">
             <div class="rc-icon">📊</div>
             <div class="rc-name">Monthly</div>
+            <span class="rc-detail">Month comparison</span>
           </div>
           <div class="report-card" id="rc-payment" onclick="selectReport('payment')">
             <div class="rc-icon">💰</div>
             <div class="rc-name">Payment</div>
+            <span class="rc-detail">Collection status</span>
           </div>
         </div>
 
         <!-- Filters -->
-        <div class="filter-row">
-          <input type="date" id="report-start" />
-          <span style="font-weight: 700; color: #6c757d">to</span>
-          <input type="date" id="report-end" />
-          <button class="filter-btn" onclick="generateReport()">🔍 Generate</button>
-          <button class="export-btn" onclick="exportReportExcel()">📥 Export Excel</button>
+        <div class="workspace-presets" aria-label="Quick report dates">
+          <button type="button" data-report-preset="today">Today</button>
+          <button type="button" data-report-preset="yesterday">Yesterday</button>
+          <button type="button" data-report-preset="month" aria-pressed="true">This month</button>
+          <button type="button" data-report-preset="financial">Financial year</button>
         </div>
-      </div>
+        <div class="report-filter-bar">
+          <div class="filter-row">
+            <div class="date-field"><label for="report-start">From</label><input type="date" id="report-start" /></div>
+            <div class="date-field"><label for="report-end">To</label><input type="date" id="report-end" /></div>
+            <button class="filter-btn" onclick="generateReport()">↻ Refresh report</button>
+          </div>
+          <button class="export-btn" onclick="exportReportExcel()">⇩ Export Excel</button>
+        </div>
+      </section>
 
       <!-- Summary Cards -->
       <div class="summary-grid" id="report-summary"></div>
+      <div id="report-state"></div>
 
       <!-- Chart -->
-      <div class="sc" id="report-chart-container" style="display: none">
+      <section class="sc report-panel" id="report-chart-container" style="display: none">
         <div class="sc-title"><span id="report-chart-title">Trend</span></div>
         <div style="position: relative; height: 320px">
           <canvas id="report-chart"></canvas>
         </div>
-      </div>
+      </section>
 
       <!-- Report Table -->
-      <div class="sc" id="report-table-container" style="display: none">
+      <section class="sc report-panel" id="report-table-container" style="display: none">
         <div class="sc-title">
           <span id="report-title">Report</span>
         </div>
@@ -248,7 +323,7 @@
             <tfoot id="report-tfoot"></tfoot>
           </table>
         </div>
-      </div>
-    </div>
+      </section>
+    </main>
   </body>
 </html>

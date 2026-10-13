@@ -20,6 +20,24 @@ let paymentModal,
   deductionReasonInput,
   saveBtn;
 
+function ledgerDate(value) {
+  if (!value) return new Date(0);
+  if (value && typeof value.toDate === "function") return value.toDate();
+  if (typeof value === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
+    const [day, month, year] = value.split("/").map(Number);
+    return new Date(year, month - 1, day);
+  }
+  const parsed = new Date(value);
+  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
+}
+
+function setLedgerSyncStatus(message, isError = false) {
+  const status = document.getElementById("ledgerSyncStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("is-error", isError);
+}
+
 function initializeLedgerPage() {
   paymentModal = document.getElementById("payment-modal");
   modalTitle = document.getElementById("modal-title");
@@ -154,6 +172,13 @@ async function fetchUniqueCustomers() {
 
     allUniqueCustomers = Array.from(customerMap.values()).sort((a, b) => a.name.localeCompare(b.name));
     renderCustomerList(allUniqueCustomers);
+    const customerCount = document.getElementById("ledgerCustomerCount");
+    const recordCount = document.getElementById("ledgerRecordCount");
+    if (customerCount) customerCount.textContent = allUniqueCustomers.length;
+    if (recordCount) recordCount.textContent = billsSnapshot.docs.length + paymentsSnapshot.docs.length;
+    setLedgerSyncStatus(
+      `Last checked ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`
+    );
 
     // 🚀 Secure Token / URL Parameter check (Safe Decoding)
     const urlParams = new URLSearchParams(window.location.search);
@@ -201,6 +226,7 @@ async function fetchUniqueCustomers() {
     }
   } catch (error) {
     console.error("Error fetching unique customers:", error);
+    setLedgerSyncStatus("Could not refresh ledger", true);
     alert("Could not load customer list.");
   } finally {
     hideLoading();
@@ -210,7 +236,7 @@ function renderCustomerList(customers) {
   const container = document.getElementById("customer-list-container");
   container.innerHTML = "";
   if (customers.length === 0) {
-    container.innerHTML = "<p>No customers found.</p>";
+    container.innerHTML = '<p class="ledger-empty">No customer accounts found yet. Add a Farmer or Vepari in Party Master, or create a bill to begin.</p>';
     return;
   }
   customers.forEach((customer) => {
@@ -281,11 +307,11 @@ async function showCustomerLedger(customer) {
 
     mergedBillDocs.forEach((doc) => {
       const bill = doc.data();
-      const billDateParts = bill.Date.split("/");
-      const billDate = new Date(`${billDateParts[2]}-${billDateParts[1]}-${billDateParts[0]}`);
+      const billDate = ledgerDate(bill.Date || bill.date || bill.billDate || bill.createdAt);
+      const billTotal = Number(bill["Final Total"] || bill.total || bill.amount || 0);
 
       billDates.push(billDate);
-      totalBillValue += bill["Final Total"];
+      totalBillValue += billTotal;
       billIdToSerialMap.set(doc.id, bill["Serial No"]);
 
       allTransactions.push({
@@ -293,7 +319,7 @@ async function showCustomerLedger(customer) {
         type: "bill",
         date: billDate,
         particulars: `Bill No: ${bill["Serial No"]}`,
-        debit: bill["Final Total"],
+        debit: billTotal,
         credit: 0,
         sortKey: billDate.getTime(),
         amountDue: bill.amountDue ?? bill["Final Total"],
@@ -314,9 +340,9 @@ async function showCustomerLedger(customer) {
 
     paymentsSnapshot.docs.forEach((doc) => {
       const payment = doc.data();
-      const paymentDate = payment.paymentDate.toDate();
-      const cashAmount = payment.cashAmount || 0;
-      const deductionAmount = payment.deductionAmount || 0;
+      const paymentDate = ledgerDate(payment.paymentDate || payment.createdAt);
+      const cashAmount = Number(payment.cashAmount || 0);
+      const deductionAmount = Number(payment.deductionAmount || 0);
 
       let particulars = "General Payment";
       if (payment.appliedToBills && payment.appliedToBills.length > 0) {
@@ -346,7 +372,7 @@ async function showCustomerLedger(customer) {
         date: paymentDate,
         particulars: particulars,
         debit: 0,
-        credit: payment.totalCredit,
+        credit: Number(payment.totalCredit || cashAmount + deductionAmount),
         sortKey: paymentDate.getTime(),
       });
     });
@@ -436,7 +462,7 @@ function renderLedgerTable(transactions, startDateStr = null, endDateStr = null)
       }
 
       const row = document.createElement("tr");
-      row.innerHTML = `${checkboxHtml}<td>${tx.date.toLocaleDateString("en-IN")}</td><td>${tx.particulars}</td><td>${
+      row.innerHTML = `${checkboxHtml}<td>${tx.date.toLocaleDateString("en-IN")}</td><td>${escapeHtml(tx.particulars)}</td><td>${
         tx.debit > 0 ? formatNumber(tx.debit) : "-"
       }</td><td>${tx.credit > 0 ? formatNumber(tx.credit) : "-"}</td><td>${formatNumber(runningBalance)}</td>`;
       tableBody.appendChild(row);

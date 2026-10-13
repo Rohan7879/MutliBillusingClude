@@ -56,6 +56,7 @@ function updateDashboardWelcome() {
 window.addEventListener("mandibook:access-ready", updateDashboardWelcome);
 
 async function fetchAllBills() {
+  let loadedSuccessfully = false;
   try {
     // This part stays the same: fetch all bill summaries
     const snapshot = await billsCollection.orderBy("Serial No", "desc").get();
@@ -104,11 +105,13 @@ async function fetchAllBills() {
       return billYear === currentYear && billMonth === currentMonth;
     });
     updateDashboard(currentMonthBills);
+    loadedSuccessfully = true;
   } catch (error) {
     console.error("Error fetching bills:", error);
+    updateDashboardSyncStatus("Could not refresh — check internet", "error");
     alert("Could not load bill data.");
   } finally {
-    updateSyncTime();
+    if (loadedSuccessfully) updateSyncTime();
   }
 }
 
@@ -333,15 +336,19 @@ async function downloadFormattedBill(docId) {
 // MOVED to core-engine.js — generateBillHtmlForView() is now a shared utility.
 
 function updateSyncTime() {
+  const now = new Date();
+  const formattedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(
+    2,
+    "0"
+  )}:${String(now.getSeconds()).padStart(2, "0")}`;
+  updateDashboardSyncStatus(`Last checked ${formattedTime}`);
+}
+
+function updateDashboardSyncStatus(message, state = "ready") {
   const syncStatusElement = document.getElementById("dashboard_sync_status");
-  if (syncStatusElement) {
-    const now = new Date();
-    const formattedTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(
-      2,
-      "0"
-    )}:${String(now.getSeconds()).padStart(2, "0")}`;
-    syncStatusElement.textContent = `Live data synced at ${formattedTime}`;
-  }
+  if (!syncStatusElement) return;
+  syncStatusElement.textContent = message;
+  syncStatusElement.dataset.state = state;
 }
 
 function resetTime(date) {

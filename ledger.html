@@ -23,9 +23,23 @@
       /* ── NAVBAR ── */
       /* ── PAGE ── */
       .page-wrapper {
-        max-width: 960px;
+        max-width: 1120px;
         margin: 0 auto;
+        padding: 28px 22px 54px;
       }
+
+      .ledger-hero { position:relative; overflow:hidden; display:flex; justify-content:space-between; gap:22px; align-items:flex-start; padding:28px 30px; margin-bottom:18px; border-radius:21px; color:#fff; background:radial-gradient(circle at 88% 13%, rgba(113,212,255,.33), transparent 25%), linear-gradient(125deg,#07365f,#0868aa 62%,#0b7fbd); box-shadow:0 14px 30px rgba(5,69,116,.18); }
+      .ledger-hero::after { content:""; position:absolute; width:240px; height:240px; right:-80px; bottom:-130px; border-radius:50%; border:1px solid rgba(255,255,255,.18); }
+      .ledger-eyebrow { margin:0 0 7px; color:#c8edff; font-size:11px; font-weight:800; letter-spacing:.15em; text-transform:uppercase; }
+      .ledger-hero h1 { margin:0; font-size:clamp(28px,3vw,36px); letter-spacing:-.035em; }
+      .ledger-hero-copy { margin:9px 0 0; color:rgba(255,255,255,.86); font-size:14px; }
+      .ledger-hero-aside { position:relative; z-index:1; display:flex; flex-direction:column; align-items:flex-end; gap:11px; }
+      #ledgerSyncStatus { display:inline-flex; padding:8px 11px; border:1px solid rgba(255,255,255,.26); border-radius:999px; background:rgba(0,0,0,.12); color:#dcffea; font-size:12px; font-weight:800; }
+      #ledgerSyncStatus.is-error { color:#ffe0df; border-color:rgba(255,180,180,.55); }
+      .ledger-hero-stats { display:grid; grid-template-columns:repeat(2,minmax(110px,1fr)); gap:9px; }
+      .ledger-hero-stat { padding:11px 13px; border:1px solid rgba(255,255,255,.18); border-radius:11px; background:rgba(255,255,255,.1); }
+      .ledger-hero-stat span { display:block; color:#cfeeff; font-size:10px; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
+      .ledger-hero-stat strong { display:block; margin-top:4px; font-size:21px; }
 
       /* ── SECTION CARD ── */
       .section-card {
@@ -49,6 +63,8 @@
         text-transform: uppercase;
         letter-spacing: 0.5px;
       }
+      .ledger-directory-card { box-shadow:0 8px 24px rgba(15,71,113,.075); }
+      .ledger-directory-subtitle { margin:-7px 0 18px; color:#71839a; font-size:13px; font-weight:600; }
 
       /* ── CUSTOMER SEARCH ── */
       .customer-search-wrap {
@@ -131,6 +147,7 @@
         font-size: 14px;
         color: #dc3545;
       }
+      .ledger-empty { grid-column:1/-1; padding:28px; text-align:center; color:#71839a; border:1px dashed #cddfed; border-radius:12px; background:#f8fbfe; }
 
       /* ── LEDGER VIEW ── */
       .ledger-toolbar {
@@ -144,6 +161,7 @@
         border-radius: 12px;
         border: 1px solid #dee2e6;
       }
+      @media (max-width:760px) { .page-wrapper { padding:18px 13px 94px; }.ledger-hero { padding:23px 19px; border-radius:17px; flex-direction:column; }.ledger-hero-aside { width:100%; align-items:stretch; }.ledger-hero-stats { width:100%; }.ledger-hero-stat { text-align:center; }.section-card { padding:18px 15px; } }
       .ledger-toolbar .filter-btn {
         padding: 9px 16px;
         border-radius: 8px;
@@ -492,8 +510,23 @@
     <div class="page-wrapper">
       <!-- CUSTOMER SELECTION -->
       <div id="customer-selection-view" class="no-print">
-        <div class="section-card">
+        <section class="ledger-hero">
+          <div>
+            <p class="ledger-eyebrow">Accounts workspace</p>
+            <h1>Customer Ledger</h1>
+            <p class="ledger-hero-copy">Review balances, payment history and printable customer statements.</p>
+          </div>
+          <div class="ledger-hero-aside">
+            <span id="ledgerSyncStatus">Checking ledger…</span>
+            <div class="ledger-hero-stats">
+              <div class="ledger-hero-stat"><span>Accounts</span><strong id="ledgerCustomerCount">0</strong></div>
+              <div class="ledger-hero-stat"><span>Records</span><strong id="ledgerRecordCount">0</strong></div>
+            </div>
+          </div>
+        </section>
+        <div class="section-card ledger-directory-card">
           <div class="section-card-title"><span>📒</span> Customer Ledger (ખાતાવહી)</div>
+          <p class="ledger-directory-subtitle">Select an account to view its complete bill and payment trail.</p>
           <div class="customer-search-wrap">
             <input type="text" id="customer-search-input" placeholder="Search for a customer by name or village..." />
           </div>

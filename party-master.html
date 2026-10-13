@@ -13,7 +13,35 @@
     <style>
       body {
         font-family: "Poppins", sans-serif;
-        background: #f8fafc;
+        background: #f4f7fb;
+        color: #1e293b;
+      }
+      .party-hero {
+        background: radial-gradient(circle at 86% -24%, rgba(125, 211, 252, .32), transparent 44%), linear-gradient(120deg, #063a70, #075a9c);
+        box-shadow: 0 18px 42px rgba(7, 71, 133, .18);
+      }
+      .party-card {
+        border: 1px solid #e2e8f0;
+        border-radius: 18px;
+        box-shadow: 0 8px 24px rgba(15, 23, 42, .055);
+      }
+      .party-stat {
+        min-width: 135px;
+        border: 1px solid #e0ecf8;
+        border-radius: 14px;
+        background: rgba(255, 255, 255, .9);
+      }
+      .party-filter.is-active {
+        background: #0f5d98;
+        color: white;
+        border-color: #0f5d98;
+        box-shadow: 0 4px 10px rgba(15, 93, 152, .2);
+      }
+      .party-table-scroll { scrollbar-color: #94a3b8 transparent; }
+      @media (max-width: 640px) {
+        .party-hero { border-radius: 0 0 22px 22px; margin-left: -1rem; margin-right: -1rem; }
+        .party-stat { min-width: 0; }
+        .party-table-scroll table { min-width: 740px; }
       }
     </style>
   </head>
@@ -21,25 +49,38 @@
   <body>
     <div id="navbar-root"></div>
 
-    <div class="max-w-7xl mx-auto mt-4 px-4">
-      <!-- Header -->
-      <div class="flex justify-between items-center mb-6 bg-white p-5 rounded-xl shadow-sm border border-gray-100">
-        <div>
-          <h1 class="text-2xl font-bold text-slate-800">📖 Party Master Directory</h1>
-          <p class="text-sm text-slate-500">Manage all Farmers, Brokers, Buyers & Suppliers securely.</p>
+    <main class="max-w-7xl mx-auto px-4 pb-10">
+      <!-- Directory hero -->
+      <section class="party-hero mt-4 mb-6 px-5 py-6 sm:px-7 sm:py-7 rounded-2xl text-white">
+        <div class="flex flex-col gap-5 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p class="text-xs font-bold uppercase tracking-[.18em] text-sky-200">Master data</p>
+            <h1 class="mt-1 text-2xl font-bold tracking-tight sm:text-3xl">Party Master</h1>
+            <p class="mt-2 max-w-xl text-sm text-blue-100">A single, clean directory for farmers, brokers, buyers and merchants.</p>
+          </div>
+          <div class="flex items-center gap-3">
+            <span id="partySyncStatus" class="rounded-full border border-white/20 bg-white/10 px-3 py-2 text-xs font-semibold text-blue-50">Checking records…</span>
+            <a href="index.html" class="rounded-lg bg-white px-3.5 py-2 text-sm font-semibold text-blue-800 shadow-sm transition hover:bg-blue-50">Dashboard</a>
+          </div>
         </div>
-        <a
-          href="index.html"
-          class="bg-slate-100 text-slate-700 px-4 py-2 rounded-lg text-sm font-semibold hover:bg-slate-200 transition"
-          >← Back to Dashboard</a
-        >
+        <div class="mt-6 grid grid-cols-2 gap-3 sm:flex sm:flex-wrap" aria-label="Party summary">
+          <div class="party-stat p-3 text-slate-800"><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">All parties</p><p id="partyCountAll" class="mt-1 text-xl font-bold">—</p></div>
+          <div class="party-stat p-3 text-slate-800"><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Farmers</p><p id="partyCountFarmers" class="mt-1 text-xl font-bold">—</p></div>
+          <div class="party-stat p-3 text-slate-800"><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Brokers</p><p id="partyCountBrokers" class="mt-1 text-xl font-bold">—</p></div>
+          <div class="party-stat p-3 text-slate-800"><p class="text-[11px] font-bold uppercase tracking-wide text-slate-500">Needs attention</p><p id="partyCountBlacklisted" class="mt-1 text-xl font-bold text-red-600">—</p></div>
+        </div>
+      </section>
       </div>
 
       <!-- Main Grid -->
       <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
         <!-- Left Box: Add / Edit Form -->
-        <div class="bg-white p-6 rounded-xl shadow-sm border border-gray-100 h-fit">
-          <h2 id="formTitle" class="text-lg font-bold text-slate-800 mb-4 pb-2 border-b">➕ Add New Party</h2>
+        <section class="party-card bg-white p-5 sm:p-6 h-fit">
+          <div class="mb-5 border-b border-slate-100 pb-4">
+            <p class="text-[11px] font-bold uppercase tracking-[.15em] text-blue-700">Directory record</p>
+            <h2 id="formTitle" class="mt-1 text-lg font-bold text-slate-800">Add a party</h2>
+            <p class="mt-1 text-xs leading-5 text-slate-500">Mobile number is checked across every party so one number cannot be reused.</p>
+          </div>
 
           <form id="partyForm">
             <input type="hidden" id="partyId" />
@@ -69,15 +110,28 @@
             </div>
 
             <div class="mb-4">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Munim / Reference</label>
+              <input type="text" id="partyMunim" placeholder="E.G. MAHESH BHAI" class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" oninput="this.value=this.value.toUpperCase()" />
+            </div>
+
+            <div class="mb-4">
               <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Mobile Number *</label>
               <input
                 type="tel"
                 id="partyPhone"
                 required
                 maxlength="10"
+                inputmode="numeric"
+                pattern="[6-9][0-9]{9}"
                 placeholder="10-digit mobile number"
                 class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500"
               />
+              <p class="mt-1 text-[11px] text-slate-500">Use an Indian 10-digit number beginning with 6–9.</p>
+            </div>
+
+            <div class="mb-4">
+              <label class="block text-xs font-semibold text-slate-600 uppercase mb-1">Alternate Mobile <span class="normal-case font-medium text-slate-400">(optional)</span></label>
+              <input type="tel" id="partyAltPhone" maxlength="10" inputmode="numeric" pattern="[6-9][0-9]{9}" placeholder="Second contact number" class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500" />
             </div>
 
             <!-- Default Commission (Sirf Broker select hone par dikhega) -->
@@ -199,56 +253,62 @@
               </button>
             </div>
           </form>
-        </div>
+        </section>
 
         <!-- Right Box: List & Search -->
-        <div class="lg:col-span-2 bg-white p-6 rounded-xl shadow-sm border border-gray-100">
+        <section class="lg:col-span-2 party-card bg-white p-5 sm:p-6">
           <!-- Smart Filters & Excel Export Button -->
-          <div class="flex flex-wrap justify-between items-center mb-4 border-b pb-4 gap-2">
+          <div class="flex flex-wrap justify-between items-start mb-4 border-b border-slate-100 pb-4 gap-3">
+            <div>
+              <p class="text-[11px] font-bold uppercase tracking-[.15em] text-blue-700">Directory</p>
+              <h2 class="mt-1 text-lg font-bold text-slate-800">Search & manage parties</h2>
+            </div>
+            <button
+              onclick="exportPartiesExcel()"
+              class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg text-xs font-bold transition flex items-center gap-1 shadow-sm"
+            >
+              Download Excel
+            </button>
+          </div>
+          <div class="flex flex-wrap justify-between items-center mb-4 gap-3">
             <div class="flex flex-wrap gap-2">
               <button
-                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-800 text-white"
+                class="filter-badge party-filter is-active px-3 py-1.5 rounded-full border border-slate-200 text-xs font-bold transition"
                 onclick="applyTypeFilter('All', this)"
               >
                 📋 All
               </button>
               <button
-                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                class="filter-badge party-filter px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
                 onclick="applyTypeFilter('Farmer', this)"
               >
                 🌾 Farmers
               </button>
               <button
-                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                class="filter-badge party-filter px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
                 onclick="applyTypeFilter('Broker', this)"
               >
                 🤝 Brokers
               </button>
               <button
-                class="filter-badge px-3 py-1.5 rounded-full text-xs font-bold bg-slate-100 text-slate-600 hover:bg-slate-200"
+                class="filter-badge party-filter px-3 py-1.5 rounded-full border border-slate-200 bg-white text-xs font-bold text-slate-600 hover:bg-slate-50 transition"
                 onclick="applyTypeFilter('Buyer', this)"
               >
                 🏢 Buyers
               </button>
             </div>
-            <button
-              onclick="exportPartiesExcel()"
-              class="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-1.5 rounded-lg text-xs font-bold transition flex items-center gap-1"
-            >
-              📥 Export Excel
-            </button>
           </div>
 
           <div class="flex flex-col sm:flex-row justify-between items-center mb-4 gap-3">
             <input
               type="text"
               id="searchInput"
-              placeholder="🔍 Search name, phone or village..."
+              placeholder="Search name, mobile, GST, village or reference…"
               class="w-full p-2.5 border rounded-lg text-sm outline-none focus:ring-2 focus:ring-blue-500 bg-slate-50"
             />
           </div>
 
-          <div class="overflow-x-auto">
+          <div class="party-table-scroll overflow-x-auto rounded-xl border border-slate-100">
             <table class="w-full text-left border-collapse">
               <thead>
                 <tr class="bg-slate-50 text-slate-600 text-xs uppercase border-b">
@@ -265,9 +325,9 @@
               </tbody>
             </table>
           </div>
-        </div>
+        </section>
       </div>
-    </div>
+    </main>
 
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>

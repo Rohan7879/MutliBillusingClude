@@ -3,6 +3,9 @@ let currentPageForList = 1;
 const itemsPerPageForList = 25;
 
 let billListInitialized = false;
+const billReportParams = new URLSearchParams(window.location.search);
+let billReportFrom = /^\d{4}-\d{2}-\d{2}$/.test(billReportParams.get("from") || "") ? billReportParams.get("from") : "";
+let billReportTo = /^\d{4}-\d{2}-\d{2}$/.test(billReportParams.get("to") || "") ? billReportParams.get("to") : "";
 
 // Newest-first (desc) by default; ascending shows oldest bills first —
 // toggle button in the toolbar flips this and reloads the list.
@@ -38,6 +41,24 @@ function showBillListView() {
     const nextBtn = document.getElementById("next_page_list_btn");
     const paidBtn = document.getElementById("mark_paid_btn");
     const sortBtn = document.getElementById("sort_direction_btn");
+    const statusFilter = document.getElementById("bill_status_filter");
+    const dateFilter = document.getElementById("bill_date_filter");
+    const requestedStatus = billReportParams.get("status");
+    if (statusFilter && ["all", "due", "partial", "paid", "outstanding", "received"].includes(requestedStatus)) statusFilter.value = requestedStatus;
+    const reportContext = document.getElementById("bill-report-context");
+    if (reportContext && (billReportFrom || billReportTo)) {
+      reportContext.hidden = false;
+      const label = document.createElement("span");
+      label.textContent = `Report range: ${billReportFrom || "Beginning"} to ${billReportTo || "Today"} · `;
+      const clear = document.createElement("button");
+      clear.type = "button"; clear.textContent = "Clear date range";
+      clear.addEventListener("click", () => { billReportFrom = ""; billReportTo = ""; reportContext.hidden = true; const url = new URL(window.location.href); url.searchParams.delete("from"); url.searchParams.delete("to"); window.history.replaceState(null, "", url); currentPageForList = 1; filterAndRenderList(); });
+      reportContext.replaceChildren(label, clear);
+    }
+    document.querySelectorAll("[data-bill-bucket]").forEach((button) => {
+      button.style.textAlign = "left"; button.style.fontFamily = "inherit"; button.style.cursor = "pointer";
+      button.addEventListener("click", () => { statusFilter.value = button.dataset.billBucket; currentPageForList = 1; filterAndRenderList(); document.getElementById("bill_list_view").scrollIntoView({ block: "start", behavior: "smooth" }); });
+    });
     if (searchEl)
       searchEl.addEventListener(
         "input",
@@ -47,6 +68,8 @@ function showBillListView() {
     if (nextBtn) nextBtn.addEventListener("click", goToNextListPage);
     if (paidBtn) paidBtn.addEventListener("click", markSelectedBillsAsPaid);
     if (sortBtn) sortBtn.addEventListener("click", toggleBillSortDirection);
+    if (statusFilter) statusFilter.addEventListener("change", () => { currentPageForList = 1; filterAndRenderList(); });
+    if (dateFilter) dateFilter.addEventListener("change", () => { currentPageForList = 1; filterAndRenderList(); });
   }
 
   const sortBtnLabel = document.getElementById("sort_direction_btn");
@@ -60,23 +83,20 @@ function showBillListView() {
     unsubscribeBillsListener = null;
   }
 
-  unsubscribeBillsListener = billsCollection
-    .limit(200) // 👈 Sirf limit rakho, orderBy hata do taaki saare bills bina error ke fetch ho jayein
-    .onSnapshot((snapshot) => {
-      const syncStatus = document.getElementById("sync_status");
-      if (syncStatus) {
-        if (snapshot.metadata.hasPendingWrites) {
-          syncStatus.textContent = "Offline. Changes will sync when online.";
-          syncStatus.style.color = "orange";
-        } else {
-          const now = new Date();
-          const formattedTime = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
-          syncStatus.textContent = `All data synced. (Last sync: ${formattedTime})`;
-          syncStatus.style.color = "green";
-        }
+  // Keep the workspace complete: a hard 200-record cap silently omitted older
+  // bills from search, totals, export selection and pagination.
+  unsubscribeBillsListener = billsCollection.onSnapshot(
+    (snapshot) => {
+      if (snapshot.metadata.hasPendingWrites) {
+        setBillsSyncStatus("Waiting to sync changes", "#ffe29a");
+      } else {
+        const now = new Date();
+        const formattedTime = `${now.getHours()}:${String(now.getMinutes()).padStart(2, "0")}`;
+        setBillsSyncStatus(`Last checked ${formattedTime}`, "#d9ffea");
       }
 
       allBillsForList = snapshot.docs.filter((d) => d.data().deleted !== true);
+      updateBillsSummary(allBillsForList);
       // 📅 Sorting with button direction support (Newest First / Oldest First)
       allBillsForList.sort((a, b) => {
         const dataA = a.data();
@@ -109,17 +129,44 @@ function showBillListView() {
       currentPageForList = 1;
       filterAndRenderList();
       hideLoading();
-    });
+    },
+    (error) => {
+      console.error("Could not load bills:", error);
+      setBillsSyncStatus("Could not refresh — check internet", "#ffd0d0");
+      hideLoading();
+    }
+  );
+}
+
+function setBillsSyncStatus(message, color) {
+  const syncStatus = document.getElementById("sync_status");
+  if (!syncStatus) return;
+  syncStatus.textContent = message;
+  syncStatus.style.color = color;
 }
 function toggleBillSortDirection() {
   billSortDirection = billSortDirection === "desc" ? "asc" : "desc";
   showBillListView();
 }
 function filterAndRenderList(searchTerm = null) {
+  const billsToDisplay = getFilteredBills(searchTerm);
+
+  const start = (currentPageForList - 1) * itemsPerPageForList;
+  const end = start + itemsPerPageForList;
+  const billsForCurrentPage = billsToDisplay.slice(start, end);
+
+  renderBillList(billsForCurrentPage);
+  renderListPaginationControls(billsToDisplay.length);
+}
+
+function getFilteredBills(searchTerm = null) {
+  const searchValue = searchTerm === null ? document.getElementById("search_input_list")?.value || "" : searchTerm;
+  const statusValue = document.getElementById("bill_status_filter")?.value || "all";
+  const dateValue = document.getElementById("bill_date_filter")?.value || "";
   let billsToDisplay = allBillsForList;
 
-  if (searchTerm) {
-    const lowerCaseSearch = searchTerm.toLowerCase();
+  if (searchValue) {
+    const lowerCaseSearch = searchValue.toLowerCase();
     billsToDisplay = allBillsForList.filter((doc) => {
       const bill = doc.data();
       const searchString = [bill["Serial No"], bill["Customer Name"], bill["Village"], bill["Vehicle No"]]
@@ -129,12 +176,63 @@ function filterAndRenderList(searchTerm = null) {
     });
   }
 
-  const start = (currentPageForList - 1) * itemsPerPageForList;
-  const end = start + itemsPerPageForList;
-  const billsForCurrentPage = billsToDisplay.slice(start, end);
+  if (statusValue !== "all") {
+    billsToDisplay = billsToDisplay.filter((doc) => {
+      const bucket = getBillPaymentBucket(doc.data());
+      if (statusValue === "outstanding") return bucket !== "paid";
+      if (statusValue === "received") return bucket === "paid" || Number(doc.data().amountPaid || 0) > 0;
+      return bucket === statusValue;
+    });
+  }
+  if (billReportFrom || billReportTo) billsToDisplay = billsToDisplay.filter((doc) => {
+    const key = toInputDate(doc.data().Date || doc.data().createdAt);
+    return key && (!billReportFrom || key >= billReportFrom) && (!billReportTo || key <= billReportTo);
+  });
 
-  renderBillList(billsForCurrentPage);
-  renderListPaginationControls(billsToDisplay.length);
+  if (dateValue) {
+    billsToDisplay = billsToDisplay.filter((doc) => toInputDate(doc.data()["Date"]) === dateValue);
+  }
+
+  return billsToDisplay;
+}
+
+function toInputDate(dateValue) {
+  if (!dateValue) return "";
+  if (typeof dateValue === "string" && /^\d{1,2}\/\d{1,2}\/\d{4}$/.test(dateValue)) {
+    const [day, month, year] = dateValue.split("/");
+    return `${year}-${month.padStart(2, "0")}-${day.padStart(2, "0")}`;
+  }
+  const date = dateValue.toDate && typeof dateValue.toDate === "function" ? dateValue.toDate() : new Date(dateValue);
+  if (Number.isNaN(date.getTime())) return "";
+  return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+}
+
+function getBillPaymentBucket(bill) {
+  const total = Number(bill["Final Total"] || 0);
+  const paid = Number(bill.amountPaid || 0);
+  const status = String(bill.paymentStatus || "").toLowerCase();
+  if (status === "paid" || (total > 0 && paid >= total - 0.01)) return "paid";
+  if (status.includes("partial") || paid > 0) return "partial";
+  return "due";
+}
+
+function updateBillsSummary(docs) {
+  const totals = docs.reduce(
+    (summary, doc) => {
+      const bill = doc.data();
+      const total = Number(bill["Final Total"] || 0);
+      const paid = Math.min(total, Math.max(0, Number(bill.amountPaid || (String(bill.paymentStatus).toLowerCase() === "paid" ? total : 0))));
+      summary.total += total;
+      summary.paid += paid;
+      return summary;
+    },
+    { total: 0, paid: 0 }
+  );
+  const set = (id, value) => { const element = document.getElementById(id); if (element) element.textContent = value; };
+  set("bills-summary-count", docs.length.toLocaleString("en-IN"));
+  set("bills-summary-total", `₹${totals.total.toLocaleString("en-IN")}`);
+  set("bills-summary-due", `₹${Math.max(0, totals.total - totals.paid).toLocaleString("en-IN")}`);
+  set("bills-summary-paid", `₹${totals.paid.toLocaleString("en-IN")}`);
 }
 
 async function markSelectedBillsAsPaid() {
@@ -353,7 +451,7 @@ function renderBillList(docs) {
   const tableBody = document.getElementById("bill_list_body");
   tableBody.innerHTML = "";
   if (docs.length === 0) {
-    tableBody.innerHTML = '<tr><td colspan="9" style="text-align:center;">No bills found.</td></tr>';
+    tableBody.innerHTML = '<tr><td colspan="9" class="empty-bills-state">No bills match the selected filters.</td></tr>';
     return;
   }
 
@@ -411,23 +509,19 @@ function renderListPaginationControls(totalItems) {
 }
 
 function goToNextListPage() {
-  // We get the total number of items from the currently filtered list to calculate total pages
-  const searchTerm = document.getElementById("search_input_list")?.value || "";
-  const filteredList = searchTerm
-    ? allBillsForList.filter((doc) => JSON.stringify(doc.data()).toLowerCase().includes(searchTerm.toLowerCase()))
-    : allBillsForList;
+  const filteredList = getFilteredBills();
   const totalPages = Math.ceil(filteredList.length / itemsPerPageForList);
 
   if (currentPageForList < totalPages) {
     currentPageForList++;
-    filterAndRenderList(searchTerm);
+    filterAndRenderList();
   }
 }
 
 function goToPrevListPage() {
   if (currentPageForList > 1) {
     currentPageForList--;
-    filterAndRenderList(document.getElementById("search_input_list").value);
+    filterAndRenderList();
   }
 }
 function viewBill(docId) {
@@ -763,13 +857,15 @@ function updateSelectionSummary() {
 
     const selectedBills = billSource.filter((bill) => selectedIds.includes(bill.id));
 
-    const totalAmount = selectedBills.reduce((sum, bill) => sum + bill["Final Total"], 0);
+    const totalAmount = selectedBills.reduce((sum, bill) => sum + Number(bill.data()["Final Total"] || 0), 0);
 
+    summaryElement.style.display = "block";
     summaryElement.innerHTML = `Selected ${
       selectedBills.length
     } bill(s) | Total: <span style="color: #005a9e;">${formatNumber(totalAmount)}</span>`;
   } else {
     summaryElement.innerHTML = ""; // Clear the summary if nothing is selected
+    summaryElement.style.display = "none";
   }
 }
 

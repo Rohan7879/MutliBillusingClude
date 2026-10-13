@@ -553,31 +553,33 @@ const NAV_ITEMS = [
   { href: "dashboard.html", icon: "📊", label: "Dashboard" },
   { href: "order-book.html", icon: "📦", label: "Orders", roles: ["admin", "manager", "biller"] },
   { href: "party-master.html", icon: "📖", label: "Party Master", roles: ["admin", "manager", "biller"] },
-  { href: "reports.html", icon: "📈", label: "Reports", group: "Accounts" },
+  { href: "reports.html", icon: "📈", label: "Reports", description: "Insights and exports", group: "Accounts" },
   {
     href: "broker-ledger.html",
     icon: "🤝",
     label: "Brokers",
+    description: "Commission and settlements",
     roles: ["admin", "manager", "accountant"],
     group: "Accounts",
   },
-  { href: "ledger.html", icon: "📒", label: "Ledger", roles: ["admin", "manager", "accountant"], group: "Accounts" },
-  { href: "daily-closing.html", icon: "📅", label: "Daily Close", roles: ["admin", "accountant"], group: "Accounts" },
-  { href: "audit-log.html", icon: "🛡️", label: "Audit", roles: ["admin"], group: "Admin" },
-  { href: "staff-access.html", icon: "👥", label: "Staff", roles: ["admin"], group: "Admin" },
-  { href: "core_settings.html", icon: "⚙️", label: "Settings", roles: ["admin"], group: "Admin" },
+  { href: "ledger.html", icon: "📒", label: "Ledger", description: "Customer balances", roles: ["admin", "manager", "accountant"], group: "Accounts" },
+  { href: "daily-closing.html", icon: "📅", label: "Daily Close", description: "Day-end reconciliation", roles: ["admin", "accountant"], group: "Accounts" },
+  { href: "audit-log.html", icon: "🛡️", label: "Audit", description: "Protected activity trail", roles: ["admin"], group: "Admin" },
+  { href: "staff-access.html", icon: "👥", label: "Staff", description: "Roles and approvals", roles: ["admin"], group: "Admin" },
+  { href: "core_settings.html", icon: "⚙️", label: "Settings", description: "Company and preferences", roles: ["admin"], group: "Admin" },
 ];
 
 // Order controls which dropdown appears first; icon is shown on the
 // dropdown's own toggle button.
 const NAV_GROUPS = [
-  { key: "Accounts", icon: "💰", label: "Accounts" },
-  { key: "Admin", icon: "🛠️", label: "Admin" },
+  { key: "Accounts", icon: "💰", label: "Accounts", description: "Financial workspace" },
+  { key: "Admin", icon: "🛠️", label: "Admin", description: "Access and controls" },
 ];
 
 const PAGE_ROLE_REQUIREMENTS = {
   "bill-create.html": ["admin", "manager", "biller"],
   "broker-ledger.html": ["admin", "manager", "accountant"],
+  "broker-detail.html": ["admin", "manager", "accountant"],
   "ledger.html": ["admin", "manager", "accountant"],
   "daily-closing.html": ["admin", "accountant"],
   "order-book.html": ["admin", "manager", "biller"],
@@ -602,7 +604,8 @@ function renderNavbar() {
     return;
   }
 
-  const currentFile = window.location.pathname.split("/").pop() || "index.html";
+  const pageFile = window.location.pathname.split("/").pop() || "index.html";
+  const currentFile = pageFile === "broker-detail.html" ? "broker-ledger.html" : pageFile;
 
   const role = window.currentUserProfile && window.currentUserProfile.role;
   const visibleItems = NAV_ITEMS.filter((item) => !item.roles || item.roles.includes(role));
@@ -629,16 +632,21 @@ function renderNavbar() {
     const itemsHtml = items
       .map((item) => {
         const isActive = item.href === currentFile;
-        return `<a class="nav-dropdown-item${isActive ? " active" : ""}" href="${item.href}">${item.icon} <span>${
-          item.label
-        }</span></a>`;
+        return `<a class="nav-dropdown-item${isActive ? " active" : ""}" href="${item.href}">
+          <span class="nav-dropdown-icon" aria-hidden="true">${item.icon}</span>
+          <span class="nav-dropdown-copy"><strong>${item.label}</strong><small>${item.description || "Open workspace"}</small></span>
+          <span class="nav-dropdown-arrow" aria-hidden="true">›</span>
+        </a>`;
       })
       .join("");
     return `<div class="nav-dropdown">
         <button type="button" class="nav-link nav-dropdown-toggle${isActiveGroup ? " active" : ""}">${
       group.icon
     } <span>${group.label}</span> <span class="nav-caret">▾</span></button>
-        <div class="nav-dropdown-menu">${itemsHtml}</div>
+        <div class="nav-dropdown-menu">
+          <div class="nav-dropdown-heading"><span>${group.icon}</span><div><strong>${group.label}</strong><small>${group.description}</small></div></div>
+          <div class="nav-dropdown-items">${itemsHtml}</div>
+        </div>
       </div>`;
   }).join("");
 

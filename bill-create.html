@@ -1125,6 +1125,19 @@
         flex-wrap: wrap;
         gap: 8px;
       }
+
+      /* ── NEW BILL WORKSPACE ── */
+      body { background: #f4f8fc; }
+      .pg.bill-workspace { max-width: 1180px; padding: 28px 22px 120px; }
+      .new-bill-hero { position: relative; overflow: hidden; display: flex; justify-content: space-between; align-items: center; gap: 24px; margin-bottom: 18px; padding: 28px 32px; border-radius: 22px; color: #fff; background: radial-gradient(circle at 85% 15%, rgba(98,210,255,.33), transparent 27%), linear-gradient(123deg,#06335e,#075b9d 58%,#0874b7); box-shadow: 0 14px 34px rgba(0,75,130,.2); }.new-bill-hero::after { content:""; position:absolute; width:230px; height:230px; right:-76px; bottom:-130px; border-radius:50%; border:1px solid rgba(255,255,255,.16); }.new-bill-eyebrow { margin:0 0 7px; color:#bfe7ff; font-size:12px; font-weight:800; letter-spacing:.12em; text-transform:uppercase; }.new-bill-hero h1 { margin:0; font-size:clamp(27px,3vw,37px); letter-spacing:-.035em; }.new-bill-hero p { margin:9px 0 0; color:rgba(255,255,255,.84); font-size:14px; }.new-bill-hero-link { position:relative; z-index:1; display:inline-flex; align-items:center; justify-content:center; min-height:43px; padding:0 17px; border:1px solid rgba(255,255,255,.35); border-radius:10px; color:#fff; text-decoration:none; font-size:14px; font-weight:800; background:rgba(255,255,255,.1); }.new-bill-hero-link:hover { color:#fff; background:rgba(255,255,255,.2); }
+      .new-bill-hero-actions { position:relative; z-index:1; display:flex; align-items:flex-end; gap:10px; flex-wrap:wrap; }.layout-picker { display:flex; flex-direction:column; gap:5px; min-width:150px; }.layout-picker label { color:#ccecff; font-size:10px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; }.layout-picker select { min-height:40px; padding:0 10px; border:1px solid rgba(255,255,255,.35); border-radius:9px; color:#fff; background:rgba(0,0,0,.16); font:700 13px inherit; }.layout-picker option { color:#173a5e; background:#fff; }
+      .bill-step { border-color:#dfeaf3; box-shadow:0 7px 22px rgba(15,71,113,.06); }.bill-step .sc-title, .bill-order-link .sc-title { color:#173a5e; letter-spacing:0; text-transform:none; font-size:17px; }.bill-order-link { border-color:#d7e7f4; background:#fbfdff; }.bill-step .ff input, .bill-step textarea, .bill-step select { border-color:#d7e3ef; background:#fbfdff; }.bill-step .ff input:focus, .bill-step textarea:focus { border-color:#1681c5; box-shadow:0 0 0 3px rgba(22,129,197,.12); }
+      .form-submit-area { position:sticky; bottom:13px; z-index:20; display:flex; align-items:center; justify-content:space-between; gap:16px; padding:12px 14px 12px 17px; margin-top:18px; border:1px solid #d4e4f1; border-radius:15px; background:rgba(255,255,255,.96); box-shadow:0 12px 30px rgba(15,71,113,.18); backdrop-filter:blur(10px); }.live-bill-meta { display:flex; align-items:center; gap:20px; flex-wrap:wrap; }.live-bill-note { color:#71839a; font-size:12px; font-weight:700; }.live-bill-stat small { display:block; margin-bottom:2px; color:#71839a; font-size:10px; font-weight:800; letter-spacing:.06em; text-transform:uppercase; }.live-bill-stat strong { color:#123f67; font-size:19px; }.live-bill-stat.total strong { color:#0872b6; }.form-submit-area .gen-btn { margin:0; min-width:210px; }
+      .moisture-card { border-color:#ffe08a; background:#fffdf8; }.moisture-card .sc-title { color:#7a5700; }.moisture-card .trow { margin:0; }
+      /* Classic keeps the original compact, familiar bill-entry layout. */
+      body[data-bill-layout="classic"] { background:#f4f6f9; }.pg.bill-workspace[data-layout="classic"] { max-width:880px; padding:22px 16px 40px; }.pg[data-layout="classic"] .new-bill-hero { display:none; }.pg[data-layout="classic"] .bill-step, .pg[data-layout="classic"] .bill-order-link { border-color:#dee2e6; box-shadow:0 2px 10px rgba(0,90,158,.07); }.pg[data-layout="classic"] .bill-step .sc-title, .pg[data-layout="classic"] .bill-order-link .sc-title { color:#005a9e; font-size:.9em; letter-spacing:.5px; text-transform:uppercase; }.pg[data-layout="classic"] .form-submit-area { position:static; display:block; padding:0; margin-top:18px; border:0; border-radius:0; background:transparent; box-shadow:none; backdrop-filter:none; }.pg[data-layout="classic"] .live-bill-meta { display:none; }.pg[data-layout="classic"] .form-submit-area .gen-btn { width:100%; min-width:0; }.pg[data-layout="classic"] .moisture-card { background:#fff; border-color:#dee2e6; }.pg[data-layout="classic"] .moisture-card .sc-title { color:#005a9e; }
+      .classic-layout-switch { display:none; }.pg[data-layout="classic"] .classic-layout-switch { display:flex; justify-content:flex-end; margin:0 0 10px; }.classic-layout-switch button { padding:7px 10px; border:1px solid #cdddea; border-radius:7px; color:#075c9f; background:#fff; font:700 12px inherit; cursor:pointer; }
+      @media (max-width: 700px) { .pg.bill-workspace { padding:18px 14px 104px; }.new-bill-hero { padding:24px 22px; flex-direction:column; align-items:stretch; gap:18px; border-radius:18px; }.new-bill-hero-actions { align-items:stretch; flex-direction:column; }.layout-picker { width:100%; }.new-bill-hero-link { width:100%; }.bill-step, .bill-order-link { padding:17px 14px; }.form-submit-area { bottom:74px; align-items:stretch; flex-direction:column; gap:10px; padding:12px; }.live-bill-meta { width:100%; justify-content:space-between; gap:10px; }.live-bill-note { width:100%; }.form-submit-area .gen-btn { width:100%; min-width:0; }.live-bill-stat strong { font-size:17px; }.pg.bill-workspace[data-layout="classic"] { padding-bottom:84px; } }
     </style>
     <link rel="stylesheet" href="css/themes.css" />
   </head>
@@ -1132,11 +1145,29 @@
     <!-- NAVBAR -->
     <div id="navbar-root"></div>
 
-    <div class="pg">
+    <div class="pg bill-workspace">
+      <section class="new-bill-hero" aria-labelledby="new-bill-title">
+        <div>
+          <p class="new-bill-eyebrow">Purchase entry</p>
+          <h1 id="new-bill-title">Create a new bill</h1>
+          <p>Complete the bill details below. Your totals update before you save.</p>
+        </div>
+        <div class="new-bill-hero-actions">
+          <div class="layout-picker">
+            <label for="bill-layout-picker">Your layout</label>
+            <select id="bill-layout-picker">
+              <option value="professional">Professional</option>
+              <option value="classic">Classic (familiar)</option>
+            </select>
+          </div>
+          <a class="new-bill-hero-link" href="bills.html">← Back to bills</a>
+        </div>
+      </section>
+      <div class="classic-layout-switch"><button type="button" id="classic-layout-switch">Use professional layout</button></div>
       <!-- ===== BILL CREATION FORM ===== -->
 
       <!-- Order Link Section -->
-      <div class="sc" id="order-link-section">
+      <div class="sc bill-order-link" id="order-link-section">
         <div class="sc-title">📦 Link to Order (Optional)</div>
         <div style="display: flex; gap: 12px; align-items: center; flex-wrap: wrap">
           <select
@@ -1259,7 +1290,7 @@
       <div id="bill_creation_form">
         <form id="estimateForm">
           <!-- Product Template Selector -->
-          <div class="sc" id="product-template-card">
+          <div class="sc bill-step" id="product-template-card">
             <div class="sc-title">🌾 Product</div>
             <div id="product-template-selector"></div>
             <div id="series-preview" class="series-preview-text">
@@ -1273,7 +1304,7 @@
           </div>
 
           <!-- Customer Details -->
-          <div class="sc">
+          <div class="sc bill-step">
             <div class="sc-title">👤 Customer Details</div>
             <div class="fg2">
               <div class="ff">
@@ -1350,7 +1381,7 @@
           </div>
 
           <!-- Bill Type & Weight -->
-          <div class="sc">
+          <div class="sc bill-step">
             <div class="sc-title">⚖️ Bill Type & Weight</div>
 
             <div class="trow">
@@ -1426,7 +1457,7 @@
           </div>
 
           <!-- Bardan — MUST keep id="bag_supply_section" as tbody for JS -->
-          <div class="sc">
+          <div class="sc bill-step">
             <div class="sc-title">🧺 બારદાન (Bags)</div>
             <table style="width: 100%; border-collapse: collapse">
               <tbody id="bag_supply_section">
@@ -1490,8 +1521,7 @@
             </table>
           </div>
           <!-- WEIGHBRIDGE MOISTURE -->
-          <tr>
-            <td colspan="5" style="padding: 6px 0">
+          <div class="sc bill-step moisture-card">
               <div class="trow" style="background: #fff8e7; border-color: #ffe08a">
                 <div class="trow-label" style="color: #7a5700">💧 વેબ્રીજ મોઇશ્ચર (Weighbridge Moisture)</div>
                 <div style="display: flex; align-items: center; gap: 10px">
@@ -1539,11 +1569,10 @@
                   <span style="color: #6c757d; font-size: 13px; font-weight: 600" id="wb_moisture_preview"></span>
                 </div>
               </div>
-            </td>
-          </tr>
+          </div>
 
           <!-- Vakal — MUST keep id="vakal_section" as tbody for JS -->
-          <div class="sc">
+          <div class="sc bill-step">
             <div class="sc-title">📦 વકલ (Items)</div>
             <div class="tbag">🎒 Total Bags: <span id="total-bags-count" style="font-size: 1.3em">0</span></div>
             <div
@@ -1717,7 +1746,7 @@
           </div>
 
           <!-- Expenses & Freight -->
-          <div class="sc">
+          <div class="sc bill-step">
             <div class="sc-title">💸 ખર્ચ & ભાડું</div>
             <div class="exp-sec">
               <h3>📋 અન્ય ખર્ચ (Other Expenses)</h3>
@@ -1763,7 +1792,7 @@
           </div>
 
           <!-- Bill Remarks -->
-          <div class="sc">
+          <div class="sc bill-step">
             <div class="sc-title">📝 Remarks / Notes</div>
             <div class="ff">
               <label>નોંધ (Optional)</label>
@@ -1785,7 +1814,14 @@
             </div>
           </div>
 
-          <button type="submit" class="gen-btn">🧾 Generate Bill</button>
+          <div class="form-submit-area" aria-live="polite">
+            <div class="live-bill-meta">
+              <span class="live-bill-note" id="live-bill-status">Add weight and item details to preview totals.</span>
+              <span class="live-bill-stat"><small>Net weight</small><strong id="live-net-weight">0 kg</strong></span>
+              <span class="live-bill-stat total"><small>Final total</small><strong id="live-final-total">₹0</strong></span>
+            </div>
+            <button type="submit" class="gen-btn">🧾 Generate Bill</button>
+          </div>
         </form>
       </div>
       <!-- end bill_creation_form -->

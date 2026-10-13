@@ -7,42 +7,40 @@
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
-    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/firebase-init.js?v=14"></script>
     <script src="js/core/utils.js"></script>
-    <script src="js/core/core-engine.js"></script>
+    <script src="js/core/core-engine.js?v=14"></script>
+    <script src="js/core/pwa.js?v=14" defer></script>
+    <script src="js/core/workspace-ui.js?v=14"></script>
     <link rel="stylesheet" href="css/main.css" />
     <style>
-      .closing-wrap {
-        max-width: 1050px;
-        margin: 28px auto;
-        padding: 0 18px;
-      }
+      body { background: #f4f8fc; }
+      .closing-wrap { max-width: 1100px; margin: 30px auto; padding: 0 20px 45px; }
       .closing-card {
         background: #fff;
-        border: 1px solid #d9e2ef;
-        border-radius: 12px;
-        padding: 20px;
-        box-shadow: 0 2px 8px #003d6e0d;
+        border: 1px solid #d6e5f2;
+        border-radius: 20px;
+        overflow: hidden;
+        box-shadow: 0 16px 34px rgba(13, 72, 116, .10);
       }
+      .closing-hero { display:flex; align-items:center; justify-content:space-between; gap:22px; padding:28px 30px; color:#fff; background:radial-gradient(circle at 88% 10%, rgba(98,190,255,.4), transparent 29%), linear-gradient(125deg,#063968,#0877bc); }
+      .closing-kicker { margin:0 0 7px; color:#b9e2ff; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:1.3px; }
+      .closing-hero h1 { margin:0; font-size:29px; letter-spacing:-.5px; }
+      .closing-hero p:last-child { margin:7px 0 0; color:#e2f3ff; line-height:1.5; }
+      .closing-live { padding:9px 12px; border:1px solid rgba(255,255,255,.3); border-radius:999px; background:rgba(1,34,68,.22); font-size:12px; font-weight:750; white-space:nowrap; }
+      .closing-body { padding:23px 30px 30px; }
       .closing-controls {
-        display: flex;
-        gap: 10px;
-        align-items: center;
+        display:flex; gap:12px; align-items:end; justify-content:space-between;
         flex-wrap: wrap;
-        margin: 16px 0;
+        margin:0 0 22px; padding:15px; border:1px solid #e0ebf4; border-radius:14px; background:#f7fbff;
       }
+      .closing-date-field label { display:block; margin:0 0 6px; color:#5d7891; font-size:11px; font-weight:800; text-transform:uppercase; letter-spacing:.55px; }
       .closing-controls input,
       .closing-controls button {
-        padding: 9px 12px;
-        border-radius: 6px;
-        border: 1px solid #b9c9db;
+        padding:11px 13px; border-radius:10px; border:1px solid #cbddea; font-family:inherit;
       }
       .closing-controls button {
-        background: #005a9e;
-        color: #fff;
-        border: 0;
-        font-weight: 700;
-        cursor: pointer;
+        background:linear-gradient(135deg,#075e9d,#087cc1); color:#fff; border:0; font-weight:750; cursor:pointer; box-shadow:0 7px 12px rgba(0,90,158,.18);
       }
       .closing-grid {
         display: grid;
@@ -50,9 +48,7 @@
         gap: 14px;
       }
       .closing-metric {
-        border: 1px solid #d9e2ef;
-        border-radius: 10px;
-        padding: 16px;
+        border: 1px solid #d9e7f1; border-radius:14px; padding:17px; background:linear-gradient(145deg,#fff,#f7fbff);
       }
       .closing-metric span {
         display: block;
@@ -60,28 +56,37 @@
         font-weight: 700;
       }
       .closing-metric strong {
-        font-size: 1.5rem;
-        color: #005a9e;
+        margin-top:6px; font-size:1.45rem; color:#075b99;
       }
       @media (max-width: 700px) {
+        .closing-wrap { margin:18px auto; padding:0 13px 32px; }
+        .closing-hero { align-items:flex-start; flex-direction:column; padding:23px 20px; }
+        .closing-body { padding:16px; }
+        .closing-controls { align-items:stretch; }
+        .closing-date-field,.closing-controls button { width:100%; }
+        .closing-controls input { width:100%; box-sizing:border-box; }
         .closing-grid {
           grid-template-columns: repeat(2, minmax(0, 1fr));
         }
       }
     </style>
+    <link rel="stylesheet" href="css/workspaces.css?v=14" />
   </head>
-  <body>
+  <body class="workspace-page">
     <div id="navbar-root"></div>
     <main class="closing-wrap">
       <section class="closing-card">
-        <h1>📅 Daily Closing</h1>
-        <p>Review bills, collections and current outstanding before closing the day.</p>
-        <div class="closing-controls">
-          <label for="closing-date">Date</label><input id="closing-date" type="date" /><button id="load-closing">
-            Refresh summary
-          </button>
+        <header class="closing-hero">
+          <div><p class="closing-kicker">Accounts workspace</p><h1>Daily closing</h1><p>Review bills, collections and the outstanding balance before you close the day.</p></div>
+          <span class="closing-live" id="closing-live" aria-live="polite">● Ready to review</span>
+        </header>
+        <div class="closing-body">
+          <div class="closing-controls">
+            <div class="closing-date-field"><label for="closing-date">Closing date</label><input id="closing-date" type="date" /></div>
+            <button id="load-closing">↻ Refresh summary</button>
+          </div>
+          <div id="closing-summary">Loading summary…</div>
         </div>
-        <div id="closing-summary">Loading summary…</div>
       </section>
     </main>
     <script>
@@ -104,14 +109,19 @@
       async function loadDailyClosing() {
         const selectedDate = document.getElementById("closing-date").value;
         const target = document.getElementById("closing-summary");
+        const status = document.getElementById("closing-live");
+        const button = document.getElementById("load-closing");
+        if (!selectedDate) { status.textContent = "Select a closing date"; return; }
+        button.disabled = true;
         target.textContent = "Loading summary…";
+        status.textContent = "↻ Updating figures…";
         try {
           const [billsSnapshot, paymentsSnapshot] = await Promise.all([
-            billsCollection.limit(200).get(),
-            db.collection("payments").limit(200).get(),
+            billsCollection.get(),
+            db.collection("payments").get(),
           ]);
-          const bills = billsSnapshot.docs.map((doc) => doc.data()).filter((bill) => bill.deleted !== true);
-          const payments = paymentsSnapshot.docs.map((doc) => doc.data());
+          const bills = billsSnapshot.docs.map((doc) => ({ ...doc.data(), id: doc.id })).filter((bill) => bill.deleted !== true);
+          const payments = paymentsSnapshot.docs.map((doc) => doc.data()).filter((payment) => payment.deleted !== true);
           const dayBills = bills.filter((bill) => billDateKey(bill.Date || bill.createdAt) === selectedDate);
           const dayPayments = payments.filter(
             (payment) => billDateKey(payment.paymentDate || payment.createdAt) === selectedDate
@@ -137,8 +147,20 @@
           )}</strong></div></div><p style="margin:18px 0 0;color:#475569">Selected-day difference (bill total − payments): <b>${money(
             difference
           )}</b>. Review this before closing the day.</p>`;
+          const billsRows = dayBills.map((bill) => `<tr><td><a href="final.html?id=${encodeURIComponent(bill.id)}">${escapeHtml(bill["Serial No"] || "Bill")}</a><br><span style="color:#61788c">${escapeHtml(bill["Customer Name"] || "—")}</span></td><td>${money(bill["Final Total"])}</td></tr>`).join("");
+          const paymentRows = dayPayments.map((payment) => `<tr><td>${escapeHtml(payment.customerName || payment.partyName || payment.paymentMode || "Payment")}</td><td>${money(payment.totalCredit ?? payment.cashAmount ?? 0)}</td></tr>`).join("");
+          target.innerHTML += `<div class="closing-detail-grid"><section class="closing-detail"><h2>Selected-day bills · ${dayBills.length}</h2>${billsRows ? `<table><tbody>${billsRows}</tbody></table>` : '<div class="closing-empty">No bills recorded on this date.</div>'}</section><section class="closing-detail"><h2>Selected-day payments · ${dayPayments.length}</h2>${paymentRows ? `<table><tbody>${paymentRows}</tbody></table>` : '<div class="closing-empty">No payments recorded on this date.</div>'}</section></div>`;
+          const cardLinks = [`bills.html?from=${selectedDate}&to=${selectedDate}`, `bills.html?from=${selectedDate}&to=${selectedDate}`, `ledger.html`, `bills.html?status=outstanding`];
+          target.querySelectorAll(".closing-metric").forEach((metric, index) => {
+            const link = document.createElement("a"); link.href = cardLinks[index]; link.className = metric.className; link.innerHTML = metric.innerHTML;
+            const hint = document.createElement("span"); hint.className = "metric-record-link"; hint.textContent = "View records ↗"; link.append(hint); metric.replaceWith(link);
+          });
+          status.textContent = `● Checked ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
         } catch (error) {
-          target.textContent = `Could not load daily closing: ${error.message}`;
+          WorkspaceUI.state(target, { title: "Could not load daily closing", message: error.message, action: "Retry", onAction: loadDailyClosing, error: true });
+          status.textContent = "● Update could not complete";
+        } finally {
+          button.disabled = false;
         }
       }
       document.getElementById("closing-date").value = localDateKey(new Date());

@@ -7,9 +7,11 @@
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
-    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/firebase-init.js?v=14"></script>
     <script src="js/core/utils.js"></script>
-    <script src="js/core/core-engine.js"></script>
+    <script src="js/core/workspace-ui.js?v=14"></script>
+    <script src="js/core/core-engine.js?v=14"></script>
+    <script src="js/core/pwa.js?v=14" defer></script>
     <link rel="stylesheet" href="css/main.css" />
     <style>
       .audit-wrap {
@@ -361,14 +363,17 @@
         }
       }
     </style>
+    <link rel="stylesheet" href="css/workspaces.css?v=14" />
   </head>
-  <body>
+  <body class="workspace-page">
     <div id="navbar-root"></div>
     <main class="audit-wrap">
       <section class="audit-card">
         <header class="audit-heading">
-          <div class="audit-heading-row"><h1>🛡️ Audit History</h1><button id="audit-export" class="audit-export-btn">⇩ Export CSV</button></div>
+          <p class="workspace-kicker">Admin workspace</p>
+          <div class="audit-heading-row"><h1>Audit history</h1><button id="audit-export" class="audit-export-btn">⇩ Export CSV</button></div>
           <p>Protected, append-only trail for billing and financial actions.</p>
+          <span class="workspace-sync" id="audit-sync-status" aria-live="polite">Loading recent activity…</span>
         </header>
         <div id="audit-stats" class="audit-stats" aria-live="polite"></div>
         <div class="audit-filters">
@@ -387,9 +392,14 @@
     </div>
     <script>
       let allAuditEntries = [], unsubscribeAudit = null;
+      let auditAuthorized = false, auditDetailVersion = 0, auditReturnFocus = null;
       const escapeAuditHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (char) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#039;" }[char]));
       const formatAuditDate = (timestamp) => timestamp?.toDate ? timestamp.toDate().toLocaleString("en-IN") : "Syncing…";
-      const dateKey = (timestamp) => timestamp?.toDate ? timestamp.toDate().toISOString().slice(0, 10) : "";
+      const dateKey = (timestamp) => {
+        if (!timestamp?.toDate) return "";
+        const date = timestamp.toDate();
+        return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+      };
       const formatCurrency = (value) => Number.isFinite(Number(value)) ? `₹${Number(value).toLocaleString("en-IN")}` : String(value ?? "—");
       const actionLabel = (action) => String(action || "activity").replace(/[._-]+/g, " ").replace(/\b\w/g, (char) => char.toUpperCase());
       function actorFor(entry) {
@@ -444,11 +454,13 @@
       function renderAudit() {
         const rows = filteredEntries(), target = document.getElementById("audit-results");
         renderStats(rows);
-        if (!rows.length) { target.innerHTML = '<div class="audit-empty">No audit entries match these filters.</div>'; return; }
+        if (!rows.length) { WorkspaceUI.state(target, { title: allAuditEntries.length ? "No matching activity" : "No activity recorded yet", message: allAuditEntries.length ? "Try another action, date or search term." : "New billing and access changes will appear here automatically.", ...(allAuditEntries.length ? { action: "Clear filters", onAction: clearAuditFilters } : {}) }); return; }
         target.innerHTML = `<table class="audit-table"><thead><tr><th>When</th><th>Action</th><th>User</th><th>Record</th><th>Change</th><th></th></tr></thead><tbody>${rows.map(({ id, data }) => {
           const actor = actorFor(data);
           return `<tr><td>${escapeAuditHtml(formatAuditDate(data.createdAt))}</td><td><span class="audit-action action-${escapeAuditHtml(String(data.action || "").split(".")[0])}">${escapeAuditHtml(actionLabel(data.action))}</span></td><td><span class="audit-user">${escapeAuditHtml(actor.name)}</span><span class="audit-email">${escapeAuditHtml(actor.email)}</span><span class="audit-role">${escapeAuditHtml(actor.role)}</span></td><td class="audit-record"><strong>${escapeAuditHtml(recordFor(data))}</strong><small>${escapeAuditHtml(data.entityId || "No record ID")}</small></td><td class="audit-change">${escapeAuditHtml(auditSummary(data))}</td><td><button class="audit-view-btn" type="button" data-audit-id="${escapeAuditHtml(id)}">View</button></td></tr>`;
         }).join("")}</tbody></table>`;
+        const labels = ["When", "Action", "User", "Record", "Change", "Details"];
+        target.querySelectorAll("tbody tr").forEach((row) => [...row.cells].forEach((cell, index) => { cell.dataset.label = labels[index]; }));
         target.querySelectorAll(".audit-view-btn").forEach((button) => button.addEventListener("click", () => showAuditDetail(button.dataset.auditId)));
       }
       function showAuditDetail(id) {
@@ -456,27 +468,79 @@
         if (!entry) return;
         const actor = actorFor(entry), before = entry.before || {}, after = entry.after || {};
         const diffs = changedFields(entry);
-        const changes = diffs.length ? `<table class="audit-diff"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>${diffs.map((key) => `<tr><td><strong>${escapeAuditHtml(fieldLabel(key))}</strong></td><td class="audit-before">${escapeAuditHtml(displayValue(key, before[key]))}</td><td class="audit-after">${escapeAuditHtml(displayValue(key, after[key]))}</td></tr>`).join("")}</tbody></table>` : '<p class="audit-empty">This historical entry does not contain before/after field values.</p>';
+        const changes = diffs.length ? `<table class="audit-diff"><thead><tr><th>Field</th><th>Before</th><th>After</th></tr></thead><tbody>${diffs.map((key) => `<tr><td data-label="Field"><strong>${escapeAuditHtml(fieldLabel(key))}</strong></td><td data-label="Before" class="audit-before">${escapeAuditHtml(displayValue(key, before[key]))}</td><td data-label="After" class="audit-after">${escapeAuditHtml(displayValue(key, after[key]))}</td></tr>`).join("")}</tbody></table>` : '<p class="audit-empty">This historical entry does not contain before/after field values.</p>';
         document.getElementById("audit-detail-content").innerHTML = `<h2 id="audit-detail-title">${escapeAuditHtml(actionLabel(entry.action))}</h2><p class="audit-detail-meta">${escapeAuditHtml(formatAuditDate(entry.createdAt))} · ${escapeAuditHtml(recordFor(entry))}</p><dl class="audit-detail-info"><div><dt>User</dt><dd>${escapeAuditHtml(actor.name)}<br><small>${escapeAuditHtml(actor.email)} · ${escapeAuditHtml(actor.role)}</small></dd></div><div><dt>Record ID</dt><dd>${escapeAuditHtml(entry.entityId || "Not recorded")}</dd></div>${entry.reason ? `<div><dt>Reason</dt><dd>${escapeAuditHtml(entry.reason)}</dd></div>` : ""}</dl><h3>Changed fields</h3>${changes}`;
         document.getElementById("audit-detail-overlay").classList.add("open");
+        auditReturnFocus = document.activeElement;
+        document.getElementById("audit-detail-close").focus();
+        const related = document.createElement("div");
+        related.className = "audit-related";
+        document.getElementById("audit-detail-content").append(related);
+        showRelatedBills(entry, related, ++auditDetailVersion);
       }
-      function closeAuditDetail() { document.getElementById("audit-detail-overlay").classList.remove("open"); }
+      async function showRelatedBills(entry, target, version) {
+        const before = entry.before || {}, after = entry.after || {};
+        let ids = [entry.entityType === "bill" ? entry.entityId : null, after.billId, before.billId, ...(after.appliedToBills || []), ...(before.appliedToBills || [])].filter(Boolean);
+        try {
+          if (!ids.length && entry.entityType === "payment" && entry.entityId) {
+            target.textContent = "Looking up related bills…";
+            const payment = await db.collection("payments").doc(entry.entityId).get();
+            if (payment.exists) ids = [payment.data().billId, ...(payment.data().appliedToBills || [])].filter(Boolean);
+          }
+          const serial = after.serialNo || before.serialNo;
+          if (!ids.length && serial) {
+            const bills = await db.collection("bills").where("Serial No", "==", serial).limit(1).get();
+            ids = bills.docs.map((doc) => doc.id);
+          }
+          if (version !== auditDetailVersion) return;
+          target.replaceChildren();
+          [...new Set(ids)].forEach((billId, index) => {
+            const link = document.createElement("a"); link.className = "workspace-action";
+            link.href = `final.html?id=${encodeURIComponent(billId)}`;
+            link.textContent = ids.length > 1 ? `Open related bill ${index + 1} ↗` : "Open related bill ↗";
+            target.append(link);
+          });
+          if (!ids.length && (serial || entry.entityType === "payment")) target.textContent = "No related bill was stored for this historical record.";
+        } catch (error) {
+          if (version !== auditDetailVersion) return;
+          WorkspaceUI.state(target, { title: "Related bill could not load", message: error.message, action: "Retry lookup", onAction: () => showRelatedBills(entry, target, version), error: true });
+        }
+      }
+      function closeAuditDetail() { auditDetailVersion++; document.getElementById("audit-detail-overlay").classList.remove("open"); if (auditReturnFocus?.isConnected) auditReturnFocus.focus(); }
       function exportAuditCsv() {
         const rows = filteredEntries();
         const csv = [["When", "Action", "User", "Email", "Role", "Record", "Record ID", "Change"], ...rows.map(({ data }) => { const actor = actorFor(data); return [formatAuditDate(data.createdAt), data.action || "", actor.name, actor.email, actor.role, recordFor(data), data.entityId || "", auditSummary(data)]; })].map((row) => row.map((value) => `"${String(value).replace(/"/g, '""')}"`).join(",")).join("\n");
         const link = document.createElement("a"); link.href = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" })); link.download = `mandibook-audit-${new Date().toISOString().slice(0, 10)}.csv`; link.click(); setTimeout(() => URL.revokeObjectURL(link.href), 1000);
       }
+      function subscribeAudit() {
+        if (!auditAuthorized) return;
+        if (unsubscribeAudit) unsubscribeAudit();
+        document.getElementById("audit-sync-status").textContent = "Checking recent activity…";
+        unsubscribeAudit = db.collection("auditLogs").orderBy("createdAt", "desc").limit(200).onSnapshot((snapshot) => {
+          allAuditEntries = snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() })); renderActionOptions(); renderAudit();
+          document.getElementById("audit-sync-status").textContent = `Latest ${snapshot.size} activities · Checked ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+        }, (error) => { document.getElementById("audit-sync-status").textContent = "Update could not complete"; WorkspaceUI.state(document.getElementById("audit-results"), { title: "Audit history could not load", message: error.message, action: "Retry", onAction: subscribeAudit, error: true }); });
+      }
       window.addEventListener("mandibook:access-ready", ({ detail }) => {
-        if (!detail || detail.role !== "admin" || unsubscribeAudit) return;
-        unsubscribeAudit = db.collection("auditLogs").orderBy("createdAt", "desc").limit(200).onSnapshot((snapshot) => { allAuditEntries = snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() })); renderActionOptions(); renderAudit(); }, (error) => { document.getElementById("audit-results").textContent = `Could not load audit history: ${error.message}`; });
+        auditAuthorized = detail?.role === "admin";
+        if (auditAuthorized) subscribeAudit();
       });
       document.getElementById("audit-search").addEventListener("input", renderAudit);
       document.getElementById("audit-action").addEventListener("change", renderAudit);
       document.getElementById("audit-date").addEventListener("change", renderAudit);
-      document.getElementById("audit-clear").addEventListener("click", () => { document.getElementById("audit-search").value = ""; document.getElementById("audit-action").value = ""; document.getElementById("audit-date").value = ""; renderAudit(); });
+      function clearAuditFilters() { document.getElementById("audit-search").value = ""; document.getElementById("audit-action").value = ""; document.getElementById("audit-date").value = ""; renderAudit(); }
+      document.getElementById("audit-clear").addEventListener("click", clearAuditFilters);
       document.getElementById("audit-export").addEventListener("click", exportAuditCsv);
       document.getElementById("audit-detail-close").addEventListener("click", closeAuditDetail);
       document.getElementById("audit-detail-overlay").addEventListener("click", (event) => { if (event.target.id === "audit-detail-overlay") closeAuditDetail(); });
+      document.getElementById("audit-detail-overlay").addEventListener("keydown", (event) => {
+        if (event.key === "Escape") { event.preventDefault(); closeAuditDetail(); }
+        if (event.key !== "Tab") return;
+        const focusable = [...event.currentTarget.querySelectorAll('button:not([disabled]), a[href], input, select, [tabindex="0"]')];
+        const first = focusable[0], last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) { event.preventDefault(); last.focus(); }
+        else if (!event.shiftKey && document.activeElement === last) { event.preventDefault(); first.focus(); }
+      });
       window.addEventListener("pagehide", () => { if (unsubscribeAudit) unsubscribeAudit(); });
     </script>
   </body>

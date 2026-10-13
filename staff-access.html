@@ -8,9 +8,11 @@
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
-    <script src="js/core/firebase-init.js"></script>
+    <script src="js/core/firebase-init.js?v=14"></script>
     <script src="js/core/utils.js"></script>
-    <script src="js/core/core-engine.js"></script>
+    <script src="js/core/workspace-ui.js?v=14"></script>
+    <script src="js/core/core-engine.js?v=14"></script>
+    <script src="js/core/pwa.js?v=14" defer></script>
     <link rel="stylesheet" href="css/main.css" />
     <style>
       .staff-wrap {
@@ -54,6 +56,12 @@
         font-size: 0.84rem;
         line-height: 1.4;
       }
+      .staff-overview { display:grid; grid-template-columns:repeat(3,minmax(88px,1fr)); gap:8px; min-width:300px; }
+      .staff-metric { padding:10px 11px; border:1px solid #cfe2f4; border-radius:10px; background:#fff; }
+      .staff-metric span { display:block; color:#72859a; font-size:.66rem; font-weight:800; letter-spacing:.07em; text-transform:uppercase; }
+      .staff-metric strong { display:block; margin-top:4px; color:#075fa8; font-size:1.2rem; }
+      .staff-metric.pending strong { color:#a96b00; }
+      .staff-live { display:inline-flex; align-items:center; gap:6px; margin-top:11px; color:#147748; font-size:.76rem; font-weight:800; }.staff-live::before { content:""; width:7px; height:7px; border-radius:50%; background:currentColor; box-shadow:0 0 0 3px #1477481c; }
       .staff-list-wrap {
         overflow: auto;
         padding: 6px 28px 20px;
@@ -188,25 +196,41 @@
           margin-top: 14px;
           max-width: none;
         }
+        .staff-overview { margin-top:14px; min-width:0; }
         .staff-list-wrap {
           padding: 4px 18px 14px;
         }
       }
     </style>
+    <link rel="stylesheet" href="css/workspaces.css?v=14" />
   </head>
-  <body>
+  <body class="workspace-page">
     <div id="navbar-root"></div>
     <main class="staff-wrap">
       <section class="staff-card">
         <header class="staff-heading">
           <div>
-            <h1>👥 Staff Access</h1>
+            <p class="workspace-kicker">Admin workspace</p>
+            <h1>Staff access</h1>
             <p>Approve accounts and assign only the access needed for each person's work.</p>
           </div>
           <aside class="staff-note">
             Changes apply immediately. Suspended or revoked users lose company-data access on their next sync.
+            <div class="staff-live" id="staff-sync-status">Checking staff…</div>
           </aside>
+          <div class="staff-overview" aria-label="Staff access overview">
+            <div class="staff-metric"><span>Total</span><strong id="staff-total-count">0</strong></div>
+            <div class="staff-metric pending"><span>Pending</span><strong id="staff-pending-count">0</strong></div>
+            <div class="staff-metric"><span>Active</span><strong id="staff-active-count">0</strong></div>
+          </div>
         </header>
+        <div class="workspace-toolbar">
+          <div class="workspace-field search-field"><label for="staff-search">Find a team member</label><input type="search" id="staff-search" placeholder="Search name, email or mobile…" /></div>
+          <div class="workspace-field"><label for="staff-filter-status">Account status</label><select id="staff-filter-status"><option value="">All statuses</option><option value="pending">Pending approval</option><option value="active">Active</option><option value="suspended">Suspended</option><option value="revoked">Revoked</option></select></div>
+          <div class="workspace-field"><label for="staff-filter-role">Role</label><select id="staff-filter-role"><option value="">All roles</option><option value="admin">Admin</option><option value="manager">Manager</option><option value="biller">Biller</option><option value="accountant">Accountant</option><option value="viewer">Viewer</option></select></div>
+          <p id="staff-result-label" class="workspace-results-label" aria-live="polite"></p>
+        </div>
+        <section id="staff-pending-panel" class="staff-pending-panel" hidden><h2>Awaiting approval</h2><p>Review contact details and choose a role before approving access.</p><div id="staff-pending-list" class="staff-pending-grid"></div></section>
         <div class="staff-list-wrap"><div id="staff-list">Loading staff profiles…</div></div>
       </section>
     </main>
@@ -214,6 +238,13 @@
       const ROLES = ["admin", "manager", "biller", "accountant", "viewer"];
       const STATUSES = ["active", "pending", "suspended", "revoked"];
       let unsubscribeStaff = null;
+      let staffRows = [];
+      let staffAuthorized = false;
+      const staffSaving = new Set();
+      function clearStaffFilters() {
+        ["staff-search", "staff-filter-status", "staff-filter-role"].forEach((id) => document.getElementById(id).value = "");
+        renderStaff(staffRows);
+      }
       function esc(value) {
         return String(value || "").replace(
           /[&<>\"']/g,
@@ -236,11 +267,30 @@
       }
       function renderStaff(rows) {
         const target = document.getElementById("staff-list");
-        if (!rows.length) {
-          target.textContent = "No staff profiles yet.";
+        const total = rows.length;
+        const pending = rows.filter(({ data }) => (data.status || "pending") === "pending").length;
+        const active = rows.filter(({ data }) => (data.status || "pending") === "active").length;
+        document.getElementById("staff-total-count").textContent = total;
+        document.getElementById("staff-pending-count").textContent = pending;
+        document.getElementById("staff-active-count").textContent = active;
+        const search = document.getElementById("staff-search").value.trim().toLowerCase();
+        const selectedStatus = document.getElementById("staff-filter-status").value;
+        const selectedRole = document.getElementById("staff-filter-role").value;
+        const filtered = rows.filter(({ data }) => {
+          const text = `${data.email || ""} ${data.displayName || ""} ${data.mobileNumber || ""}`.toLowerCase();
+          return (!search || text.includes(search)) && (!selectedStatus || (data.status || "pending") === selectedStatus) && (!selectedRole || (data.role || "viewer") === selectedRole);
+        });
+        document.getElementById("staff-result-label").textContent = `${filtered.length} of ${total} staff`;
+        const pendingRows = filtered.filter(({ data }) => (data.status || "pending") === "pending");
+        document.getElementById("staff-pending-panel").hidden = !pendingRows.length;
+        document.getElementById("staff-pending-list").innerHTML = pendingRows.map(({ id, data }) => `<article class="staff-pending-card"><strong class="staff-email">${esc(data.email || "Email not recorded")}</strong><p>${esc(data.displayName || "Name not provided")} · ${esc(data.mobileNumber || "Mobile not provided")}</p><div class="staff-missing">${!String(data.displayName || "").trim() ? '<span>Name missing</span>' : ""}${!String(data.mobileNumber || "").trim() ? '<span>Mobile missing</span>' : ""}${!data.emailVerified ? '<span>Email unverified</span>' : ""}</div><label for="role-${esc(id)}">Access role</label><select id="role-${esc(id)}">${options(ROLES, data.role || "viewer")}</select><button type="button" class="staff-save" data-approve-staff="${esc(id)}">Approve access</button></article>`).join("");
+        document.querySelectorAll("[data-approve-staff]").forEach((button) => button.addEventListener("click", () => saveStaff(button.dataset.approveStaff, true)));
+        const regularRows = filtered.filter(({ data }) => (data.status || "pending") !== "pending");
+        if (!regularRows.length) {
+          WorkspaceUI.state(target, { title: pendingRows.length ? "Pending accounts are shown above" : rows.length ? "No staff match these filters" : "No staff profiles yet", message: pendingRows.length ? "Approved accounts will appear in the team list." : rows.length ? "Try another name, status or role." : "New staff will appear here after signing in.", ...(rows.length && !pendingRows.length ? { action: "Clear filters", onAction: clearStaffFilters } : {}) });
           return;
         }
-        target.innerHTML = `<table class="staff-table"><thead><tr><th>Email</th><th>Name</th><th>Mobile</th><th>Sign-in</th><th>Last sign-in</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>${rows
+        target.innerHTML = `<table class="staff-table"><thead><tr><th>Email</th><th>Name</th><th>Mobile</th><th>Sign-in</th><th>Last sign-in</th><th>Role</th><th>Status</th><th>Action</th></tr></thead><tbody>${regularRows
           .map(
             ({ id, data }) =>
               `<tr><td><span class="staff-email">${esc(data.email || "—")}</span>${
@@ -264,10 +314,17 @@
               )}</span></td><td><button class="staff-save" onclick="saveStaff('${id}')">Save</button></td></tr>`
           )
           .join("")}</tbody></table>`;
+        const labels = ["Email", "Name", "Mobile", "Sign-in", "Last sign-in", "Role", "Status", "Action"];
+        target.querySelectorAll("tbody tr").forEach((row) => [...row.cells].forEach((cell, index) => { cell.dataset.label = labels[index]; }));
       }
-      async function saveStaff(uid) {
+      async function saveStaff(uid, approve = false) {
+        if (!staffAuthorized || staffSaving.has(uid)) return;
         const role = document.getElementById(`role-${uid}`).value;
-        const status = document.getElementById(`status-${uid}`).value;
+        const status = approve ? "active" : document.getElementById(`status-${uid}`).value;
+        if (!ROLES.includes(role) || !STATUSES.includes(status)) return;
+        staffSaving.add(uid);
+        const control = document.getElementById(`role-${uid}`).closest(approve ? "article" : "tr").querySelector("button");
+        control.disabled = true; control.textContent = "Saving…";
         try {
           const userRef = db.collection("users").doc(uid);
           const beforeDoc = await userRef.get();
@@ -285,14 +342,41 @@
           Swal.fire({ icon: "success", title: "Staff access updated", timer: 1200, showConfirmButton: false });
         } catch (error) {
           Swal.fire({ icon: "error", title: "Could not update staff", text: error.message });
+        } finally {
+          staffSaving.delete(uid);
+          control.disabled = false; control.textContent = approve ? "Approve access" : "Save";
         }
       }
       window.saveStaff = saveStaff;
-      window.addEventListener("mandibook:access-ready", ({ detail }) => {
-        if (!detail || detail.role !== "admin" || unsubscribeStaff) return;
+      function subscribeStaff() {
+        if (!staffAuthorized) return;
+        if (unsubscribeStaff) unsubscribeStaff();
+        document.getElementById("staff-sync-status").textContent = "Checking staff…";
         unsubscribeStaff = db
           .collection("users")
-          .onSnapshot((snapshot) => renderStaff(snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }))));
+          .onSnapshot((snapshot) => {
+            const rows = snapshot.docs.map((doc) => ({ id: doc.id, data: doc.data() }));
+            const rank = { pending: 0, active: 1, suspended: 2, revoked: 3 };
+            rows.sort((a, b) => {
+              const byStatus = (rank[a.data.status || "pending"] ?? 9) - (rank[b.data.status || "pending"] ?? 9);
+              if (byStatus) return byStatus;
+              return String(a.data.displayName || a.data.email || "").localeCompare(String(b.data.displayName || b.data.email || ""));
+            });
+            staffRows = rows;
+            document.getElementById("staff-sync-status").textContent = `Live checked ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+            renderStaff(staffRows);
+          }, (error) => {
+            document.getElementById("staff-sync-status").textContent = "Could not sync staff";
+            document.getElementById("staff-pending-panel").hidden = true;
+            WorkspaceUI.state(document.getElementById("staff-list"), { title: "Staff could not load", message: error.message, action: "Retry", onAction: subscribeStaff, error: true });
+          });
+      }
+      window.addEventListener("mandibook:access-ready", ({ detail }) => {
+        staffAuthorized = detail?.role === "admin";
+        if (staffAuthorized) subscribeStaff();
+      });
+      ["staff-search", "staff-filter-status", "staff-filter-role"].forEach((id) => {
+        document.getElementById(id).addEventListener(id === "staff-search" ? "input" : "change", () => renderStaff(staffRows));
       });
       window.addEventListener("pagehide", () => {
         if (unsubscribeStaff) unsubscribeStaff();

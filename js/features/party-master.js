@@ -2,6 +2,35 @@ let partiesList = [];
 let billsSummaryMap = {}; // Feature 5: Party-wise bill counts
 let currentFilterType = "All";
 
+const partyText = (value) => String(value || "").trim();
+const partyKey = (value) => partyText(value).toLowerCase();
+const mobileDigits = (value) => {
+  const digits = partyText(value).replace(/\D/g, "");
+  return digits.length === 12 && digits.startsWith("91") ? digits.slice(2) : digits;
+};
+const isValidIndianMobile = (value) => /^[6-9]\d{9}$/.test(value) && !/^(\d)\1{9}$/.test(value);
+
+function updatePartyOverview() {
+  const total = partiesList.length;
+  const countByType = (type) => partiesList.filter((party) => partyText(party.type) === type).length;
+  const setText = (id, value) => {
+    const target = document.getElementById(id);
+    if (target) target.textContent = String(value);
+  };
+  setText("partyCountAll", total);
+  setText("partyCountFarmers", countByType("Farmer"));
+  setText("partyCountBrokers", countByType("Broker"));
+  setText("partyCountBlacklisted", partiesList.filter((party) => party.isBlacklisted === true).length);
+}
+
+function setPartySyncStatus(message, isError = false) {
+  const status = document.getElementById("partySyncStatus");
+  if (!status) return;
+  status.textContent = message;
+  status.classList.toggle("text-red-100", isError);
+  status.classList.toggle("border-red-300/40", isError);
+}
+
 document.addEventListener("DOMContentLoaded", async () => {
   await fetchBillsSummary(); // Fetch bills first to calculate summary badges
   fetchParties();
@@ -40,11 +69,13 @@ async function fetchBillsSummary() {
 
       const cust = data["Customer Name"] || data.customer_name;
       if (cust) {
-        billsSummaryMap[cust] = (billsSummaryMap[cust] || 0) + 1;
+        const key = partyKey(cust);
+        billsSummaryMap[key] = (billsSummaryMap[key] || 0) + 1;
       }
       const brk = data["Broker"] || data.broker;
       if (brk) {
-        billsSummaryMap[brk] = (billsSummaryMap[brk] || 0) + 1;
+        const key = partyKey(brk);
+        billsSummaryMap[key] = (billsSummaryMap[key] || 0) + 1;
       }
     });
   } catch (e) {
@@ -55,11 +86,9 @@ async function fetchBillsSummary() {
 window.applyTypeFilter = function (type, btnElement) {
   currentFilterType = type;
   document.querySelectorAll(".filter-badge").forEach((btn) => {
-    btn.classList.remove("bg-slate-800", "text-white");
-    btn.classList.add("bg-slate-100", "text-slate-600");
+    btn.classList.remove("is-active");
   });
-  btnElement.classList.remove("bg-slate-100", "text-slate-600");
-  btnElement.classList.add("bg-slate-800", "text-white");
+  btnElement.classList.add("is-active");
   renderFilteredTable();
 };
 
@@ -69,8 +98,8 @@ async function saveParty() {
 
   const partyType = document.getElementById("partyType")?.value || "";
   const partyName = document.getElementById("partyName")?.value?.trim()?.toUpperCase() || "";
-  const partyPhone = document.getElementById("partyPhone")?.value?.trim() || "";
-  const partyAltPhone = document.getElementById("partyAltPhone")?.value?.trim() || "";
+  const partyPhone = mobileDigits(document.getElementById("partyPhone")?.value);
+  const partyAltPhone = mobileDigits(document.getElementById("partyAltPhone")?.value);
   const partyGst = document.getElementById("partyGst")?.value?.trim()?.toUpperCase() || "";
   const partyVillage = document.getElementById("partyAddress")?.value?.trim()?.toUpperCase() || "";
 
@@ -80,28 +109,43 @@ async function saveParty() {
   if (!partyVillage) {
     return Swal.fire("Village Required", "Party save karne ke liye Village / City mandatory hai.", "error");
   }
+  if (!isValidIndianMobile(partyPhone)) {
+    return Swal.fire("Invalid mobile", "Enter a valid 10-digit Indian mobile number starting with 6–9.", "error");
+  }
+  if (partyAltPhone && !isValidIndianMobile(partyAltPhone)) {
+    return Swal.fire("Invalid alternate mobile", "Alternate mobile must be a valid 10-digit Indian mobile number.", "error");
+  }
+  if (partyAltPhone && partyAltPhone === partyPhone) {
+    return Swal.fire("Duplicate number", "Primary and alternate mobile numbers cannot be the same.", "error");
+  }
 
   // ── Duplicate Checks (Current editing ID ko ignore karega taaki self-duplicate error na aaye) ──
-  let nameTypeExists = partiesList.find((p) => p.id !== partyId && p.name === partyName && p.type === partyType);
+  let nameTypeExists = partiesList.find(
+    (p) => p.id !== partyId && partyText(p.name).toUpperCase() === partyName && partyText(p.type) === partyType
+  );
   if (nameTypeExists) {
     return Swal.fire("Duplicate Entry", `"${partyName}" is already registered as a ${partyType}.`, "error");
   }
 
-  if (partyPhone) {
-    let phoneTypeExists = partiesList.find(
-      (p) => p.id !== partyId && (p.phone === partyPhone || p.altPhone === partyPhone) && p.type === partyType
+  // A contact number belongs to exactly one party, regardless of party type.
+  // Existing records are normalised before comparing, so old formatting cannot
+  // accidentally bypass this check.
+  const numbersToCheck = [partyPhone, partyAltPhone].filter(Boolean);
+  const duplicatePhoneParty = partiesList.find((p) => {
+    if (p.id === partyId) return false;
+    const existingNumbers = [mobileDigits(p.phone), mobileDigits(p.altPhone)].filter(Boolean);
+    return numbersToCheck.some((number) => existingNumbers.includes(number));
+  });
+  if (duplicatePhoneParty) {
+    return Swal.fire(
+      "Number already in use",
+      `This mobile number is already registered under ${partyText(duplicatePhoneParty.name) || "another party"}.`,
+      "error"
     );
-    if (phoneTypeExists) {
-      return Swal.fire(
-        "Duplicate Number",
-        `Mobile number ${partyPhone} is already registered under ${phoneTypeExists.name}.`,
-        "error"
-      );
-    }
   }
 
   if (partyGst) {
-    let gstExists = partiesList.find((p) => p.id !== partyId && p.gst === partyGst);
+    let gstExists = partiesList.find((p) => p.id !== partyId && partyText(p.gst).toUpperCase() === partyGst);
     if (gstExists) {
       return Swal.fire("Duplicate GST", `This GSTIN is already registered for ${gstExists.name}.`, "error");
     }
@@ -126,6 +170,11 @@ async function saveParty() {
   };
 
   try {
+    const saveBtn = document.getElementById("saveBtn");
+    if (saveBtn) {
+      saveBtn.disabled = true;
+      saveBtn.classList.add("opacity-70", "cursor-wait");
+    }
     if (partyId) {
       // ✏️ Update Existing Party
       await db.collection("parties").doc(partyId).update(partyData);
@@ -154,24 +203,29 @@ async function saveParty() {
       form.reset();
       delete form.dataset.editId;
     }
+    const commFieldContainer = document.getElementById("commFieldContainer");
+    if (commFieldContainer) commFieldContainer.style.display = "none";
     const partyIdInput = document.getElementById("partyId");
     if (partyIdInput) partyIdInput.value = "";
 
     const formTitle = document.getElementById("formTitle");
-    if (formTitle) formTitle.innerText = "+ Add New Party";
+    if (formTitle) formTitle.innerText = "Add a party";
 
-    const saveBtn = document.getElementById("saveBtn");
     if (saveBtn) saveBtn.innerText = "Save Party";
 
     const cancelBtn = document.getElementById("cancelBtn");
     if (cancelBtn) cancelBtn.classList.add("hidden");
 
-    if (typeof fetchParties === "function") {
-      fetchParties();
-    }
+    if (typeof fetchParties === "function") await fetchParties();
   } catch (err) {
     console.error("Error saving party:", err);
     Swal.fire("Error", "Could not save party. Please try again.", "error");
+  } finally {
+    const saveBtn = document.getElementById("saveBtn");
+    if (saveBtn) {
+      saveBtn.disabled = false;
+      saveBtn.classList.remove("opacity-70", "cursor-wait");
+    }
   }
 }
 
@@ -188,23 +242,28 @@ async function fetchParties() {
         partiesList.push({ id: docSnap.id, ...data });
       }
     });
+    updatePartyOverview();
+    setPartySyncStatus(`Last checked ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
     renderFilteredTable();
   } catch (error) {
     console.error("Error fetching parties: ", error);
     tbody.innerHTML = `<tr><td colspan="4" class="p-4 text-center text-red-500">Database Error.</td></tr>`;
+    updatePartyOverview();
+    setPartySyncStatus("Could not check records", true);
   }
 }
 
 function renderFilteredTable() {
-  const query = document.getElementById("searchInput").value.toLowerCase();
+  const query = partyKey(document.getElementById("searchInput")?.value);
   const filtered = partiesList.filter((p) => {
     const matchesSearch =
-      p.name.toLowerCase().includes(query) ||
-      p.phone.includes(query) ||
-      (p.altPhone && p.altPhone.includes(query)) ||
-      (p.munimName && p.munimName.toLowerCase().includes(query)) ||
-      (p.address && p.address.toLowerCase().includes(query));
-    const matchesType = currentFilterType === "All" ? true : p.type === currentFilterType;
+      partyKey(p.name).includes(query) ||
+      partyKey(p.phone).includes(query) ||
+      partyKey(p.altPhone).includes(query) ||
+      partyKey(p.munimName).includes(query) ||
+      partyKey(p.address).includes(query) ||
+      partyKey(p.gst).includes(query);
+    const matchesType = currentFilterType === "All" ? true : partyText(p.type) === currentFilterType;
     return matchesSearch && matchesType;
   });
   drawTable(filtered);
@@ -256,7 +315,7 @@ function drawTable(data) {
           : "-";
 
       // Feature 5: Business Summary Badge (Total bills linked)
-      let totalBills = billsSummaryMap[p.name] || 0;
+      let totalBills = billsSummaryMap[partyKey(rawParty.name)] || 0;
       let summaryBadge =
         totalBills > 0
           ? `<span class="px-1.5 py-0.5 bg-indigo-50 text-indigo-700 text-[10px] font-bold rounded">🧾 ${totalBills} Bills</span>`
@@ -291,10 +350,8 @@ function drawTable(data) {
           </td>
           <td class="p-3">
               <div class="font-medium text-slate-700 text-sm mb-1 flex items-center gap-2">
-                 📞 ${p.phone}
-                 <a href="https://wa.me/91${
-                   p.phone
-                 }" target="_blank" class="text-green-600 hover:text-green-700 text-xs font-bold bg-green-50 px-1.5 py-0.5 rounded">💬 WA</a>
+                 📞 ${p.phone || "Not added"}
+                 ${isValidIndianMobile(mobileDigits(rawParty.phone)) ? `<a href="https://wa.me/91${mobileDigits(rawParty.phone)}" target="_blank" rel="noopener" class="text-green-600 hover:text-green-700 text-xs font-bold bg-green-50 px-1.5 py-0.5 rounded">WhatsApp</a>` : ""}
               </div>
               ${p.altPhone ? `<div class="text-xs text-slate-500 mb-1">📞 Alt: ${p.altPhone}</div>` : ""}
               ${p.bankAcc ? `<div class="text-[11px] text-slate-500">🏦 A/c: ${p.bankAcc}</div>` : ""}
@@ -360,7 +417,7 @@ window.editParty = function (id) {
     if (el) el.checked = checked;
   };
 
-  const commContainer = document.getElementById("commContainer");
+  const commContainer = document.getElementById("commFieldContainer");
   if (commContainer) {
     if (p.type === "Broker") {
       commContainer.style.display = "block";
@@ -386,7 +443,7 @@ window.editParty = function (id) {
   setCheck("partyBlacklist", p.isBlacklisted || false);
 
   const formTitle = document.getElementById("formTitle");
-  if (formTitle) formTitle.innerText = "✏️ Edit Party Details";
+  if (formTitle) formTitle.innerText = "Edit party details";
 
   const saveBtn = document.getElementById("saveBtn");
   if (saveBtn) saveBtn.innerText = "Update Party";
@@ -397,10 +454,12 @@ window.editParty = function (id) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 };
 function resetForm() {
-  document.getElementById("partyForm").reset();
+  const form = document.getElementById("partyForm");
+  form.reset();
+  delete form.dataset.editId;
   document.getElementById("partyId").value = "";
   document.getElementById("commFieldContainer").style.display = "none";
-  document.getElementById("formTitle").innerText = "➕ Add New Party";
+  document.getElementById("formTitle").innerText = "Add a party";
   document.getElementById("saveBtn").innerText = "Save Party";
   document.getElementById("cancelBtn").classList.add("hidden");
 }
@@ -435,13 +494,13 @@ window.importPartiesExcel = function (event) {
       });
 
       for (let row of jsonRows) {
-        const type = (row["Type"] || row["type"] || "Farmer").trim();
-        const name = (row["Name"] || row["name"] || "").trim().toUpperCase();
-        const munimName = (row["Munim / Ref"] || row["munimName"] || "").trim().toUpperCase();
-        const phone = String(row["Mobile"] || row["mobile"] || row["Phone"] || "").trim();
-        const altPhone = String(row["Alt Mobile"] || row["alt_mobile"] || "").trim();
-        const village = (row["Village"] || row["village"] || row["Address"] || "").trim().toUpperCase();
-        const gstin = (row["GSTIN"] || row["gst"] || "").trim().toUpperCase();
+        const type = partyText(row["Type"] || row["type"] || "Farmer");
+        const name = partyText(row["Name"] || row["name"] || "").toUpperCase();
+        const munimName = partyText(row["Munim / Ref"] || row["munimName"] || "").toUpperCase();
+        const phone = mobileDigits(row["Mobile"] || row["mobile"] || row["Phone"] || "");
+        const altPhone = mobileDigits(row["Alt Mobile"] || row["alt_mobile"] || "");
+        const village = partyText(row["Village"] || row["village"] || row["Address"] || "").toUpperCase();
+        const gstin = partyText(row["GSTIN"] || row["gst"] || "").toUpperCase();
         const defaultComm = parseFloat(row["Default Comm."] || row["defaultComm"] || 0) || 0;
         const creditLimit = parseFloat(row["Credit Limit"] || row["creditLimit"] || 0) || 0;
         const opBal = parseFloat(row["Opening Balance"] || row["opBal"] || 0) || 0;
@@ -457,7 +516,7 @@ window.importPartiesExcel = function (event) {
         }
 
         // 2. Primary Mobile Strict Validation (10 digits, starts with 6-9, not repeating)
-        if (phone.length !== 10 || isNaN(phone) || !/^[6-9]\d{9}$/.test(phone) || /^(\d)\1{9}$/.test(phone)) {
+        if (!isValidIndianMobile(phone) || (altPhone && (!isValidIndianMobile(altPhone) || altPhone === phone))) {
           skippedCount++;
           continue;
         }
@@ -471,12 +530,16 @@ window.importPartiesExcel = function (event) {
           }
         }
 
-        // 4. Role-based & Batch Duplicate Checks
-        let nameTypeExists = partiesList.find((p) => p.name === name && p.type === type);
-        let phoneTypeExists = partiesList.find((p) => (p.phone === phone || p.altPhone === phone) && p.type === type);
-        let gstExists = gstin ? partiesList.find((p) => p.gst === gstin) : null;
+        // 4. Batch Duplicate Checks. Contact numbers remain unique across all
+        // party types, not only within Farmer/Broker/Buyer categories.
+        let nameTypeExists = partiesList.find((p) => partyText(p.name).toUpperCase() === name && partyText(p.type) === type);
+        let phoneExists = partiesList.find((p) => {
+          const existingNumbers = [mobileDigits(p.phone), mobileDigits(p.altPhone)].filter(Boolean);
+          return [phone, altPhone].filter(Boolean).some((number) => existingNumbers.includes(number));
+        });
+        let gstExists = gstin ? partiesList.find((p) => partyText(p.gst).toUpperCase() === gstin) : null;
 
-        if (nameTypeExists || phoneTypeExists || gstExists) {
+        if (nameTypeExists || phoneExists || gstExists) {
           skippedCount++; // Duplicate mila toh skip kar do
           continue;
         }
@@ -501,9 +564,9 @@ window.importPartiesExcel = function (event) {
           deleted: false,
         };
 
-        await db.collection("parties").add(newParty);
+        const created = await db.collection("parties").add(newParty);
         // Locally push karein taaki agar Excel mein hi same kisan 2 baar ho, toh doosri baar wo detect ho jaye
-        partiesList.push(newParty);
+        partiesList.push({ id: created.id, ...newParty });
         importedCount++;
       }
 

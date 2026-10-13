@@ -3,13 +3,14 @@
 // a stale signed-in screen or accounting data while offline.
 // Bump whenever a core/login script changes so installed phones fetch the
 // current authentication and progress experience on their next launch.
-const STATIC_CACHE = "mandibook-static-v4";
+const STATIC_CACHE = "mandibook-static-v14";
 const STATIC_PATHS = [
   "/manifest.webmanifest",
   "/assets/logo.jpg",
   "/assets/icon-192.jpg",
   "/assets/icon-512.jpg",
   "/css/main.css",
+  "/css/workspaces.css?v=14",
   "/js/core/pwa.js",
 ];
 
@@ -36,6 +37,19 @@ self.addEventListener("fetch", (event) => {
     ["script", "style", "image", "font"].includes(request.destination);
 
   if (!safeStaticAsset) return;
+
+  // Code/styles must be current on the first load after a release. Images can
+  // stay stale-while-revalidate, but old scripts must not render a mixed UI.
+  if (["script", "style"].includes(request.destination)) {
+    event.respondWith(fetch(request).then((response) => {
+      if (response.ok) {
+        const copy = response.clone();
+        event.waitUntil(caches.open(STATIC_CACHE).then((cache) => cache.put(request, copy)));
+      }
+      return response;
+    }).catch(async () => (await caches.match(request)) || Response.error()));
+    return;
+  }
 
   event.respondWith(
     caches.match(request).then((cached) => {

@@ -18,7 +18,7 @@
     <script src="js/core/core-engine.js"></script>
     <script src="js/features/company-profile.js"></script>
     <script src="js/features/backup.js" defer></script>
-    <script src="js/features/bill-list.js" defer></script>
+    <script src="js/features/bill-list.js?v=14" defer></script>
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/dashboard.css" />
     <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
@@ -1122,6 +1122,23 @@
         flex-wrap: wrap;
         gap: 8px;
       }
+
+      /* ── BILLS WORKSPACE REFRESH ── */
+      body { background: #f4f8fc; }
+      .pg.bills-workspace { max-width: 1240px; padding: 28px 22px 48px; }
+      .bills-hero { position: relative; overflow: hidden; display: flex; align-items: center; justify-content: space-between; gap: 24px; padding: 28px 32px; margin-bottom: 18px; border-radius: 22px; color: #fff; background: radial-gradient(circle at 82% 14%, rgba(102, 208, 255, .33), transparent 27%), linear-gradient(123deg, #06335e, #075b9d 58%, #0874b7); box-shadow: 0 14px 34px rgba(0,75,130,.2); }
+      .bills-hero::after { content: ""; position: absolute; right: -78px; bottom: -135px; width: 270px; height: 270px; border-radius: 50%; border: 1px solid rgba(255,255,255,.14); }
+      .bills-eyebrow { margin: 0 0 7px; color: #bfe7ff; font-size: 12px; font-weight: 800; letter-spacing: .12em; text-transform: uppercase; }.bills-hero h1 { margin: 0; font-size: clamp(27px, 3vw, 37px); letter-spacing: -.035em; }.bills-hero p { margin: 9px 0 0; color: rgba(255,255,255,.84); font-size: 14px; }
+      .bills-hero-side { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: flex-end; gap: 10px; }.bills-hero-action { display: inline-flex; align-items: center; justify-content: center; min-height: 44px; padding: 0 18px; border-radius: 10px; color: #063e6d; background: #fff; text-decoration: none; font-size: 14px; font-weight: 800; box-shadow: 0 5px 13px rgba(0,0,0,.13); transition: transform .18s ease, background .18s ease; }.bills-hero-action:hover { color: #063e6d; background: #e9f7ff; transform: translateY(-2px); }
+      #sync_status { display: inline-flex; align-items: center; gap: 7px; margin: 0 !important; padding: 7px 11px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; font-size: 12px !important; color: #d9ffea; background: rgba(0,0,0,.12); }#sync_status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #5de19b; box-shadow: 0 0 0 3px rgba(93,225,155,.14); }.bills-summary-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 13px; margin-bottom: 19px; }
+      .bills-summary { position: relative; overflow: hidden; min-height: 106px; padding: 17px; background: #fff; border: 1px solid #e0ebf4; border-radius: 15px; box-shadow: 0 4px 14px rgba(15,71,113,.045); }.bills-summary::after { content: ""; position: absolute; right: -18px; bottom: -38px; width: 95px; height: 95px; border-radius: 50%; background: rgba(0,90,158,.035); }.bills-summary-label { position: relative; z-index: 1; color: #71839a; font-size: 11px; font-weight: 800; letter-spacing: .06em; text-transform: uppercase; }.bills-summary-value { position: relative; z-index: 1; margin-top: 13px; color: #123f67; font-size: clamp(21px, 2.4vw, 28px); font-weight: 800; }.bills-summary.due .bills-summary-value { color: #bb4b26; }.bills-summary.paid .bills-summary-value { color: #197c51; }
+      .bills-list-card { padding: 22px; box-shadow: 0 8px 24px rgba(15,71,113,.07); }.bills-list-card .sc-title { margin-bottom: 15px; padding: 0; border: 0; color: #173a5e; font-size: 17px; letter-spacing: 0; text-transform: none; }.bills-list-card .sc-title small { display: block; margin-top: 3px; color: #7c8da0; font-size: 12px; font-weight: 600; }
+      .toolbar { padding: 12px; background: #f8fbfe; border-color: #dce8f2; }.srch { min-width: 260px; }.srch input { min-height: 42px; border-color: #d7e3ef; background: #fff; }.tbtn { min-height: 42px; border-radius: 9px; }.bill-filter-select { min-height: 42px; padding: 0 10px; border: 1.5px solid #d7e3ef; border-radius: 9px; color: #3d5872; background: #fff; font: 700 13px inherit; }
+      .transfer-grid { display: grid !important; grid-template-columns: repeat(2, minmax(0, 1fr)) !important; gap: 12px !important; margin-bottom: 17px !important; }.transfer-card { background: #f8fbfe !important; border: 1px solid #dce8f2 !important; border-radius: 11px !important; padding: 14px !important; }.transfer-card-title { color: #244a6d !important; }
+      .bills-table-scroll { width: 100%; overflow-x: auto; padding: 0 2px 4px; }.blt { min-width: 900px; border-spacing: 0 5px; }.blt th { background: #eaf2f8; color: #59718a; }.blt td { border-color: #edf2f6; color: #29445e; }.blt tbody tr:hover { transform: none; }.pgn { justify-content: flex-end; }.pgn span { color: #627b93; font-size: 13px; }.empty-bills-state { padding: 38px 18px !important; color: #7b8da0 !important; font-weight: 600; }
+      #selection-summary { display: none; text-align: left; background: #eaf5fd; border-color: #bfdcf3; color: #075c9f; font-size: 13px; }.selection-actions { margin-left: auto; }
+      @media (max-width: 900px) { .pg.bills-workspace { padding: 18px 14px 100px; }.bills-hero { padding: 24px 22px; align-items: flex-start; flex-direction: column; gap: 18px; border-radius: 18px; }.bills-hero-side { width: 100%; align-items: stretch; }.bills-hero-action { width: 100%; }.bills-hero-side #sync_status { justify-content: center; }.bills-summary-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }.bills-list-card { padding: 17px 14px; }.transfer-grid { grid-template-columns: 1fr !important; }.toolbar { align-items: stretch; }.srch { min-width: 0; }.bill-filter-select { width: 100%; } }
+      @media (max-width: 460px) { .bills-hero h1 { font-size: 25px; }.bills-hero p { font-size: 13px; }.bills-summary { min-height: 93px; padding: 14px 12px; }.bills-summary-label { font-size: 10px; }.bills-summary-value { margin-top: 10px; font-size: 20px; }.toolbar .tbtn { justify-content: center; }.selection-actions { margin-left: 0; } }
     </style>
     <link rel="stylesheet" href="css/themes.css" />
   </head>
@@ -1129,18 +1146,45 @@
     <!-- NAVBAR -->
     <div id="navbar-root"></div>
 
-    <div class="pg">
-      <div id="sync_status" style="text-align: center; font-weight: 700; margin-bottom: 12px; font-size: 13px"></div>
+    <div class="pg bills-workspace">
+      <section class="bills-hero" aria-labelledby="bills-title">
+        <div>
+          <p class="bills-eyebrow">Purchase records</p>
+          <h1 id="bills-title">Bills workspace</h1>
+          <p>Search, review, print and manage your purchase bills securely.</p>
+        </div>
+        <div class="bills-hero-side">
+          <span id="sync_status" title="Latest successful data check">Checking live data…</span>
+          <a class="bills-hero-action" href="bill-create.html">＋ Create new bill</a>
+        </div>
+      </section>
+
+      <section class="bills-summary-grid" aria-label="Bill summaries">
+        <button type="button" class="bills-summary" data-bill-bucket="all"><div class="bills-summary-label">Active bills ↗</div><div class="bills-summary-value" id="bills-summary-count">0</div></button>
+        <button type="button" class="bills-summary" data-bill-bucket="all"><div class="bills-summary-label">Purchase value ↗</div><div class="bills-summary-value" id="bills-summary-total">₹0</div></button>
+        <button type="button" class="bills-summary due" data-bill-bucket="outstanding"><div class="bills-summary-label">Outstanding due ↗</div><div class="bills-summary-value" id="bills-summary-due">₹0</div></button>
+        <button type="button" class="bills-summary paid" data-bill-bucket="received"><div class="bills-summary-label">Amount received ↗</div><div class="bills-summary-value" id="bills-summary-paid">₹0</div></button>
+      </section>
 
       <div id="bill_list_view">
-        <div class="sc">
-          <div class="sc-title">📋 Saved Bills</div>
+        <div id="bill-report-context" hidden style="padding:12px 16px;margin-bottom:12px;border-radius:10px;background:#e8f4ff;color:#075fa8;font-size:13px;"></div>
+        <div class="sc bills-list-card">
+          <div class="sc-title">📋 <span>All purchase bills<small>Use filters to find a bill. Select one or more records for bulk actions.</small></span></div>
 
           <!-- Toolbar -->
           <div class="toolbar">
             <div class="srch">
               <input type="text" id="search_input_list" placeholder="Search by name, village, vehicle, bill no..." />
             </div>
+            <select class="bill-filter-select" id="bill_status_filter" aria-label="Filter by payment status">
+              <option value="all">All payment statuses</option>
+              <option value="due">Due</option>
+              <option value="outstanding">All outstanding bills</option>
+              <option value="received">Payments received</option>
+              <option value="partial">Partially paid</option>
+              <option value="paid">Paid</option>
+            </select>
+            <input class="bill-filter-select" id="bill_date_filter" type="date" aria-label="Filter by bill date" />
             <button class="tbtn" id="sort_direction_btn" style="background: #6c757d; color: #fff">
               ⬇️ Newest First
             </button>
@@ -1153,17 +1197,17 @@
           </div>
 
           <!-- Import/Export -->
-          <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px">
-            <div style="background: #f8f9fa; border: 1.5px solid #dee2e6; border-radius: 10px; padding: 14px">
-              <div style="font-weight: 800; font-size: 13px; color: #005a9e; margin-bottom: 8px">📤 Upload Bills</div>
+          <div class="transfer-grid" style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px; margin-bottom: 16px">
+            <div class="transfer-card" style="background: #f8f9fa; border: 1.5px solid #dee2e6; border-radius: 10px; padding: 14px">
+              <div class="transfer-card-title" style="font-weight: 800; font-size: 13px; color: #005a9e; margin-bottom: 8px">📤 Upload Bills</div>
               <div class="file-row">
                 <input type="file" id="upload_file_input" accept=".xlsx" />
                 <button class="tbtn tbtn-exp" onclick="uploadBills()">Upload</button>
               </div>
               <p id="upload_status" style="margin: 7px 0 0; font-weight: 700; font-size: 12px"></p>
             </div>
-            <div style="background: #f8f9fa; border: 1.5px solid #dee2e6; border-radius: 10px; padding: 14px">
-              <div style="font-weight: 800; font-size: 13px; color: #005a9e; margin-bottom: 8px">📥 Export Bills</div>
+            <div class="transfer-card" style="background: #f8f9fa; border: 1.5px solid #dee2e6; border-radius: 10px; padding: 14px">
+              <div class="transfer-card-title" style="font-weight: 800; font-size: 13px; color: #005a9e; margin-bottom: 8px">📥 Export Bills</div>
               <div class="file-row">
                 <select id="export_format">
                   <option value="excel">Excel (XLSX)</option>
@@ -1177,7 +1221,7 @@
           <div id="selection-summary"></div>
 
           <!-- Bill Table -->
-          <table class="blt bill-list-table">
+          <div class="bills-table-scroll"><table class="blt bill-list-table">
             <thead>
               <tr>
                 <th><input type="checkbox" onchange="toggleSelectAll(this)" /></th>
@@ -1192,7 +1236,7 @@
               </tr>
             </thead>
             <tbody id="bill_list_body"></tbody>
-          </table>
+          </table></div>
 
           <div class="pgn">
             <button id="prev_page_list_btn" class="filter-btn">← Prev</button>

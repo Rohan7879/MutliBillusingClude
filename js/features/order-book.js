@@ -11,6 +11,20 @@ let currentFilter = "All";
 let editingOrderId = null;
 let supplierCount = 0;
 
+function setOrderSyncStatus(message, isError = false) {
+  const target = document.getElementById("orderSyncStatus");
+  if (!target) return;
+  target.textContent = message;
+  target.style.color = isError ? "#fee2e2" : "";
+  target.style.borderColor = isError ? "rgba(252,165,165,.55)" : "";
+}
+
+function setActiveOrderFilter(status) {
+  document.querySelectorAll(".order-tabs button").forEach((button) => {
+    button.classList.toggle("is-active", button.getAttribute("onclick")?.includes(`'${status}'`));
+  });
+}
+
 // ── INIT ──────────────────────────────────────────────────────────────────────
 // 🚀 Real-time Live Listener - Jab bhi bills ya orders badlenge, yeh khud-b-khud update kar dega
 document.addEventListener("DOMContentLoaded", () => {
@@ -45,10 +59,12 @@ function initRealtimeDataSync() {
   // 2. Orders par live listener lagao
   ordersCollection.orderBy("createdAt", "desc").onSnapshot(
     (snap) => {
-      window.allOrders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      allOrders = snap.docs.map((d) => ({ id: d.id, ...d.data() }));
+      window.allOrders = allOrders;
       console.log("⚡ Live Orders Synced:", window.allOrders.length);
 
       hideLoading();
+      setOrderSyncStatus(`Last checked ${new Date().toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}`);
       if (typeof renderOrders === "function") {
         renderOrders();
       }
@@ -56,6 +72,7 @@ function initRealtimeDataSync() {
     (err) => {
       console.error("Orders live sync error:", err);
       hideLoading();
+      setOrderSyncStatus("Could not refresh orders", true);
     }
   );
 }
@@ -98,12 +115,6 @@ async function loadMasterProducts() {
 }
 
 // Existing DOMContentLoaded mein isko call kar lo:
-document.addEventListener("DOMContentLoaded", () => {
-  setDefaultDate();
-  loadMasterProducts(); // 👈 NAYA CALL YAHAN ADD KIYA
-  loadOrders();
-});
-
 // Dropdown banane wala function (Yeh wahi hai jo pehle bataya tha)
 function generateProductOptions(selectedId) {
   let optionsHTML = `<option value="" data-name="" disabled ${!selectedId ? "selected" : ""}>Select Product</option>`;
@@ -131,6 +142,7 @@ async function loadOrders() {
 // ── FILTER ────────────────────────────────────────────────────────────────────
 function filterOrders(status) {
   currentFilter = status;
+  setActiveOrderFilter(status);
   renderOrders();
 }
 // 4. Main Render Orders Function
@@ -652,8 +664,9 @@ async function saveOrder() {
     }
 
     if (typeof closeOrderModal === "function") closeOrderModal();
-    if (typeof loadOrders === "function") await loadOrders();
-    if (typeof renderOrders === "function") renderOrders();
+    // The real-time listener refreshes the list. Avoid a second full Firestore
+    // query here: on slower phones that duplicate fetch made a successful save
+    // look like the screen was stuck.
   } catch (e) {
     console.error("Error saving order:", e);
     Swal.fire("Error", "Could not save order.", "error");
@@ -670,7 +683,14 @@ function editOrder(id) {
   document.getElementById("order-date").value = `${yyyy}-${mm}-${dd}`;
   document.getElementById("order-broker").value = order.broker || "";
   document.getElementById("order-notes").value = order.notes || "";
-  document.getElementById("order-supplier").value = order.suppliers[0]?.supplierName || "";
+  // Supplier is stored on the order root. Older records can include the
+  // village in brackets, so restore both fields cleanly for editing.
+  const savedSupplier = String(order.supplierName || order.supplier || order.partyName || "").trim();
+  const supplierMatch = savedSupplier.match(/^(.*?)\s*\(([^()]*)\)\s*$/);
+  document.getElementById("order-supplier").value = supplierMatch ? supplierMatch[1].trim() : savedSupplier;
+  document.getElementById("order-village").value = supplierMatch
+    ? supplierMatch[2].trim()
+    : String(order.village || order.supplierVillage || "").trim();
 
   document.getElementById("supplier-entries").innerHTML = "";
   supplierCount = 0;
@@ -706,7 +726,8 @@ async function updateOrderStatus(id, newStatus) {
       updatedAt: Date.now(),
     });
 
-    await loadOrders(); // List ko refresh karega
+    // The active snapshot refreshes the list. Do not run a second collection
+    // read here, otherwise a quick status change feels slow on mobile data.
 
     // Chhota sa success notification
     Swal.fire({
@@ -755,7 +776,7 @@ async function deleteOrder(id) {
       cancelReason: cancelReason,
       updatedAt: Date.now(),
     });
-    await loadOrders(); // List ko refresh karega
+    // The real-time listener updates the Trash view without another full read.
 
     Swal.fire({
       icon: "success",
@@ -1267,7 +1288,6 @@ function updateOrderSummary(filteredList) {
   let totalOrders = filteredList.length;
   let totalKgAll = 0;
   let totalDeliveredKgAll = 0;
-  let groupMap = {};
 
   filteredList.forEach((order) => {
     if (order.suppliers && Array.isArray(order.suppliers)) {
@@ -1294,15 +1314,6 @@ function updateOrderSummary(filteredList) {
         totalKgAll += itemKg;
         totalDeliveredKgAll += itemDelKg;
 
-        const vName = (s.variety || "OTHER").trim().toUpperCase();
-        const pName = (s.product || "").trim();
-        const groupKey = pName ? `${vName} (${pName})` : vName;
-
-        if (!groupMap[groupKey]) {
-          groupMap[groupKey] = { orderedKg: 0, deliveredKg: 0 };
-        }
-        groupMap[groupKey].orderedKg += itemKg;
-        groupMap[groupKey].deliveredKg += itemDelKg;
       });
     }
   });
@@ -1311,31 +1322,10 @@ function updateOrderSummary(filteredList) {
   let totalTonsAll = (totalKgAll / 1000).toFixed(2);
   let totalDelTonsAll = (totalDeliveredKgAll / 1000).toFixed(2);
 
-  // Variety & Product wise badges (Tons mein)
-  let groupHtml = Object.keys(groupMap)
-    .map((key) => {
-      const data = groupMap[key];
-      const ordTons = (data.orderedKg / 1000).toFixed(2);
-      const delTons = (data.deliveredKg / 1000).toFixed(2);
-      const safeKey = key.replace(/'/g, "\\'");
-
-      return `<span onclick="filterBySummaryGroup('${safeKey}')" style="background:#fff; padding:4px 10px; border-radius:6px; border:1px solid #cbd5e1; font-size:11px; display:inline-block; margin:2px 0; cursor:pointer; box-shadow: 0 1px 2px rgba(0,0,0,0.05); transition: all 0.2s;" title="Click to filter orders for ${key}" onmouseover="this.style.borderColor='#005a9e'" onmouseout="this.style.borderColor='#cbd5e1'">
-      🌾 <b>${key}</b>: <span style="color:#d35400;">${ordTons} Ton</span> (Done: <span style="color:#27ae60;">${delTons} Ton</span>)
-    </span>`;
-    })
-    .join(" ");
-
   summaryBar.innerHTML = `
-    <div style="display: flex; justify-content: space-between; width: 100%; align-items: center; flex-wrap: wrap; gap: 10px;">
-      <div>
-        📦 Orders: <strong style="color:#005a9e;">${totalOrders}</strong> &nbsp;|&nbsp; 
-        Total: <strong style="color:#d35400;">${totalTonsAll} Ton</strong> &nbsp;|&nbsp; 
-        Done: <strong style="color:#27ae60;">${totalDelTonsAll} Ton</strong>
-      </div>
-      <div style="display: flex; gap: 6px; flex-wrap: wrap;">
-        ${groupHtml || '<span style="color:#777;">No items</span>'}
-      </div>
-    </div>
+    <div style="background:rgba(255,255,255,.94); border:1px solid #dbeafe; border-radius:12px; padding:12px 14px; color:#0f172a;"><div style="font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b;">Visible orders</div><div style="margin-top:3px; font-size:21px; font-weight:800; color:#075a9c;">${totalOrders}</div></div>
+    <div style="background:rgba(255,255,255,.94); border:1px solid #dbeafe; border-radius:12px; padding:12px 14px; color:#0f172a;"><div style="font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b;">Booked quantity</div><div style="margin-top:3px; font-size:21px; font-weight:800; color:#b45309;">${totalTonsAll} <span style="font-size:12px;">Ton</span></div></div>
+    <div style="background:rgba(255,255,255,.94); border:1px solid #dbeafe; border-radius:12px; padding:12px 14px; color:#0f172a;"><div style="font-size:11px; font-weight:800; letter-spacing:.08em; text-transform:uppercase; color:#64748b;">Delivered quantity</div><div style="margin-top:3px; font-size:21px; font-weight:800; color:#15803d;">${totalDelTonsAll} <span style="font-size:12px;">Ton</span></div></div>
   `;
 }
 // Badge click karne par auto search/filter karne ka function

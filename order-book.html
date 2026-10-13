@@ -19,9 +19,24 @@
     <link rel="icon" href="assets/logo.jpg" />
     <style>
       .pg {
-        max-width: 960px;
+        max-width: 1180px;
         margin: 0 auto;
       }
+      .order-hero {
+        margin: 16px 0 22px;
+        padding: 26px 28px;
+        border-radius: 18px;
+        background: radial-gradient(circle at 88% -30%, rgba(125, 211, 252, .35), transparent 45%), linear-gradient(120deg, #063a70, #075a9c);
+        color: white;
+        box-shadow: 0 18px 42px rgba(7, 71, 133, .18);
+      }
+      .order-hero p { color: #dbeeff; }
+      .order-filter-panel { background: white; border: 1px solid #e2e8f0; border-radius: 16px; padding: 14px; box-shadow: 0 7px 22px rgba(15, 23, 42, .05); }
+      .order-filter-panel input, .order-filter-panel select { min-height: 42px; border: 1px solid #cbd5e1 !important; border-radius: 9px !important; background: #f8fafc !important; }
+      .order-toolbar { display: flex; justify-content: space-between; gap: 16px; align-items: center; margin-bottom: 18px; }
+      .order-tabs { display: flex; gap: 8px; flex-wrap: wrap; }
+      .order-tabs button { cursor: pointer; padding: 7px 13px; border: 1px solid #dbe5ef; background: white; color: #475569; border-radius: 999px; font-size: 12px; font-weight: 700; transition: .18s ease; }
+      .order-tabs button:hover, .order-tabs button.is-active { background: #075a9c; border-color: #075a9c; color: white; box-shadow: 0 4px 11px rgba(7, 90, 156, .2); }
       .sc {
         background: #fff;
         border-radius: 14px;
@@ -55,6 +70,9 @@
         box-shadow: 0 2px 8px rgba(0, 90, 158, 0.07);
         transition: all 0.2s;
       }
+      .order-card { border-left: 4px solid #bfdbfe; }
+      .order-card:has(.status-completed) { border-left-color: #86efac; }
+      .order-card:has(.status-cancelled) { border-left-color: #fca5a5; }
       .order-card:hover {
         box-shadow: 0 4px 16px rgba(0, 90, 158, 0.12);
         border-color: #b3d4f5;
@@ -257,13 +275,39 @@
         cursor: pointer;
         font-family: inherit;
       }
+      @media (max-width: 640px) {
+        .pg { padding: 0 14px; }
+        .order-hero { margin: 0 -14px 16px; border-radius: 0 0 20px 20px; padding: 22px 18px; }
+        .order-toolbar { align-items: stretch; flex-direction: column; }
+        .order-toolbar > div { display: grid; grid-template-columns: 1fr 1fr; }
+        .supplier-row { grid-template-columns: 1.4fr 1fr 1fr; }
+        .supplier-row > :nth-child(4), .supplier-row > :nth-child(5) { display: none; }
+        .order-card-header { align-items: flex-start; gap: 9px; }
+        .order-actions { flex-wrap: wrap; }
+      }
     </style>
   </head>
   <body>
     <div id="navbar-root"></div>
 
-    <!-- Filter & Search Bar Container -->
-    <div style="margin: 15px 0; display: flex; gap: 10px; align-items: center; flex-wrap: wrap">
+    <main class="pg">
+      <section class="order-hero">
+        <div class="order-toolbar">
+          <div>
+            <p style="margin:0 0 5px; font-size:11px; font-weight:800; letter-spacing:.16em; text-transform:uppercase;">Purchase planning</p>
+            <h1 style="margin:0; font-size:30px; line-height:1.15;">Order Book</h1>
+            <p style="margin:8px 0 0; font-size:14px;">Track vakal, delivery progress and linked bills in one place.</p>
+          </div>
+          <div style="display:flex; gap:9px; flex-wrap:wrap; align-items:center;">
+            <span id="orderSyncStatus" style="border:1px solid rgba(255,255,255,.24); background:rgba(255,255,255,.1); padding:9px 11px; border-radius:999px; font-size:12px; font-weight:700;">Checking orders…</span>
+            <button class="btn-primary" onclick="openNewOrderModal()" style="font-size:13px; padding:10px 16px; background:white; color:#075a9c;">+ New Order</button>
+          </div>
+        </div>
+        <div id="orderSummaryBar" style="display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px;"></div>
+      </section>
+
+      <section class="order-filter-panel">
+        <div style="display:flex; gap:10px; align-items:center; flex-wrap:wrap">
       <!-- Date Filter Dropdown -->
       <select
         id="dateFilter"
@@ -300,33 +344,11 @@
           font-size: 13px;
         "
       />
-    </div>
-
-    <!-- 📊 Live Summary Bar (Total Orders & Qty) -->
-    <div
-      id="orderSummaryBar"
-      style="
-        background: #eef2f7;
-        border: 1px solid #d1d8e0;
-        padding: 10px 15px;
-        border-radius: 8px;
-        margin-bottom: 15px;
-        font-size: 13px;
-        font-weight: bold;
-        color: #2c3e50;
-        display: flex;
-        justify-content: space-between;
-        align-items: center;
-        flex-wrap: wrap;
-        gap: 10px;
-      "
-    >
-      <!-- Yahan JavaScript se total live dikhega -->
-    </div>
-    <div class="pg">
+        </div>
+      </section>
       <div class="sc">
         <div class="sc-title">
-          <span>📦 Order Book</span>
+          <span>Orders</span>
 
           <button
             class="btn-secondary"
@@ -335,62 +357,44 @@
           >
             ⚙️ Manage Products
           </button>
-          <button class="btn-primary" onclick="openNewOrderModal()" style="font-size: 13px; padding: 9px 18px">
-            ➕ New Order
-          </button>
         </div>
 
         <!-- Filter tabs -->
-        <div style="display: flex; gap: 8px; margin-bottom: 16px; flex-wrap: wrap">
+        <div class="order-tabs" aria-label="Order status filters">
           <button
-            class="status-badge status-pending"
-            style="cursor: pointer; padding: 7px 16px"
+            class="is-active"
             onclick="filterOrders('Pending')"
           >
             ⏳ Pending
           </button>
           <button
-            class="status-badge status-partial"
-            style="cursor: pointer; padding: 7px 16px"
+            class=""
             onclick="filterOrders('Partial')"
           >
             🔄 Partial
           </button>
           <button
-            class="status-badge status-completed"
-            style="cursor: pointer; padding: 7px 16px"
+            class=""
             onclick="filterOrders('Completed')"
           >
             ✅ Completed
           </button>
           <button
-            class="status-badge status-cancelled"
-            style="cursor: pointer; padding: 7px 16px"
+            class=""
             onclick="filterOrders('Cancelled')"
           >
             ❌ Cancelled
           </button>
 
           <button
-            class="status-badge"
-            style="cursor: pointer; padding: 7px 16px; background: #f8f9fa; border: 1px solid #dee2e6; color: #495057"
+            class=""
             onclick="filterOrders('All')"
           >
             📋 All
           </button>
           <button
             onclick="filterOrders('Deleted')"
-            style="
-              background: #ffffff;
-              border: 1px solid #d3d3d3;
-              color: #555;
-              border-radius: 20px;
-              padding: 6px 16px;
-              font-size: 14px;
-              font-weight: 600;
-              cursor: pointer;
-              margin-left: 5px;
-            "
+            class=""
           >
             🗑️ Trash
           </button>
@@ -398,7 +402,7 @@
 
         <div id="order-list"></div>
       </div>
-    </div>
+    </main>
 
     <!-- New/Edit Order Modal -->
     <!-- Isko order-book.html mein replace karna hai -->

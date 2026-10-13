@@ -5,7 +5,12 @@
   },
   "hosting": {
     "public": ".",
-    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "config/**"],
+    "ignore": ["firebase.json", "**/.*", "**/node_modules/**", "config/**", "ui-tests/**"],
+    "headers": [
+      { "source": "**/*.html", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "**/*.css", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] },
+      { "source": "**/*.js", "headers": [{ "key": "Cache-Control", "value": "no-cache" }] }
+    ],
     "rewrites": [
       { "source": "/d1j3h2k", "destination": "/download.html" },
       { "source": "/f7p4l9q", "destination": "/final.html" }

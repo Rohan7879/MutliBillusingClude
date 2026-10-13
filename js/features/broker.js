@@ -5,6 +5,12 @@
  */
 
 const brokersCollection = db.collection("brokers");
+let brokerDirectoryStarted = false;
+function startBrokerDirectory() {
+  if (brokerDirectoryStarted || !window.currentUserProfile || !document.getElementById("broker-list")) return;
+  brokerDirectoryStarted = true;
+  loadBrokerLedger();
+}
 
 // ── BROKER LEDGER PAGE ────────────────────────────────────────────────────────
 // ═══════════════════════════════════════════════════════════════════════════
@@ -12,13 +18,31 @@ const brokersCollection = db.collection("brokers");
 // ═══════════════════════════════════════════════════════════════════════════
 
 document.addEventListener("DOMContentLoaded", () => {
-  loadBrokerLedger();
+  document.getElementById("broker-search")?.addEventListener("input", filterBrokerCards);
+  startBrokerDirectory();
 });
+window.addEventListener("mandibook:access-ready", startBrokerDirectory);
+
+function filterBrokerCards() {
+  const query = (document.getElementById("broker-search")?.value || "").trim().toLowerCase();
+  const cards = [...document.querySelectorAll("#broker-list [data-broker-name]")];
+  cards.forEach((card) => { card.hidden = !card.dataset.brokerName.toLowerCase().includes(query); });
+  const label = document.getElementById("broker-result-label");
+  if (label) label.textContent = `${cards.filter((card) => !card.hidden).length} of ${cards.length} brokers`;
+  const empty = document.getElementById("broker-search-empty");
+  if (empty) {
+    empty.hidden = !(cards.length && cards.every((card) => card.hidden));
+    if (!empty.hidden) WorkspaceUI.state(empty, { title: "No matching brokers", message: "Try another name or clear your search.", action: "Clear search", onAction: () => { document.getElementById("broker-search").value = ""; filterBrokerCards(); } });
+  }
+}
 
 async function loadBrokerLedger() {
   const container = document.getElementById("broker-list");
+  const overview = document.getElementById("broker-overview");
+  const status = document.getElementById("broker-sync-status");
   if (!container) return;
   showLoading();
+  if (status) status.textContent = "Updating brokers…";
 
   try {
     const billsSnap = await billsCollection.get();
@@ -59,27 +83,16 @@ async function loadBrokerLedger() {
       }
     });
 
-    // Auto-sync missing brokers into 'brokers' master collection
-    for (let name of brokerNamesSet) {
-      const upper = name.toUpperCase();
-      const querySnap = await db.collection("brokers").where("nameUpper", "==", upper).get();
-      if (querySnap.empty) {
-        await db.collection("brokers").add({
-          name: name,
-          nameUpper: upper,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-    }
-
-    // 4. Fetch final Master Brokers list
-    const masterSnap = await db.collection("brokers").orderBy("name").get();
+    // Build the directory locally. Simply opening this page must never create Firestore records.
     const brokerMap = {};
-
-    masterSnap.docs.forEach((doc) => {
+    brokersMasterSnap.docs.forEach((doc) => {
       const d = doc.data();
-      const name = d.name;
-      brokerMap[name.toUpperCase()] = { displayName: name, totalCommission: 0, paidAmount: 0, totalBills: 0 };
+      const name = String(d.name || "").trim();
+      if (name) brokerMap[name.toUpperCase()] = { displayName: name, totalCommission: 0, paidAmount: 0, totalBills: 0 };
+    });
+    brokerNamesSet.forEach((name) => {
+      const upper = name.toUpperCase();
+      if (!brokerMap[upper]) brokerMap[upper] = { displayName: name, totalCommission: 0, paidAmount: 0, totalBills: 0 };
     });
 
     // 5. Calculate Totals from Bills
@@ -103,19 +116,21 @@ async function loadBrokerLedger() {
       }
     });
 
-    const brokerKeys = Object.keys(brokerMap);
+    const brokerKeys = Object.keys(brokerMap).sort((a, b) => brokerMap[a].displayName.localeCompare(brokerMap[b].displayName));
+    const totalCommission = brokerKeys.reduce((sum, key) => sum + brokerMap[key].totalCommission, 0);
+    const totalPaid = brokerKeys.reduce((sum, key) => sum + brokerMap[key].paidAmount, 0);
+    const totalDue = totalCommission - totalPaid;
+    if (status) status.textContent = `Checked ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+    if (overview) {
+      overview.innerHTML = `<div class="broker-overview-card"><span>Listed brokers</span><strong>${brokerKeys.length}</strong></div><div class="broker-overview-card"><span>Total commission</span><strong>₹${Number(totalCommission).toLocaleString("en-IN")}</strong></div><div class="broker-overview-card"><span>Balance payable</span><strong>₹${Number(totalDue).toLocaleString("en-IN")}</strong></div>`;
+    }
 
-    let htmlContent = `
-      <div style="margin-bottom:16px; text-align:right;">
-        <button onclick="openAddBrokerModal()" style="background:linear-gradient(135deg, #005a9e, #003d6e); color:white; padding:10px 20px; border-radius:8px; border:none; font-weight:700; cursor:pointer; font-family:inherit; box-shadow:0 4px 10px rgba(0,90,158,0.2);">+ Add New Broker</button>
-      </div>
-    `;
+    let htmlContent = "";
 
     if (brokerKeys.length === 0) {
-      container.innerHTML =
-        htmlContent +
-        `<div style="text-align:center; color:#6c757d; padding:30px;">No brokers found in master list. Click above to add one.</div>`;
+      WorkspaceUI.state(container, { title: "Your broker directory is empty", message: "Add a broker to start tracking commission and payouts.", action: "Add broker", onAction: openAddBrokerModal });
       hideLoading();
+      filterBrokerCards();
       return;
     }
 
@@ -124,37 +139,29 @@ async function loadBrokerLedger() {
         const b = brokerMap[key];
         const balanceDue = b.totalCommission - (b.paidAmount || 0);
         return `
-        <div class="broker-card" onclick="viewBrokerDetails('${
-          b.displayName
-        }')" style="cursor:pointer; background:#fff; border:1.5px solid #dee2e6; border-radius:12px; padding:18px; margin-bottom:14px; box-shadow:0 2px 8px rgba(0,90,158,0.07); transition:all 0.2s;">
-          <div class="broker-name" style="font-weight:800; font-size:17px; color:#005a9e; margin-bottom:10px;">🤝 ${
-            b.displayName
-          }</div>
-          <div class="broker-stats" style="display:grid; grid-template-columns:repeat(4,1fr); gap:10px; text-align:center;">
-            <div><span class="bs-val" style="font-weight:800; font-size:15px; color:#343a40; display:block;">₹${Number(
+        <button class="broker-card" type="button" data-broker-name="${escapeHtml(b.displayName)}">
+          <div class="broker-name">🤝 ${escapeHtml(b.displayName)}</div>
+          <div class="broker-stats">
+            <div><span class="bs-val">₹${Number(
               b.totalCommission
-            ).toLocaleString(
-              "en-IN"
-            )}</span><span class="bs-label" style="font-size:11px; color:#6c757d; font-weight:600;">Total Commission</span></div>
-            <div><span class="bs-val" style="font-weight:800; font-size:15px; color:#28a745; display:block;">₹${Number(
+            ).toLocaleString("en-IN")}</span><span class="bs-label">Total Commission</span></div>
+            <div><span class="bs-val" style="color:#188754;">₹${Number(
               b.paidAmount || 0
-            ).toLocaleString(
-              "en-IN"
-            )}</span><span class="bs-label" style="font-size:11px; color:#6c757d; font-weight:600;">Paid</span></div>
-            <div><span class="bs-val" style="font-weight:800; font-size:15px; color:#dc3545; display:block;">₹${Number(
+            ).toLocaleString("en-IN")}</span><span class="bs-label">Paid</span></div>
+            <div><span class="bs-val" style="color:#c84b4b;">₹${Number(
               balanceDue
-            ).toLocaleString(
-              "en-IN"
-            )}</span><span class="bs-label" style="font-size:11px; color:#6c757d; font-weight:600;">Balance Due</span></div>
-            <div><span class="bs-val" style="font-weight:800; font-size:15px; color:#005a9e; display:block;">${
-              b.totalBills
-            }</span><span class="bs-label" style="font-size:11px; color:#6c757d; font-weight:600;">Bills</span></div>
+            ).toLocaleString("en-IN")}</span><span class="bs-label">Balance Due</span></div>
+            <div><span class="bs-val">${b.totalBills}</span><span class="bs-label">Bills</span></div>
           </div>
-        </div>`;
+        </button>`;
       })
       .join("");
 
     container.innerHTML = htmlContent;
+    container.querySelectorAll("[data-broker-name]").forEach((card) => {
+      card.addEventListener("click", () => viewBrokerDetails(card.dataset.brokerName));
+    });
+    filterBrokerCards();
 
     const urlParams = new URLSearchParams(window.location.search);
     const targetBrokerName = urlParams.get("name");
@@ -167,6 +174,8 @@ async function loadBrokerLedger() {
     }
   } catch (e) {
     console.error("Error loading broker ledger:", e);
+    WorkspaceUI.state(container, { title: "Could not load brokers", message: e.message, action: "Retry", onAction: loadBrokerLedger, error: true });
+    if (status) status.textContent = "Update could not complete";
   } finally {
     hideLoading();
   }
@@ -222,8 +231,9 @@ window.openAddBrokerModal = function () {
 };
 
 window.openBrokerPaymentModal = function (brokerName, defaultAmount) {
+  if (!hasRole("admin", "accountant")) { Swal.fire("Not allowed", "Only an Admin or Accountant can record payouts.", "error"); return; }
   Swal.fire({
-    title: `💰 Pay to ${brokerName}`,
+    titleText: `Pay to ${brokerName}`,
     html: `
       <label style="display:block; text-align:left; font-weight:700; font-size:13px; margin-bottom:5px;">Payment Amount (₹)</label>
       <input type="number" id="swal-pay-amount" class="swal2-input" placeholder="Enter amount" value="${
@@ -232,7 +242,7 @@ window.openBrokerPaymentModal = function (brokerName, defaultAmount) {
       
       <label style="display:block; text-align:left; font-weight:700; font-size:13px; margin-bottom:5px;">Payment Date</label>
       <input type="date" id="swal-pay-date" class="swal2-input" value="${
-        new Date().toISOString().split("T")[0]
+        WorkspaceUI.localDate()
       }" style="margin:0; width:100%; box-sizing:border-box;">
     `,
     focusConfirm: false,
@@ -242,8 +252,9 @@ window.openBrokerPaymentModal = function (brokerName, defaultAmount) {
     preConfirm: () => {
       const amount = document.getElementById("swal-pay-amount").value;
       const date = document.getElementById("swal-pay-date").value;
-      if (!amount || Number(amount) <= 0) {
+      if (!Number.isFinite(Number(amount)) || Number(amount) <= 0 || !date) {
         Swal.showValidationMessage("Please enter a valid amount");
+        return false;
       }
       return { amount: Number(amount), date };
     },
@@ -263,8 +274,8 @@ window.openBrokerPaymentModal = function (brokerName, defaultAmount) {
 
         hideLoading();
         Swal.fire("Success!", "Payment recorded successfully.", "success");
-        loadBrokerLedger();
-        viewBrokerDetails(brokerName);
+        if (document.getElementById("broker-detail-content")) window.dispatchEvent(new Event("mandibook:broker-payment-saved"));
+        else loadBrokerLedger();
       } catch (e) {
         hideLoading();
         console.error(e);
@@ -275,6 +286,7 @@ window.openBrokerPaymentModal = function (brokerName, defaultAmount) {
 };
 
 window.deleteBrokerPayment = async function (paymentId, brokerName) {
+  if (!hasRole("admin", "accountant")) return;
   const confirm = await Swal.fire({
     title: "Delete Payment?",
     text: "This payment record will be deleted.",
@@ -290,8 +302,8 @@ window.deleteBrokerPayment = async function (paymentId, brokerName) {
       await db.collection("broker_payments").doc(paymentId).delete();
       hideLoading();
       Swal.fire("Deleted!", "Payment removed.", "success");
-      loadBrokerLedger();
-      viewBrokerDetails(brokerName);
+      if (document.getElementById("broker-detail-content")) window.dispatchEvent(new Event("mandibook:broker-payment-saved"));
+      else { loadBrokerLedger(); viewBrokerDetails(brokerName); }
     } catch (e) {
       hideLoading();
       Swal.fire("Error", "Could not delete payment.", "error");
@@ -300,127 +312,8 @@ window.deleteBrokerPayment = async function (paymentId, brokerName) {
 };
 
 window.viewBrokerDetails = viewBrokerDetails;
-async function viewBrokerDetails(brokerIdentifier) {
-  showLoading();
-  try {
-    let brokerName = "";
-    let totalComm = 0;
-    let brokerData = {};
-
-    // Check karo ki identifier ID hai ya direct Broker Name hai
-    const brokerDoc = await db.collection("brokers").doc(brokerIdentifier).get();
-    if (brokerDoc.exists) {
-      brokerData = brokerDoc.data() || {};
-      brokerName = brokerData.name || brokerIdentifier;
-    } else {
-      brokerName = brokerIdentifier;
-    }
-
-    // Bills fetch karo (Safe query)
-    const snap = await billsCollection.get();
-    const billDocs = snap.docs.filter((d) => {
-      const b = d.data();
-      if (b.deleted === true) return;
-      const bName = (b["Broker"] || "").trim().toUpperCase();
-      return bName === brokerName.trim().toUpperCase();
-    });
-
-    billDocs.forEach((d) => (totalComm += Number(d.data()["BrokerCommission"] || 0)));
-
-    // Payments fetch karo
-    let totalPaid = 0;
-    let paymentsList = [];
-    try {
-      const paySnap = await db
-        .collection("broker_payments")
-        .where("brokerName", "==", brokerName.trim().toUpperCase())
-        .get();
-      paySnap.docs.forEach((pDoc) => {
-        const pData = pDoc.data();
-        if (pData.deleted !== true) {
-          totalPaid += Number(pData.amount || 0);
-          paymentsList.push({ id: pDoc.id, ...pData });
-        }
-      });
-    } catch (err) {
-      console.log("No payments collection yet");
-    }
-
-    const balanceDue = totalComm - totalPaid;
-
-    let html = `<h3 style="color:#005a9e; margin-top:0;">🤝 ${brokerName}</h3>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:12px;margin-bottom:16px;">
-        <div class="kpi-card" style="background:#f8f9fa; padding:12px; border-radius:10px; border:1px solid #dee2e6;"><div class="kpi-label" style="font-size:12px; color:#6c757d;">Total Commission</div><div class="kpi-value" style="font-size:1.3em; font-weight:800; color:#005a9e;">₹${Number(
-          totalComm
-        ).toLocaleString("en-IN")}</div></div>
-        <div class="kpi-card" style="background:#f8f9fa; padding:12px; border-radius:10px; border:1px solid #dee2e6;"><div class="kpi-label" style="font-size:12px; color:#6c757d;">Paid</div><div class="kpi-value" style="font-size:1.3em; font-weight:800; color:#28a745;">₹${Number(
-          totalPaid
-        ).toLocaleString("en-IN")}</div></div>
-        <div class="kpi-card" style="background:#f8f9fa; padding:12px; border-radius:10px; border:1px solid #dee2e6;"><div class="kpi-label" style="font-size:12px; color:#6c757d;">Balance Due</div><div class="kpi-value" style="font-size:1.3em; font-weight:800; color:#dc3545;">₹${Number(
-          balanceDue
-        ).toLocaleString("en-IN")}</div></div>
-      </div>
-      
-      <div style="margin-bottom:14px; display:flex; gap:10px;">
-        <input type="number" id="broker-pay-amount" placeholder="Payment amount" style="flex:1;padding:10px;border:1.5px solid #dee2e6;border-radius:8px;font-family:inherit;box-sizing:border-box;"/>
-        <button onclick="recordBrokerPaymentByName('${brokerName}', ${balanceDue})" style="padding:10px 20px;background:linear-gradient(135deg, #28a745, #1e7e34);color:#fff;border:none;border-radius:8px;font-weight:700;cursor:pointer;">💰 Record Payment</button>
-      </div>
-
-      <h4 style="color:#005a9e; margin:14px 0 6px; text-align:left; font-size:13px; text-transform:uppercase;">Bills List</h4>
-      <table class="blt" style="width:100%; border-collapse:collapse; margin-bottom:16px; font-size:13px;">
-        <thead><tr style="background:#005a9e; color:white;"><th style="padding:8px; text-align:left;">Bill No</th><th style="padding:8px; text-align:left;">Date</th><th style="padding:8px; text-align:left;">Supplier</th><th style="padding:8px; text-align:right;">Bags</th><th style="padding:8px; text-align:right;">Commission</th></tr></thead>
-        <tbody>${billDocs
-          .map((d) => {
-            const bill = d.data();
-            const bags =
-              bill["Bill Type"] === "Loose"
-                ? Math.round((bill["Net Weight"] || 0) / 50)
-                : [1, 2, 3, 4, 5].reduce((s, i) => s + (Number(bill[`Vakal ${i} Katta`]) || 0), 0);
-            return `<tr style="border-bottom:1px solid #f0f0f0;">
-            <td style="padding:8px;">${bill["Serial No"]}</td>
-            <td style="padding:8px;">${bill["Date"]}</td>
-            <td style="padding:8px;">${bill["Customer Name"]}</td>
-            <td style="padding:8px; text-align:right;">${bags}</td>
-            <td style="padding:8px; text-align:right; font-weight:700; color:#005a9e;">₹${Number(
-              bill["BrokerCommission"] || 0
-            ).toLocaleString("en-IN")}</td>
-          </tr>`;
-          })
-          .join("")}</tbody>
-      </table>`;
-
-    if (paymentsList.length > 0) {
-      html += `<h4 style="color:#28a745; margin:14px 0 6px; text-align:left; font-size:13px; text-transform:uppercase;">Payment History</h4>
-        <table class="blt" style="width:100%; border-collapse:collapse; font-size:13px;">
-          <thead><tr style="background:#28a745; color:white;"><th style="padding:8px; text-align:left;">Date</th><th style="padding:8px; text-align:right;">Amount</th><th style="padding:8px; text-align:center;">Action</th></tr></thead>
-          <tbody>${paymentsList
-            .map(
-              (p) => `
-            <tr style="border-bottom:1px solid #f0f0f0;">
-              <td style="padding:8px;">${p.date}</td>
-              <td style="padding:8px; text-align:right; color:#28a745; font-weight:700;">₹${Number(
-                p.amount
-              ).toLocaleString("en-IN")}</td>
-              <td style="padding:8px; text-align:center;"><button onclick="deleteBrokerPayment('${
-                p.id
-              }', '${brokerName}')" style="background:#dc3545; color:white; border:none; padding:4px 10px; border-radius:4px; cursor:pointer; font-weight:700;">Delete</button></td>
-            </tr>`
-            )
-            .join("")}</tbody>
-        </table>`;
-    }
-
-    Swal.fire({
-      html,
-      width: "850px",
-      confirmButtonText: "Close",
-      confirmButtonColor: "#005a9e",
-    });
-  } catch (e) {
-    console.error("View broker error:", e);
-  } finally {
-    hideLoading();
-  }
+function viewBrokerDetails(brokerIdentifier) {
+  window.location.href = `broker-detail.html?name=${encodeURIComponent(brokerIdentifier)}`;
 }
 
 window.recordBrokerPaymentByName = async function (brokerName) {
@@ -518,5 +411,3 @@ window.loadBrokerLedger = loadBrokerLedger;
 window.viewBrokerDetails = viewBrokerDetails;
 window.recordBrokerPayment = recordBrokerPayment;
 window.updateBrokerCommission = updateBrokerCommission;
-
-document.addEventListener("DOMContentLoaded", loadBrokerLedger);

@@ -453,7 +453,7 @@
       .dashboard-eyebrow { margin: 0 0 7px; color: #bfe7ff; font-weight: 800; font-size: 12px; letter-spacing: 0.12em; text-transform: uppercase; }
       .dashboard-hero h1 { margin: 0; font-size: clamp(26px, 3vw, 37px); letter-spacing: -0.035em; }
       .dashboard-hero p { margin: 9px 0 0; max-width: 610px; color: rgba(255, 255, 255, 0.84); font-size: 15px; }
-      .dashboard-hero-actions { position: relative; z-index: 1; display: flex; gap: 10px; flex-wrap: wrap; }
+      .dashboard-hero-actions { position: relative; z-index: 1; display: flex; gap: 10px; flex-wrap: wrap; align-items: center; }
       .dashboard-action {
         display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: 43px; padding: 0 17px;
         border: 1px solid rgba(255,255,255,0.34); border-radius: 10px; color: #fff; text-decoration: none; font-size: 14px; font-weight: 800;
@@ -462,8 +462,9 @@
       .dashboard-action:hover { color: #fff; transform: translateY(-2px); background: rgba(255,255,255,0.2); }
       .dashboard-action.primary { color: #063e6d; background: #fff; border-color: #fff; box-shadow: 0 5px 13px rgba(0,0,0,.13); }
       .dashboard-action.primary:hover { color: #063e6d; background: #e9f7ff; }
-      #dashboard_sync_status { display: inline-flex; align-items: center; gap: 7px; margin: 0 0 19px; padding: 7px 11px; border-radius: 999px; font-size: 12px; color: #1b6f45; background: #eaf8f0; }
-      #dashboard_sync_status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #23a566; box-shadow: 0 0 0 3px rgba(35,165,102,.13); }
+      #dashboard_sync_status { display: inline-flex; align-items: center; gap: 7px; margin: 0; padding: 7px 11px; border: 1px solid rgba(255,255,255,.22); border-radius: 999px; font-size: 12px; font-weight: 700; color: #d9ffea; background: rgba(0,0,0,.12); }
+      #dashboard_sync_status::before { content: ""; width: 7px; height: 7px; border-radius: 50%; background: #5de19b; box-shadow: 0 0 0 3px rgba(93,225,155,.14); }
+      #dashboard_sync_status[data-state="error"] { color: #ffd0d0; } #dashboard_sync_status[data-state="error"]::before { background: #ff8989; box-shadow: 0 0 0 3px rgba(255,137,137,.14); }
       .dashboard-filter-card { padding: 20px 22px; box-shadow: 0 8px 24px rgba(15, 71, 113, 0.07); }
       .dashboard-filter-card .section-card-title { margin-bottom: 15px; border: 0; padding: 0; color: #173a5e; text-transform: none; letter-spacing: 0; font-size: 17px; }
       .filter-description { margin: -10px 0 16px; color: #71839a; font-size: 13px; }
@@ -501,7 +502,7 @@
       @media (max-width: 900px) {
         .page-wrapper.dashboard-workspace { padding: 18px 14px 100px; }
         .dashboard-hero { grid-template-columns: 1fr; gap: 18px; padding: 24px 22px; border-radius: 18px; }
-        .dashboard-hero-actions { width: 100%; }.dashboard-action { flex: 1; }
+        .dashboard-hero-actions { width: 100%; }.dashboard-action { flex: 1; }.dashboard-hero-actions #dashboard_sync_status { width: 100%; justify-content: center; }
         .dashboard-quick-actions { grid-template-columns: repeat(2, minmax(0, 1fr)); }
         .kpi-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; }
         .dashboard-filter-card, .dashboard-bills-card { padding: 17px 14px; }
@@ -530,11 +531,11 @@
           <p>Review your purchase activity, outstanding amount and recent bills from one secure workspace.</p>
         </div>
         <div class="dashboard-hero-actions">
+          <span id="dashboard_sync_status" title="Latest successful data check">Checking live data…</span>
           <a class="dashboard-action primary" href="bill-create.html">＋ Create bill</a>
           <a class="dashboard-action" href="bills.html">View all bills →</a>
         </div>
       </section>
-      <div id="dashboard_sync_status"></div>
 
       <!-- FILTERS -->
       <div class="section-card dashboard-filter-card">

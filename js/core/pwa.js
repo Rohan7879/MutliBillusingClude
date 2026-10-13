@@ -1,5 +1,5 @@
-// PWA install support. Loaded on login and injected by firebase-init on every
-// app page so Android Chrome can recognise MandiBook as an installable app.
+// PWA install support. Include this on app entry and workspace pages so
+// installed clients check for a new worker without having to revisit login.
 (() => {
   const manifestHref = new URL("manifest.webmanifest", window.location.href).href;
   if (!document.querySelector('link[rel="manifest"]')) {
@@ -47,8 +47,26 @@
   });
 
   if ("serviceWorker" in navigator && window.isSecureContext) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("/sw.js").catch((error) => console.warn("PWA service worker unavailable:", error));
-    });
+    const syncWorker = async () => {
+      try {
+        const isLocal = ["localhost", "127.0.0.1", "[::1]"].includes(window.location.hostname);
+        if (isLocal) {
+          // Live Server serves source files. An installed worker from a prior
+          // preview must not replace those files with an older cached version.
+          const registrations = await navigator.serviceWorker.getRegistrations();
+          await Promise.all(registrations.filter((registration) => {
+            const worker = registration.active || registration.waiting || registration.installing;
+            return worker && new URL(worker.scriptURL).pathname === "/sw.js";
+          }).map((registration) => registration.unregister()));
+          return;
+        }
+        const registration = await navigator.serviceWorker.register("/sw.js", { updateViaCache: "none" });
+        await registration.update();
+      } catch (error) {
+        console.warn("PWA service worker unavailable:", error);
+      }
+    };
+    if (document.readyState === "complete") syncWorker();
+    else window.addEventListener("load", syncWorker, { once: true });
   }
 })();

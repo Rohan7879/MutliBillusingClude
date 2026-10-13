@@ -361,6 +361,68 @@ function initializeIndexPage() {
   // Update the total immediately when the page loads
   updateTotalBags();
 }
+
+function updateLiveBillSummary() {
+  const form = document.getElementById("estimateForm");
+  const status = document.getElementById("live-bill-status");
+  const netWeight = document.getElementById("live-net-weight");
+  const finalTotal = document.getElementById("live-final-total");
+  if (!form || !status || !netWeight || !finalTotal) return;
+
+  const weight = Number(form.elements.weighbridge_weight?.value || 0);
+  if (!weight) {
+    status.textContent = "Add weight and item details to preview totals.";
+    netWeight.textContent = "0 kg";
+    finalTotal.textContent = "₹0";
+    return;
+  }
+
+  try {
+    const data = calculateBillData(new FormData(form));
+    const net = Number(data["Net Weight"] || 0);
+    const total = Number(data["Final Total"] || 0);
+    netWeight.textContent = `${net.toLocaleString("en-IN")} kg`;
+    finalTotal.textContent = `₹${total.toLocaleString("en-IN")}`;
+    status.textContent = "Preview only — final total is checked again when you save.";
+  } catch (error) {
+    netWeight.textContent = "—";
+    finalTotal.textContent = "—";
+    status.textContent = "Complete the required details to preview the final total.";
+  }
+}
+
+function initializeBillWorkspace() {
+  const form = document.getElementById("estimateForm");
+  if (!form) return;
+  const workspace = document.querySelector(".bill-workspace");
+  const layoutPicker = document.getElementById("bill-layout-picker");
+  const classicLayoutSwitch = document.getElementById("classic-layout-switch");
+  const savedLayout = localStorage.getItem("mandibook_bill_layout") || "professional";
+  const applyLayout = (layout) => {
+    const selected = layout === "classic" ? "classic" : "professional";
+    document.body.dataset.billLayout = selected;
+    if (workspace) workspace.dataset.layout = selected;
+    if (layoutPicker) layoutPicker.value = selected;
+  };
+  applyLayout(savedLayout);
+  if (layoutPicker) {
+    layoutPicker.addEventListener("change", () => {
+      const selected = layoutPicker.value === "classic" ? "classic" : "professional";
+      localStorage.setItem("mandibook_bill_layout", selected);
+      applyLayout(selected);
+    });
+  }
+  if (classicLayoutSwitch) {
+    classicLayoutSwitch.addEventListener("click", () => {
+      localStorage.setItem("mandibook_bill_layout", "professional");
+      applyLayout("professional");
+    });
+  }
+  const refresh = () => window.requestAnimationFrame(updateLiveBillSummary);
+  form.addEventListener("input", refresh);
+  form.addEventListener("change", refresh);
+  updateLiveBillSummary();
+}
 // Phase 3 (item #13): Optimistic Concurrency — captures the bill's
 // lastUpdatedAt timestamp at the moment the edit form is opened, so
 // updateData() can detect if someone else saved a change to the SAME bill
@@ -1483,6 +1545,7 @@ async function updateData(docId) {
 document.addEventListener("DOMContentLoaded", async () => {
   await fetchSettings(); // 1. Wait for the settings to load
   initializeIndexPage(); // 2. Then, set up the rest of the page
+  initializeBillWorkspace();
 });
 document.addEventListener("DOMContentLoaded", () => {
   const bInput = document.getElementById("broker_name");

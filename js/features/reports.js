@@ -5,12 +5,28 @@
 
 let currentReport = "daily";
 let allBillsCache = [];
+let reportRequest = 0;
 
 // ── INIT ──────────────────────────────────────────────────────────────────────
 document.addEventListener("DOMContentLoaded", () => {
   setDefaultDates();
-  generateReport();
+  document.querySelectorAll("[data-report-preset]").forEach((button) => {
+    button.addEventListener("click", () => setReportPreset(button.dataset.reportPreset));
+  });
+  ["report-start", "report-end"].forEach((id) => document.getElementById(id).addEventListener("change", () => {
+    document.querySelectorAll("[data-report-preset]").forEach((button) => button.setAttribute("aria-pressed", "false"));
+  }));
+  document.querySelectorAll(".report-card").forEach((card) => {
+    card.setAttribute("role", "button");
+    card.tabIndex = 0;
+    card.setAttribute("aria-pressed", String(card.classList.contains("active")));
+    card.addEventListener("keydown", (event) => {
+      if (event.key === "Enter" || event.key === " ") { event.preventDefault(); card.click(); }
+    });
+  });
+  if (window.currentUserProfile) generateReport();
 });
+window.addEventListener("mandibook:access-ready", ({ detail }) => { if (detail) generateReport(); });
 
 function setDefaultDates() {
   const now = new Date();
@@ -22,10 +38,34 @@ function setDefaultDates() {
   if (end) end.value = `${yyyy}-${mm}-${String(now.getDate()).padStart(2, "0")}`;
 }
 
+function reportDateRange(preset, now = new Date()) {
+  const end = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  let start = new Date(end);
+  if (preset === "yesterday") { start.setDate(start.getDate() - 1); end.setDate(end.getDate() - 1); }
+  if (preset === "month") start.setDate(1);
+  if (preset === "financial") start = new Date(end.getMonth() >= 3 ? end.getFullYear() : end.getFullYear() - 1, 3, 1);
+  return { start: WorkspaceUI.localDate(start), end: WorkspaceUI.localDate(end) };
+}
+function setReportPreset(preset) {
+  const range = reportDateRange(preset);
+  document.getElementById("report-start").value = range.start;
+  document.getElementById("report-end").value = range.end;
+  document.querySelectorAll("[data-report-preset]").forEach((button) => button.setAttribute("aria-pressed", String(button.dataset.reportPreset === preset)));
+  generateReport();
+}
+function reportBillDate(value) {
+  if (value?.toDate) return WorkspaceUI.localDate(value.toDate());
+  const text = String(value || "");
+  const match = text.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (match) return `${match[3]}-${match[2].padStart(2,"0")}-${match[1].padStart(2,"0")}`;
+  return /^\d{4}-\d{2}-\d{2}/.test(text) ? text.slice(0, 10) : "";
+}
+
 function selectReport(type) {
   currentReport = type;
   document.querySelectorAll(".report-card").forEach((c) => c.classList.remove("active"));
   document.getElementById(`rc-${type}`)?.classList.add("active");
+  document.querySelectorAll(".report-card").forEach((card) => card.setAttribute("aria-pressed", String(card.classList.contains("active"))));
   generateReport();
 }
 
@@ -33,33 +73,57 @@ function selectReport(type) {
 async function loadBillsInRange() {
   const startVal = document.getElementById("report-start")?.value;
   const endVal = document.getElementById("report-end")?.value;
-  showLoading();
-  try {
-    const snap = await billsCollection.orderBy("Date").get();
-    let bills = snap.docs.filter((d) => d.data().deleted !== true).map((d) => ({ id: d.id, ...d.data() }));
+  {
+    const snap = await billsCollection.get();
+    let bills = snap.docs.filter((d) => d.data().deleted !== true).map((d) => {
+      const bill = { ...d.data(), id: d.id };
+      const key = reportBillDate(bill.Date || bill.createdAt);
+      if (key) { const [y,m,day] = key.split("-"); bill.Date = `${day}/${m}/${y}`; }
+      ["Final Total", "Net Weight", "BrokerCommission", "amountPaid"].forEach((field) => { bill[field] = Number(bill[field] || 0); });
+      return bill;
+    });
 
     if (startVal && endVal) {
-      const s = new Date(startVal);
-      const e = new Date(endVal);
-      e.setHours(23, 59, 59);
       bills = bills.filter((b) => {
-        const [dd, mm, yyyy] = b.Date.split("/");
-        const bd = new Date(`${yyyy}-${mm}-${dd}`);
-        return bd >= s && bd <= e;
+        const key = reportBillDate(b.Date || b.createdAt);
+        return key && key >= startVal && key <= endVal;
       });
     }
-    allBillsCache = bills;
     return bills;
-  } finally {
-    hideLoading();
   }
 }
 
 // ── GENERATE REPORT ───────────────────────────────────────────────────────────
 async function generateReport() {
-  const bills = await loadBillsInRange();
-  const fns = { daily, supplier, product, broker, village, vehicle, monthly, payment };
-  if (fns[currentReport]) fns[currentReport](bills);
+  const request = ++reportRequest;
+  const status = document.getElementById("reports-sync-status");
+  showLoading();
+  if (status) status.textContent = "Updating report…";
+  try {
+    const start = document.getElementById("report-start").value;
+    const end = document.getElementById("report-end").value;
+    if (start && end && start > end) throw new Error("Start date must be before the end date.");
+    const bills = await loadBillsInRange();
+    if (request !== reportRequest) return;
+    allBillsCache = bills;
+    document.getElementById("report-state").replaceChildren();
+    const fns = { daily, supplier, product, broker, village, vehicle, monthly, payment };
+    if (fns[currentReport]) fns[currentReport](bills);
+    if (!bills.length) WorkspaceUI.state(document.getElementById("report-state"), {
+      title: "No bills in this date range", message: "Choose a wider range to review earlier business records.",
+      action: "Show this financial year", onAction: () => setReportPreset("financial"),
+    });
+    if (status) status.textContent = `Checked ${new Date().toLocaleTimeString("en-IN", { hour: "2-digit", minute: "2-digit" })}`;
+  } catch (error) {
+    if (request !== reportRequest) return;
+    if (status) status.textContent = "Report could not update";
+    document.getElementById("report-summary").replaceChildren();
+    document.getElementById("report-chart-container").style.display = "none";
+    document.getElementById("report-table-container").style.display = "none";
+    WorkspaceUI.state(document.getElementById("report-state"), { title: "Could not load report", message: error.message, action: "Retry", onAction: generateReport, error: true });
+  } finally {
+    if (request === reportRequest) hideLoading();
+  }
 }
 
 function fmt(n) {
@@ -73,12 +137,21 @@ function showSummary(items) {
   document.getElementById("report-summary").innerHTML = items
     .map(
       (i) => `
-    <div class="summary-card">
+    <a class="summary-card summary-link" href="${escapeHtml(reportSummaryHref(i.label))}">
       <div class="summary-val">${i.val}</div>
       <div class="summary-lbl">${i.label}</div>
-    </div>`
+      <span class="summary-open">View records ↗</span>
+    </a>`
     )
     .join("");
+}
+function reportSummaryHref(label) {
+  const params = new URLSearchParams({ from: document.getElementById("report-start").value, to: document.getElementById("report-end").value });
+  if (label.includes("Unpaid")) params.set("status", "due");
+  else if (label.includes("Partial")) params.set("status", "partial");
+  else if (label.includes("Paid")) params.set("status", "paid");
+  else if (label.includes("Due")) params.set("status", "outstanding");
+  return `bills.html?${params}`;
 }
 
 function showTable(title, headers, rows, footers = []) {
@@ -88,10 +161,8 @@ function showTable(title, headers, rows, footers = []) {
   document.getElementById("report-thead").innerHTML = `<tr>${headers
     .map((h) => `<th>${escapeHtml(h)}</th>`)
     .join("")}</tr>`;
-  // Cells that are pre-built HTML (colored status spans etc.) start with
-  // "<span" — everything else is raw data (customer/village/broker names)
-  // and must be escaped before going into innerHTML.
-  const cell = (c) => (typeof c === "string" && c.trim().startsWith("<span") ? c : escapeHtml(c));
+  // All report cells are data, including customer-provided names.
+  const cell = (c) => escapeHtml(c);
   document.getElementById("report-tbody").innerHTML = rows
     .map((r) => `<tr>${r.map((c) => `<td>${cell(c)}</td>`).join("")}</tr>`)
     .join("");
@@ -364,7 +435,8 @@ function vehicle(bills) {
 function monthly(bills) {
   const byMonth = {};
   bills.forEach((b) => {
-    const [, mm, yyyy] = b.Date.split("/");
+    const [, mm, yyyy] = String(b.Date || "").split("/");
+    if (!mm || !yyyy) return;
     const key = `${yyyy}-${mm}`;
     byMonth[key] = byMonth[key] || { count: 0, amount: 0, weight: 0, bags: 0 };
     byMonth[key].count++;
@@ -410,9 +482,10 @@ function monthly(bills) {
 
 // ── 8. PAYMENT ────────────────────────────────────────────────────────────────
 function payment(bills) {
-  const paid = bills.filter((b) => b.paymentStatus === "Paid");
-  const partial = bills.filter((b) => b.paymentStatus === "Partially Paid");
-  const unpaid = bills.filter((b) => !b.paymentStatus || b.paymentStatus === "Unpaid");
+  const bucket = (b) => String(b.paymentStatus || "").toLowerCase() === "paid" || (b["Final Total"] > 0 && b.amountPaid >= b["Final Total"] - .01) ? "paid" : String(b.paymentStatus || "").toLowerCase().includes("partial") || b.amountPaid > 0 ? "partial" : "due";
+  const paid = bills.filter((b) => bucket(b) === "paid");
+  const partial = bills.filter((b) => bucket(b) === "partial");
+  const unpaid = bills.filter((b) => bucket(b) === "due");
   const totalDue =
     unpaid.reduce((s, b) => s + (b["Final Total"] || 0), 0) +
     partial.reduce((s, b) => s + (b["Final Total"] || 0) - (b.amountPaid || 0), 0);
@@ -424,7 +497,7 @@ function payment(bills) {
       b["Customer Name"],
       fmtR(b["Final Total"]),
       fmtR(b.amountPaid || 0),
-      `<span style="color:#dc3545;font-weight:700;">${fmtR((b["Final Total"] || 0) - (b.amountPaid || 0))}</span>`,
+      fmtR(Math.max(0, (b["Final Total"] || 0) - (b.amountPaid || 0))),
       b.paymentStatus || "Unpaid",
     ]);
   showSummary([
