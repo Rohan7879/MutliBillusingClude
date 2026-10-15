@@ -714,6 +714,13 @@ function renderNavbar() {
       <button class="navbar-toggle" id="navbar-toggle" aria-label="Menu" type="button">☰</button>
       <div class="navbar-links" id="navbar-links">${linksHtml}${connHtml}${userBadgeHtml}${logoutHtml}</div>
     </nav>`;
+  if (role === "admin" && !window.MandiBackupHealth && !document.getElementById("backup-health-script")) {
+    const script = document.createElement("script");
+    script.id = "backup-health-script";
+    script.src = "js/core/backup-health.js?v=16";
+    document.head.appendChild(script);
+  }
+  if (role !== "admin") document.getElementById("backup-health-banner")?.remove();
   root.insertAdjacentHTML(
     "beforeend",
     `<nav class="mobile-bottom-nav" aria-label="Quick navigation">${mobileLinksHtml}<button type="button" class="mobile-nav-link mobile-nav-more" aria-expanded="false"><span aria-hidden="true">☰</span><small>More</small></button></nav>`

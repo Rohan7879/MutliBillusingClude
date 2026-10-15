@@ -385,12 +385,12 @@ async function deleteSelectedBills() {
   }
 
   const result = await Swal.fire({
-    title: `Delete ${selectedCheckboxes.length} bill(s)?`,
-    text: "Locked bills and bills with a recorded payment will be skipped automatically — they can't be deleted this way.",
+    title: `Archive ${selectedCheckboxes.length} bill(s)?`,
+    text: "Records stay in the recovery backup. Locked/paid bills will be skipped; eligible unpaid bills can be restored by an Admin.",
     icon: "warning",
     showCancelButton: true,
     confirmButtonColor: "#dc3545",
-    confirmButtonText: "Yes, delete",
+    confirmButtonText: "Yes, archive",
   });
   if (!result.isConfirmed) return;
 
@@ -410,8 +410,8 @@ async function deleteSelectedBills() {
     }
     Swal.fire(
       "Done",
-      `${deletedCount} bill(s) deleted.` +
-        (skippedCount > 0 ? ` ${skippedCount} skipped (locked or already paid).` : ""),
+      `${deletedCount} bill(s) archived.` +
+        (skippedCount > 0 ? ` ${skippedCount} not archived (locked, paid, already archived or update failed).` : ""),
       deletedCount > 0 ? "success" : "info"
     );
     showBillListView();
@@ -421,18 +421,13 @@ async function deleteSelectedBills() {
 }
 window.deleteSelectedBills = deleteSelectedBills;
 
-// softDeleteBill() (backup.js) shows its own Swal toast per call, which
-// would fire once per bill in a bulk operation — noisy. This calls the
-// same underlying logic but suppresses the individual popups, letting
-// deleteSelectedBills show one combined summary instead.
+// Use the same atomic archive transition for bulk operations without mutating
+// the global dialog handler or suppressing unrelated save/error dialogs.
 async function softDeleteBillSilently(docId) {
-  const originalFire = Swal.fire;
-  Swal.fire = () => Promise.resolve({}); // temporarily no-op, restored below
   try {
-    return await softDeleteBill(docId);
-  } finally {
-    Swal.fire = originalFire;
-  }
+    if (typeof changeBillArchive !== "function") throw new Error("Safe archive module is unavailable; reload before archiving.");
+    return await changeBillArchive(docId, false);
+  } catch (error) { console.warn("One bill was not archived:", error.message); return false; }
 }
 
 // were toggled via style.display. It had NO null-check on #bill_list_view /
@@ -560,28 +555,28 @@ async function deleteBill(docId, serialNo) {
   }
   const result = await Swal.fire({
     title: "Are you sure?",
-    text: `You are about to delete Bill No. ${serialNo}. This cannot be undone.`,
+    text: `Archive Bill No. ${serialNo}? The record stays in the recovery backup and an Admin can restore eligible unpaid bills.`,
     icon: "warning",
     showCancelButton: true,
     confirmButtonColor: "#dc3545", // Red color for the confirm button
     cancelButtonColor: "#6c757d", // Gray for cancel
-    confirmButtonText: "Yes, delete it!",
+    confirmButtonText: "Yes, archive it",
   });
 
   // If the user clicked the "Yes, delete it!" button
   if (result.isConfirmed) {
     showLoading("Deleting bill...");
     try {
-      // Soft delete - keeps data for 30 days
+      // Never fall back to permanent deletion if the archive module fails.
       if (typeof softDeleteBill === "function") {
         const done = await softDeleteBill(docId);
         if (!done) return;
       } else {
-        await billsCollection.doc(docId).delete();
+        throw new Error("Safe archive module did not load. Reload the page; nothing was permanently deleted.");
       }
       Swal.fire({
-        title: "Deleted!",
-        text: `Bill No. ${serialNo} has been deleted.`,
+        title: "Archived",
+        text: `Bill No. ${serialNo} is archived, not permanently deleted.`,
         icon: "success",
         timer: 2000, // Automatically close after 2 seconds
         showConfirmButton: false,

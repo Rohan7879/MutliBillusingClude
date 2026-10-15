@@ -67,3 +67,11 @@ node_modules/
 
 # dataconnect generated files
 .dataconnect
+
+# Private recovery files must never be committed.
+backups/
+MandiBook_FullBackup_*.json
+MandiBook_Backup_*.xlsx
+MandiBook_BillReport_*.xlsx
+auth-export*.json
+service-account*.json

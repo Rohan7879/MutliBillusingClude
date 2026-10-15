@@ -78,6 +78,7 @@ function inline(file,ctx) {
  input.value='whatsapp';input.listeners.input();check('settings searches other categories',()=>assert.equal(sections.filter(s=>!s.hidden)[0].dataset.settingsCategory,'printing'));
  input.value='not-found';input.listeners.input();check('settings no-match state',()=>assert.equal(settings.document.getElementById('settings-search-empty').hidden,false));
  settings.document.getElementById('settings-search-clear').listeners.click();check('clearing search restores category without replacing form',()=>{assert.equal(sections.filter(s=>!s.hidden)[0],sections[0]);assert.equal(input.value,'')});
+ settings.location.hash='#backup';settings.callbacks.DOMContentLoaded();check('backup reminder deep link selects backup category',()=>assert.equal(sections.filter(s=>!s.hidden)[0].dataset.settingsCategory,'backup'));
  const audit=context();inline('audit-log.html',audit);
  check('audit changed fields exclude unchanged',()=>assert.equal(Array.from(audit.changedFields({before:{amount:1,status:'paid'},after:{amount:2,status:'paid'}})).join(','),'amount'));
  const target=element();await audit.showRelatedBills({entityType:'payment',after:{billId:'id/with?chars',serialNo:'QA'}},target,0);

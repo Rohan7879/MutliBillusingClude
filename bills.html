@@ -17,8 +17,11 @@
     <script src="js/core/utils.js"></script>
     <script src="js/core/core-engine.js"></script>
     <script src="js/features/company-profile.js"></script>
-    <script src="js/features/backup.js" defer></script>
-    <script src="js/features/bill-list.js?v=14" defer></script>
+    <script id="backup-health-script" src="js/core/backup-health.js?v=16" defer></script>
+    <script src="js/core/backup-engine.js?v=16" defer></script>
+    <script src="js/features/backup-center.js?v=16" defer></script>
+    <script src="js/features/backup.js?v=15" defer></script>
+    <script src="js/features/bill-list.js?v=15" defer></script>
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/dashboard.css" />
     <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
@@ -1192,7 +1195,7 @@
             <button class="tbtn tbtn-print" onclick="printSelectedBills()">🖨️ Print</button>
             <button class="tbtn tbtn-paid" id="mark_paid_btn">✅ Mark Paid</button>
             <button class="tbtn" style="background: #dc3545; color: #fff" onclick="deleteSelectedBills()">
-              🗑️ Delete Selected
+              Archive Selected
             </button>
           </div>
 

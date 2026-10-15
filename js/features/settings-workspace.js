@@ -30,5 +30,10 @@ document.addEventListener("DOMContentLoaded", () => {
   search.addEventListener("input", render);
   clear.addEventListener("click", clearSearch);
   buttons.forEach((button) => button.addEventListener("click", () => selectView(button.dataset.settingsView)));
-  selectView("billing");
+  const fromHash = () => {
+    const view = (location.hash || "").slice(1);
+    selectView(buttons.some(button => button.dataset.settingsView === view) ? view : "billing");
+  };
+  window.addEventListener("hashchange", fromHash);
+  fromHash();
 });

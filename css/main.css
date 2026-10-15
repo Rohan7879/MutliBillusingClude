@@ -1469,3 +1469,9 @@ button[type="submit"]:hover {
     display: flex;
   }
 }
+/* Compact Admin-only backup reminder, outside the single-line navigation. */
+.backup-health-banner { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 10px 24px; background: #fff8e8; border-bottom: 1px solid #eed8a5; color: #694a13; font: 500 12px/1.5 system-ui, sans-serif; }
+.backup-health-banner[hidden] { display: none; }
+.backup-health-banner a { color: #61420e; font-weight: 750; white-space: nowrap; }
+@media (max-width: 600px) { .backup-health-banner { align-items: flex-start; flex-direction: column; gap: 4px; padding: 10px 16px; } }
+@media print { .backup-health-banner { display: none !important; } }

@@ -15,10 +15,10 @@
 
     <script src="js/core/firebase-init.js?v=14"></script>
     <script src="js/core/utils.js"></script>
-    <script src="js/core/core-engine.js?v=14"></script>
+    <script src="js/core/core-engine.js?v=16"></script>
     <script src="js/core/pwa.js?v=14" defer></script>
     <script src="js/features/company-profile.js"></script>
-    <script src="js/features/settings.js"></script>
+    <script src="js/features/settings.js?v=15"></script>
 
     <link rel="stylesheet" href="css/main.css" />
     <link rel="icon" href="assets/logo.jpg" type="image/x-icon" />
@@ -1128,9 +1128,9 @@
       @media (max-width:700px) { .page-wrapper { margin:18px auto 34px; padding:0 13px; } .settings-hero { padding:23px 20px; align-items:flex-start; flex-direction:column; } .settings-intro-grid { grid-template-columns:1fr; gap:9px; } .section-card { padding:17px !important; border-radius:15px !important; } .settings-row { align-items:flex-start; flex-direction:column; gap:10px; } .settings-row input, .settings-row select { width:100% !important; max-width:none !important; box-sizing:border-box; } }
     </style>
     <link rel="stylesheet" href="css/themes.css" />
-    <link rel="stylesheet" href="css/workspaces.css?v=14" />
+    <link rel="stylesheet" href="css/workspaces.css?v=16" />
     <script src="js/core/workspace-ui.js?v=14" defer></script>
-    <script src="js/features/settings-workspace.js?v=14" defer></script>
+    <script src="js/features/settings-workspace.js?v=16" defer></script>
   </head>
   <body class="workspace-page">
     <!-- NAVBAR -->
@@ -1462,93 +1462,71 @@
         </button>
       </div>
 
-      <!-- Backup & Restore -->
-      <div class="section-card" data-settings-category="backup">
-        <div class="section-card-title"><span>💾 Backup & Restore</span></div>
-        <div class="info-banner">ℹ️ Bills ko safely backup karo ya deleted bills restore karo.</div>
-        <div id="last-backup-reminder" style="font-size: 13px; font-weight: 700; margin-bottom: 12px"></div>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap; margin-bottom: 12px">
-          <button
-            onclick="downloadExcelBackup()"
-            class="save-btn"
-            style="flex: 1; background: linear-gradient(135deg, #28a745, #1e7e34)"
-          >
-            📊 Download Excel Report
-          </button>
-          <button
-            onclick="showDeletedBills()"
-            class="save-btn"
-            style="flex: 1; background: linear-gradient(135deg, #fd7e14, #c84b00)"
-          >
-            🗑️ View Deleted Bills
-          </button>
+      <!-- Verified recovery workspace -->
+      <section class="section-card backup-center" data-settings-category="backup">
+        <div class="section-card-title"><span>Recovery & data protection</span><span class="backup-pill">Free-plan compatible · Admin only</span></div>
+        <p class="backup-intro">Prepare, save and verify a recovery copy. No records are restored or deleted here.</p>
+        <div id="last-backup-reminder" class="backup-status" data-kind="info" role="status">Checking verified backup history…</div>
+        <div class="backup-free-plan">
+          <div><h3>Your free backup routine</h3><p>Reminders run while you use the app. An Admin prepares and saves each file. No paid cloud backup service is required for this workflow.</p></div>
+          <div class="workspace-field"><label for="backup-reminder-frequency">Remind me on this browser</label><select id="backup-reminder-frequency"><option value="1">Every day · recommended</option><option value="3">Every 3 days</option><option value="7">Every week</option></select></div>
         </div>
-        <div style="display: flex; gap: 12px; flex-wrap: wrap; padding-top: 12px; border-top: 1px dashed #dee2e6">
-          <button
-            onclick="downloadFullJsonBackup()"
-            class="save-btn"
-            style="flex: 1; background: linear-gradient(135deg, #005a9e, #073763)"
-          >
-            🛡️ Download Full Backup (JSON)
-          </button>
-          <div
-            style="flex: 1; color: #5d3a86; border: 1px solid #d6c3ef; border-radius: 8px; padding: 12px; background: #faf7ff; font-size: 13px; font-weight: 700"
-          >
-            🔒 Restore safety: web restore is disabled. Keep the JSON file safe and contact the owner for a controlled recovery.
-          </div>
+        <div class="backup-overview">
+          <div><span>Records in selected copy</span><strong id="backup-document-count">—</strong></div>
+          <div><span>Collections</span><strong id="backup-collection-count">15</strong></div>
+          <div><span>Source project</span><strong id="backup-source">Not prepared</strong></div>
+          <div><span>Data exported at</span><strong id="backup-exported-at">Not prepared</strong></div>
         </div>
-        <p style="font-size: 12px; color: #6d8098; margin: 10px 0 0">
-          <b>Excel Report</b> — human-readable, sharing/review ke liye.
-          <b>Full Backup (JSON)</b> — bills + payments + orders + parties + settings ka complete recovery copy. Isme active aur archived dono bills included hote hain.
-        </p>
-      </div>
-
-      <!-- ⚠️ DANGER ZONE — Emergency Data Wipe -->
-      <div class="section-card danger-settings" data-settings-category="backup" style="margin-top: 20px; border: 2px solid #dc3545; background: #fff5f5">
-        <div class="section-card-title" style="color: #dc3545">
-          <span>⚠️ Danger Zone — Emergency Data Wipe</span>
+        <div class="backup-flow">
+          <article><span class="backup-step">01 · PREPARE</span><h3>Capture app data</h3><p>Bills, archived bills, payments, orders, parties, brokers, payouts, products, varieties, customers, counters, staff profiles, mobile directory, audit and share links.</p>
+            <label class="backup-check"><input id="backup-quiescent" type="checkbox" /> Billing, payments and staff changes are paused until preparation finishes.</label>
+            <label for="backup-read-limit" class="backup-file-label">Read allowance per preparation</label>
+            <select id="backup-read-limit"><option value="2000">2,000 · small database</option><option value="10000" selected>10,000 · standard</option><option value="20000">20,000 · check usage first</option></select>
+            <small id="backup-read-usage">Both passes use your Firestore read quota. This allowance is not your remaining daily quota; other app activity and rules checks also use reads.</small>
+            <button id="backup-build" type="button" class="workspace-action backup-primary" onclick="downloadFullJsonBackup()">Prepare recovery backup</button>
+            <button id="backup-cancel" type="button" class="workspace-action" hidden>Cancel preparation</button>
+          </article>
+          <article><span class="backup-step">02 · SAVE</span><h3>Keep a recovery file</h3><p>Save one copy on your device and a second copy on a separate protected device or storage location.</p>
+            <label class="backup-check"><input id="backup-encrypt" type="checkbox" /> Password-protect this download</label>
+            <div id="backup-password-fields" class="backup-password-fields" hidden>
+              <label for="backup-password">Backup password · at least 12 characters</label><input id="backup-password" type="password" autocomplete="new-password" />
+              <label for="backup-password-confirm">Confirm backup password</label><input id="backup-password-confirm" type="password" autocomplete="new-password" />
+              <small>A lost encryption password cannot be recovered. It is never sent to Firebase.</small>
+            </div>
+            <button id="backup-save" type="button" class="workspace-action backup-primary" disabled>Save JSON recovery file</button>
+          </article>
+          <article><span class="backup-step">03 · VERIFY</span><h3>Check the saved copy</h3><p>Select your saved JSON file to check its checksum, collection counts, data types and project. Verification does not restore anything.</p>
+            <label for="backup-verify-file" class="backup-file-label">Choose a saved recovery file</label><input id="backup-verify-file" type="file" accept=".json,application/json" />
+            <small>File contents and encryption passwords stay on this device. Only verification metadata is saved.</small>
+          </article>
         </div>
-        <div class="info-banner" style="background: #ffe3e3; color: #8a1f1f; border-color: #f5b5b5">
-          Yeh sirf test/dummy data saaf karne ke liye hai. Selected data <b>permanently delete</b> hoga — koi undo nahi
-          hai. Staff accounts aur login access iske andar kabhi touch nahi hote.
-        </div>
-
-        <div id="dz-checkboxes" style="margin: 16px 0; display: flex; flex-direction: column; gap: 8px">
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-            <input type="checkbox" id="dz-bills" checked /> Bills (aur unse judi payments automatically)
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-            <input type="checkbox" id="dz-payments" checked /> Payments
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-            <input type="checkbox" id="dz-orders" checked /> Orders
-          </label>
-          <label style="display: flex; align-items: center; gap: 8px; cursor: pointer">
-            <input type="checkbox" id="dz-parties" /> Party Master (customers/farmers/brokers list)
-          </label>
-        </div>
-
-        <div style="margin-bottom: 14px">
-          <label style="display: block; font-weight: 700; font-size: 13px; margin-bottom: 6px; color: #8a1f1f">
-            Confirm karne ke liye niche exactly type karo: <code>DELETE ALL DATA</code>
-          </label>
-          <input
-            type="text"
-            id="dz-confirm-text"
-            placeholder="DELETE ALL DATA"
-            autocomplete="off"
-            style="width: 100%; max-width: 320px; padding: 10px 12px; border: 1.5px solid #dc3545; border-radius: 8px; font-family: monospace"
-          />
-        </div>
-
-        <button
-          id="dz-wipe-btn"
-          disabled
-          style="background: #dc3545; color: #fff; border: none; padding: 12px 22px; border-radius: 8px; font-weight: 700; cursor: not-allowed; opacity: 0.5"
-        >
-          🗑️ Permanently Delete Selected Data
-        </button>
-      </div>
+        <progress id="backup-progress" max="100" value="0" hidden aria-label="Backup preparation progress"></progress>
+        <div id="backup-status" class="backup-status" data-kind="info" role="status" aria-live="polite">Ready. Preparation is not proof of a saved file; complete Save and Verify too.</div>
+        <details class="backup-details"><summary>Verified versions & keeping older copies</summary>
+          <p id="backup-retention-note">Keep at least 3 dated files and an independent protected copy. History stores metadata, not the files themselves.</p>
+          <div id="backup-copy-history" class="backup-copy-history"></div>
+        </details>
+        <details class="backup-details"><summary>Compare two saved backups · no database usage</summary>
+          <p>First save and verify the newer file above. Then select an earlier JSON copy to see added, changed and missing records. Both files stay on this device; this does not restore or merge records.</p>
+          <label for="backup-compare-file" class="backup-file-label">Earlier recovery copy · up to 20 MB per file</label><input id="backup-compare-file" type="file" accept=".json,application/json" />
+          <div id="backup-comparison" class="backup-review" role="status" aria-live="polite">Verify the newer saved copy first.</div>
+        </details>
+        <details class="backup-details"><summary>Collection inventory and recovery limits</summary>
+          <div id="backup-manifest" class="backup-manifest"><p>Counts appear after preparation or verification, including empty collections.</p></div>
+          <div id="backup-review" class="backup-review"></div>
+          <p>Scope: all 15 known app root collections, with original document IDs and Firestore data types. Unknown collections/subcollections, Firebase Auth login accounts/passwords, uploaded Storage files, rules and hosting assets are not part of this JSON.</p>
+          <p>This is a two-pass content check, not an atomic point-in-time snapshot. Keep all staff writes paused. Automatic cloud backups and point-in-time recovery require paid Firebase services and are not enabled by this workflow. Login accounts need a separate owner-controlled Auth export.</p>
+          <p>Free Firestore quota is shared by the whole app. Check usage before repeating a large export. The read allowance stops an oversized preparation without presenting a partial file as a complete backup.</p>
+          <p>Restore is deliberately not a browser button. Verify first, rehearse recovery in an isolated environment and check record counts/balances before any owner-approved production recovery. Checksums detect corruption; they do not prove who created a file.</p>
+          <p>Keep at least one older verified copy. Never save recovery files inside the app's source folder or commit them to Git.</p>
+        </details>
+        <div class="backup-secondary"><div><h3>Excel is a review report</h3><p>A formatted bill report for review, not a full recovery copy. Nested fields and other collections remain in JSON.</p></div><button type="button" class="workspace-action" onclick="downloadExcelBackup()">Download Excel report</button><button type="button" class="workspace-action" onclick="showDeletedBills()">Review archived bills</button></div>
+      </section>
+      <section class="section-card backup-protection" data-settings-category="backup">
+        <div class="section-card-title"><span>Permanent deletion protection</span></div>
+        <p>Emergency browser wipes are disabled. They could partially clear records or alter payment evidence. Use archive for eligible unpaid bills; owner-led cleanup needs a verified backup and a separate maintenance plan.</p>
+        <span class="backup-pill">No bulk permanent wipe</span>
+      </section>
 
       <!-- Theme Settings -->
       <div class="section-card" data-settings-category="appearance" style="margin-top: 20px">
@@ -1608,7 +1586,10 @@
       </div>
     </div>
 
-    <script src="js/features/backup.js" defer></script>
+    <script id="backup-health-script" src="js/core/backup-health.js?v=16" defer></script>
+    <script src="js/core/backup-engine.js?v=16" defer></script>
+    <script src="js/features/backup-center.js?v=16" defer></script>
+    <script src="js/features/backup.js?v=15" defer></script>
     <script src="js/features/themes.js" defer></script>
 
     <!-- Theme Panel -->
