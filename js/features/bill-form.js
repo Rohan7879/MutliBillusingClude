@@ -391,6 +391,25 @@ function updateLiveBillSummary() {
   }
 }
 
+// Keep the last fields reachable beneath the phone action bar even when its
+// status text, totals, orientation or preferred text size changes.
+function initializeBillActionLayout() {
+  const workspace = document.querySelector(".bill-workspace");
+  const actions = workspace?.querySelector(".form-submit-area");
+  if (!workspace || !actions || actions.dataset.layoutObserved) return;
+  actions.dataset.layoutObserved = "true";
+  const measure = () => {
+    workspace.style.setProperty("--bill-actions-height", `${Math.ceil(actions.getBoundingClientRect().height)}px`);
+  };
+  if (typeof ResizeObserver === "function") {
+    const observer = new ResizeObserver(measure);
+    observer.observe(actions);
+  } else {
+    window.addEventListener("resize", measure);
+  }
+  measure();
+}
+
 function initializeBillWorkspace() {
   const form = document.getElementById("estimateForm");
   if (!form) return;
@@ -405,6 +424,7 @@ function initializeBillWorkspace() {
     if (layoutPicker) layoutPicker.value = selected;
   };
   applyLayout(savedLayout);
+  initializeBillActionLayout();
   if (layoutPicker) {
     layoutPicker.addEventListener("change", () => {
       const selected = layoutPicker.value === "classic" ? "classic" : "professional";

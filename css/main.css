@@ -984,6 +984,12 @@ button[type="submit"]:hover {
 }
 
 /* ── App-style phone navigation ────────────────────────────────── */
+:root {
+  /* Share the dock clearance with sticky page actions, including phone insets. */
+  --mobile-nav-height: 60px;
+  --mobile-nav-bottom: max(9px, env(safe-area-inset-bottom, 0px));
+  --mobile-nav-clearance: calc(var(--mobile-nav-height) + var(--mobile-nav-bottom) + 12px);
+}
 .mobile-bottom-nav { display: none; }
 @media (min-width: 901px) {
   /* Desktop stays a single clean row; mobile has its own bottom navigation. */
@@ -991,7 +997,7 @@ button[type="submit"]:hover {
   .navbar-links { flex-wrap: nowrap; }
 }
 @media (max-width: 900px) {
-  body { padding-bottom: 84px; }
+  body { padding-bottom: var(--mobile-nav-clearance); }
   .top-navbar { display: block; min-height: 0; padding: 0; }
   .navbar-bar { display: flex; min-height: 60px; align-items: center; justify-content: space-between; padding: 0 14px; }
   .navbar-links { display: none; padding: 10px 12px 14px; }
@@ -1000,13 +1006,13 @@ button[type="submit"]:hover {
   .mobile-bottom-nav {
     position: fixed;
     right: 10px;
-    bottom: max(9px, env(safe-area-inset-bottom));
+    bottom: var(--mobile-nav-bottom);
     left: 10px;
     z-index: 1001;
     display: flex;
     align-items: stretch;
     justify-content: space-around;
-    min-height: 60px;
+    min-height: var(--mobile-nav-height);
     padding: 5px;
     border: 1px solid rgba(18, 67, 105, .12);
     border-radius: 17px;

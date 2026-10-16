@@ -1,0 +1,548 @@
+{
+  "planId": "MB-QA-20261015-v1",
+  "date": "2026-10-15",
+  "purpose": "Synthetic manual-entry acceptance dataset, not an import or production seed",
+  "parties": [
+    {
+      "id": "A",
+      "name": "QA15 FARMER A",
+      "village": "QA15 VILLAGE A",
+      "type": "Kisan (Farmer)",
+      "openingBalance": 0,
+      "bills": [
+        "QA15-B01",
+        "QA15-B02"
+      ],
+      "expectedFinal": 12500,
+      "expectedCredit": 2500,
+      "expectedDue": 10000
+    },
+    {
+      "id": "B",
+      "name": "QA15 FARMER B",
+      "village": "QA15 VILLAGE B",
+      "type": "Kisan (Farmer)",
+      "openingBalance": 0,
+      "bills": [
+        "QA15-B03",
+        "QA15-B04"
+      ],
+      "expectedFinal": 26000,
+      "expectedCredit": 26000,
+      "expectedDue": 0
+    },
+    {
+      "id": "C",
+      "name": "QA15 FARMER C",
+      "village": "QA15 VILLAGE C",
+      "type": "Kisan (Farmer)",
+      "openingBalance": 0,
+      "bills": [
+        "QA15-B05",
+        "QA15-B06"
+      ],
+      "expectedFinal": 32050,
+      "expectedCredit": 10500,
+      "expectedDue": 21550
+    },
+    {
+      "id": "D",
+      "name": "QA15 FARMER D",
+      "village": "QA15 VILLAGE D",
+      "type": "Kisan (Farmer)",
+      "openingBalance": 0,
+      "bills": [
+        "QA15-B07",
+        "QA15-B08"
+      ],
+      "expectedFinal": 20195,
+      "expectedCredit": 16195.5,
+      "expectedDue": 3999.5
+    },
+    {
+      "id": "E",
+      "name": "QA15 FARMER E",
+      "village": "QA15 VILLAGE E",
+      "type": "Kisan (Farmer)",
+      "openingBalance": 0,
+      "bills": [
+        "QA15-B09",
+        "QA15-B10"
+      ],
+      "expectedFinal": 31420,
+      "expectedCredit": 21620,
+      "expectedDue": 9800
+    }
+  ],
+  "products": [
+    {
+      "name": "QA15 WHEAT",
+      "prefix": "QW",
+      "priceUnit": "20kg",
+      "extraDeductions": []
+    },
+    {
+      "name": "QA15 MAIZE",
+      "prefix": "QM",
+      "priceUnit": "20kg",
+      "extraDeductions": []
+    }
+  ],
+  "broker": {
+    "name": "QA15 BROKER",
+    "defaultCommission": 0,
+    "payout": 50,
+    "expectedCommission": 140,
+    "expectedBalance": 90
+  },
+  "bills": [
+    {
+      "ref": "QA15-B01",
+      "party": "QA15 FARMER A",
+      "village": "QA15 VILLAGE A",
+      "date": "2026-10-15",
+      "product": "QA15 WHEAT",
+      "mode": "Loose",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 200,
+      "looseRatePer20kg": 500,
+      "kantanFilled": 0,
+      "plasticFilled": 0,
+      "emptyBags": 0,
+      "vakals": [],
+      "expense": 0,
+      "expenseName": "",
+      "freight": 0,
+      "weighbridgeMoisturePct": 0,
+      "broker": "",
+      "brokerRatePer100kg": 0,
+      "vehicle": "QA15-VEH-01",
+      "order": "",
+      "expected": {
+        "netKg": 200,
+        "brokerCommission": 0,
+        "final": 5000,
+        "credit": 0,
+        "due": 5000,
+        "status": "Unpaid"
+      },
+      "paymentSteps": []
+    },
+    {
+      "ref": "QA15-B02",
+      "party": "QA15 FARMER A",
+      "village": "QA15 VILLAGE A",
+      "date": "2026-10-15",
+      "product": "QA15 WHEAT",
+      "mode": "Loose",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 300,
+      "looseRatePer20kg": 500,
+      "kantanFilled": 0,
+      "plasticFilled": 0,
+      "emptyBags": 0,
+      "vakals": [],
+      "expense": 0,
+      "expenseName": "",
+      "freight": 0,
+      "weighbridgeMoisturePct": 0,
+      "broker": "",
+      "brokerRatePer100kg": 0,
+      "vehicle": "QA15-VEH-02",
+      "order": "",
+      "expected": {
+        "netKg": 300,
+        "brokerCommission": 0,
+        "final": 7500,
+        "credit": 2500,
+        "due": 5000,
+        "status": "Partial"
+      },
+      "paymentSteps": [
+        {
+          "step": 1,
+          "cash": 2500,
+          "deduction": 0,
+          "reason": "",
+          "credit": 2500,
+          "expectedDue": 5000
+        }
+      ]
+    },
+    {
+      "ref": "QA15-B03",
+      "party": "QA15 FARMER B",
+      "village": "QA15 VILLAGE B",
+      "date": "2026-10-15",
+      "product": "QA15 WHEAT",
+      "mode": "Bag",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 500,
+      "looseRatePer20kg": 0,
+      "kantanFilled": 10,
+      "plasticFilled": 0,
+      "emptyBags": 0,
+      "vakals": [
+        {
+          "bags": 10,
+          "ratePer20kg": 600,
+          "variety": "QA STANDARD"
+        }
+      ],
+      "expense": 0,
+      "expenseName": "",
+      "freight": 0,
+      "weighbridgeMoisturePct": 0,
+      "broker": "",
+      "brokerRatePer100kg": 0,
+      "vehicle": "QA15-VEH-03",
+      "order": "QA15 O03",
+      "expected": {
+        "netKg": 500,
+        "brokerCommission": 0,
+        "final": 15000,
+        "credit": 15000,
+        "due": 0,
+        "status": "Paid"
+      },
+      "paymentSteps": [
+        {
+          "step": 1,
+          "cash": 15000,
+          "deduction": 0,
+          "reason": "",
+          "credit": 15000,
+          "expectedDue": 0
+        }
+      ]
+    },
+    {
+      "ref": "QA15-B04",
+      "party": "QA15 FARMER B",
+      "village": "QA15 VILLAGE B",
+      "date": "2026-10-15",
+      "product": "QA15 WHEAT",
+      "mode": "Bag",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 400,
+      "looseRatePer20kg": 0,
+      "kantanFilled": 0,
+      "plasticFilled": 8,
+      "emptyBags": 0,
+      "vakals": [
+        {
+          "bags": 8,
+          "ratePer20kg": 550,
+          "variety": "QA STANDARD"
+        }
+      ],
+      "expense": 0,
+      "expenseName": "",
+      "freight": 0,
+      "weighbridgeMoisturePct": 0,
+      "broker": "",
+      "brokerRatePer100kg": 0,
+      "vehicle": "QA15-VEH-04",
+      "order": "",
+      "expected": {
+        "netKg": 400,
+        "brokerCommission": 0,
+        "final": 11000,
+        "credit": 11000,
+        "due": 0,
+        "status": "Paid"
+      },
+      "paymentSteps": [
+        {
+          "step": 1,
+          "cash": 4000,
+          "deduction": 0,
+          "reason": "",
+          "credit": 4000,
+          "expectedDue": 7000
+        },
+        {
+          "step": 2,
+          "cash": 7000,
+          "deduction": 0,
+          "reason": "",
+          "credit": 7000,
+          "expectedDue": 0
+        }
+      ]
+    },
+    {
+      "ref": "QA15-B05",
+      "party": "QA15 FARMER C",
+      "village": "QA15 VILLAGE C",
+      "date": "2026-10-15",
+      "product": "QA15 WHEAT",
+      "mode": "Bag",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 1000,
+      "looseRatePer20kg": 0,
+      "kantanFilled": 20,
+      "plasticFilled": 0,
+      "emptyBags": 0,
+      "vakals": [
+        {
+          "bags": 12,
+          "ratePer20kg": 500,
+          "variety": "QA STANDARD"
+        },
+        {
+          "bags": 8,
+          "ratePer20kg": 600,
+          "variety": "QA PREMIUM"
+        }
+      ],
+      "expense": 0,
+      "expenseName": "",
+      "freight": 0,
+      "weighbridgeMoisturePct": 0,
+      "broker": "",
+      "brokerRatePer100kg": 0,
+      "vehicle": "QA15-VEH-05",
+      "order": "QA15 O05",
+      "expected": {
+        "netKg": 1000,
+        "brokerCommission": 0,
+        "final": 27000,
+        "credit": 10500,
+        "due": 16500,
+        "status": "Partial"
+      },
+      "paymentSteps": [
+        {
+          "step": 1,
+          "cash": 10000,
+          "deduction": 500,
+          "reason": "QA15 agreed test deduction",
+          "credit": 10500,
+          "expectedDue": 16500
+        }
+      ]
+    },
+    {
+      "ref": "QA15-B06",
+      "party": "QA15 FARMER C",
+      "village": "QA15 VILLAGE C",
+      "date": "2026-10-15",
+      "product": "QA15 WHEAT",
+      "mode": "Loose",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 250,
+      "looseRatePer20kg": 400,
+      "kantanFilled": 0,
+      "plasticFilled": 0,
+      "emptyBags": 0,
+      "vakals": [],
+      "expense": 150,
+      "expenseName": "QA15 Loading",
+      "freight": 200,
+      "weighbridgeMoisturePct": 0,
+      "broker": "",
+      "brokerRatePer100kg": 0,
+      "vehicle": "QA15-VEH-06",
+      "order": "",
+      "expected": {
+        "netKg": 250,
+        "brokerCommission": 0,
+        "final": 5050,
+        "credit": 0,
+        "due": 5050,
+        "status": "Unpaid"
+      },
+      "paymentSteps": []
+    },
+    {
+      "ref": "QA15-B07",
+      "party": "QA15 FARMER D",
+      "village": "QA15 VILLAGE D",
+      "date": "2026-10-15",
+      "product": "QA15 MAIZE",
+      "mode": "Loose",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 200,
+      "looseRatePer20kg": 525.5,
+      "kantanFilled": 0,
+      "plasticFilled": 0,
+      "emptyBags": 0,
+      "vakals": [],
+      "expense": 0,
+      "expenseName": "",
+      "freight": 0,
+      "weighbridgeMoisturePct": 0,
+      "broker": "",
+      "brokerRatePer100kg": 0,
+      "vehicle": "QA15-VEH-07",
+      "order": "",
+      "expected": {
+        "netKg": 200,
+        "brokerCommission": 0,
+        "final": 5255,
+        "credit": 1255.5,
+        "due": 3999.5,
+        "status": "Partial"
+      },
+      "paymentSteps": [
+        {
+          "step": 1,
+          "cash": 1255.5,
+          "deduction": 0,
+          "reason": "",
+          "credit": 1255.5,
+          "expectedDue": 3999.5
+        }
+      ]
+    },
+    {
+      "ref": "QA15-B08",
+      "party": "QA15 FARMER D",
+      "village": "QA15 VILLAGE D",
+      "date": "2026-10-15",
+      "product": "QA15 MAIZE",
+      "mode": "Bag",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 600,
+      "looseRatePer20kg": 0,
+      "kantanFilled": 12,
+      "plasticFilled": 0,
+      "emptyBags": 0,
+      "vakals": [
+        {
+          "bags": 12,
+          "ratePer20kg": 500,
+          "variety": "QA STANDARD"
+        }
+      ],
+      "expense": 0,
+      "expenseName": "",
+      "freight": 0,
+      "weighbridgeMoisturePct": 0,
+      "broker": "QA15 BROKER",
+      "brokerRatePer100kg": 10,
+      "vehicle": "QA15-VEH-08",
+      "order": "",
+      "expected": {
+        "netKg": 600,
+        "brokerCommission": 60,
+        "final": 14940,
+        "credit": 14940,
+        "due": 0,
+        "status": "Paid"
+      },
+      "paymentSteps": [
+        {
+          "step": 1,
+          "cash": 14940,
+          "deduction": 0,
+          "reason": "",
+          "credit": 14940,
+          "expectedDue": 0
+        }
+      ]
+    },
+    {
+      "ref": "QA15-B09",
+      "party": "QA15 FARMER E",
+      "village": "QA15 VILLAGE E",
+      "date": "2026-10-15",
+      "product": "QA15 MAIZE",
+      "mode": "Loose",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 500,
+      "looseRatePer20kg": 400,
+      "kantanFilled": 0,
+      "plasticFilled": 0,
+      "emptyBags": 0,
+      "vakals": [],
+      "expense": 0,
+      "expenseName": "",
+      "freight": 0,
+      "weighbridgeMoisturePct": 2,
+      "broker": "",
+      "brokerRatePer100kg": 0,
+      "vehicle": "QA15-VEH-09",
+      "order": "",
+      "expected": {
+        "netKg": 490,
+        "brokerCommission": 0,
+        "final": 9800,
+        "credit": 0,
+        "due": 9800,
+        "status": "Unpaid"
+      },
+      "paymentSteps": []
+    },
+    {
+      "ref": "QA15-B10",
+      "party": "QA15 FARMER E",
+      "village": "QA15 VILLAGE E",
+      "date": "2026-10-15",
+      "product": "QA15 MAIZE",
+      "mode": "Bag",
+      "supplyType": "લૂઝ",
+      "weighbridgeKg": 800,
+      "looseRatePer20kg": 0,
+      "kantanFilled": 16,
+      "plasticFilled": 0,
+      "emptyBags": 0,
+      "vakals": [
+        {
+          "bags": 10,
+          "ratePer20kg": 500,
+          "variety": "QA STANDARD"
+        },
+        {
+          "bags": 6,
+          "ratePer20kg": 600,
+          "variety": "QA PREMIUM"
+        }
+      ],
+      "expense": 100,
+      "expenseName": "QA15 Loading",
+      "freight": 300,
+      "weighbridgeMoisturePct": 0,
+      "broker": "QA15 BROKER",
+      "brokerRatePer100kg": 10,
+      "vehicle": "QA15-VEH-10",
+      "order": "QA15 O10",
+      "expected": {
+        "netKg": 800,
+        "brokerCommission": 80,
+        "final": 21620,
+        "credit": 21620,
+        "due": 0,
+        "status": "Paid"
+      },
+      "paymentSteps": [
+        {
+          "step": 1,
+          "cash": 20000,
+          "deduction": 1620,
+          "reason": "QA15 agreed test deduction",
+          "credit": 21620,
+          "expectedDue": 0
+        }
+      ]
+    }
+  ],
+  "expectedTotals": {
+    "bills": 10,
+    "orders": 3,
+    "parties": 5,
+    "broker": 1,
+    "paymentRecords": 8,
+    "unpaid": 3,
+    "partial": 3,
+    "paid": 4,
+    "grossKg": 4750,
+    "netKg": 4740,
+    "billFinal": 122165,
+    "cash": 74695.5,
+    "deductions": 2120,
+    "credit": 76815.5,
+    "due": 45349.5
+  }
+}

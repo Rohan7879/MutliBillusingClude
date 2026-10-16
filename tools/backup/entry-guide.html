@@ -1,0 +1,203 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<meta name="color-scheme" content="light">
+<link rel="icon" href="data:,">
+<title>MandiBook — 10 Bill Entry Guide</title>
+<style>
+:root{font-family:system-ui,-apple-system,BlinkMacSystemFont,"Segoe UI",sans-serif;color:#19324a;background:#f3f6fa;font-synthesis:none}
+*{box-sizing:border-box}body{margin:0}button,input{font:inherit}button,a{touch-action:manipulation}button{cursor:pointer}
+header{background:#113b60;color:white;padding:22px 28px}
+.header{max-width:1120px;margin:auto;display:flex;align-items:center;justify-content:space-between;gap:16px}
+h1{font-size:24px;line-height:1.3;margin:4px 0}h2{font-size:21px;margin:0 0 12px}h3{font-size:16px;margin:0 0 10px}
+p{line-height:1.6;margin:8px 0}.eyebrow{font-size:11px;font-weight:750;letter-spacing:.12em;text-transform:uppercase}
+header p{color:#c7dbee;font-size:13px;margin:0}.offline{border:1px solid #6e8fae;border-radius:6px;padding:8px 11px;font-size:12px;white-space:nowrap}
+main{max-width:1120px;margin:22px auto;padding:0 22px 40px}.intro{margin-bottom:18px;color:#52687c;font-size:14px}
+.tabs{display:flex;gap:5px;flex-wrap:wrap;border-bottom:1px solid #cfdce6;margin-bottom:22px}
+.tab{border:0;border-bottom:3px solid transparent;background:transparent;color:#52687c;font-weight:650;padding:12px 16px}
+.tab[aria-selected=true]{border-color:#146ab2;color:#095b9f}
+button:focus-visible,a:focus-visible{outline:3px solid #dd8600;outline-offset:3px}
+.panel[hidden]{display:none}.notice{background:#eaf2fb;border-left:3px solid #216dab;padding:12px 16px;margin:14px 0;font-size:14px;line-height:1.6}
+.note{font-size:13px;color:#52687c}.flow{display:flex;gap:8px;align-items:center;flex-wrap:wrap;margin:16px 0;font-size:13px;font-weight:650}
+.flow span{padding:7px 10px;border:1px solid #cfdce6;background:white;border-radius:5px}.flow i{font-style:normal;color:#788da0}
+.table-wrap{overflow:auto;background:white;border:1px solid #d7e1e9;border-radius:8px;margin:12px 0 24px}
+table{border-collapse:collapse;width:100%;font-size:14px}th,td{text-align:left;padding:12px 14px;border-bottom:1px solid #e5ebf0;vertical-align:top;line-height:1.5}
+th{font-size:11px;letter-spacing:.04em;text-transform:uppercase;background:#f8fafc;color:#536a7e;white-space:nowrap}
+tr:last-child td{border-bottom:0}.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+ul,ol{padding-left:22px;line-height:1.7}li{margin:5px 0}.section{margin-bottom:28px}
+.actions{display:flex;align-items:center;justify-content:space-between;gap:10px;margin:18px 0}
+.primary,.secondary{padding:11px 16px;border-radius:6px;font-size:14px;font-weight:650}
+.primary{background:#115f9e;border:1px solid #115f9e;color:white}.secondary{background:white;border:1px solid #c4d3e0;color:#254a68}
+button:disabled{opacity:.45;cursor:default}
+.bill-picks{display:grid;grid-template-columns:repeat(10,minmax(0,1fr));gap:7px;margin:0 0 20px}
+.pick{padding:11px 0;background:white;border:1px solid #cad8e4;border-radius:6px;font-weight:700;color:#335772}
+.pick[aria-pressed=true]{background:#113b60;color:white;border-color:#113b60}
+.bill-head{display:flex;align-items:flex-start;justify-content:space-between;gap:12px;margin-bottom:16px}
+.bill-head h2{margin:3px 0}.bill-head p{color:#52687c;font-size:14px}.status{padding:6px 10px;background:#e8eef5;border:1px solid #cedbe7;border-radius:5px;font-size:12px;font-weight:650;white-space:nowrap}
+.bill-layout{display:grid;grid-template-columns:minmax(0,1.5fr) minmax(260px,1fr);gap:22px;align-items:start}
+.surface{background:white;border:1px solid #d7e1e9;border-radius:8px;padding:20px}
+.fields{display:grid;grid-template-columns:minmax(125px,.8fr) minmax(0,1.2fr);margin:0;font-size:14px}
+.fields dt,.fields dd{padding:11px 0;border-bottom:1px solid #e7edf2;margin:0;overflow-wrap:anywhere}
+.fields dt{color:#536a7e;padding-right:12px}.fields dd{font-weight:650}
+.fields dt:last-of-type,.fields dd:last-of-type{border-bottom:0}
+.expected{background:#113b60;color:#fff;padding:20px;border-radius:8px;margin-bottom:18px}
+.expected .eyebrow{color:#c6d9e9}.expected strong{display:block;font-size:30px;font-weight:750;line-height:1.4;margin:6px 0;font-variant-numeric:tabular-nums}
+.expected p{font-size:14px;color:#d4e3f0}.result-line{display:flex;justify-content:space-between;gap:12px;padding:12px 0;border-bottom:1px solid #d7e1e9;font-size:14px}
+.result-line b{white-space:nowrap}.payments{padding-left:20px;font-size:14px}.payment-due{display:block;font-weight:700;color:#115f9e;margin-top:3px}
+.order-box{border:1px solid #c3d8ea;background:#f2f7fc;padding:14px;border-radius:6px;margin-top:14px;font-size:14px}
+footer{padding-top:22px;border-top:1px solid #d2dee8;color:#607488;font-size:12px;line-height:1.65}
+.summary-grid{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:20px;margin:18px 0 28px}
+.summary-stat{border-top:2px solid #1a649f;padding-top:12px}.summary-stat strong{display:block;font-size:25px;margin-top:7px}.summary-stat span{font-size:13px;color:#52687c}
+@media(max-width:760px){header{padding:18px 16px}.header{align-items:flex-start}.offline{white-space:normal;font-size:11px;max-width:120px}h1{font-size:20px}
+main{padding:0 14px 30px}.tab{padding:11px 10px;font-size:13px}.bill-picks{grid-template-columns:repeat(5,minmax(0,1fr))}
+.bill-layout{grid-template-columns:minmax(0,1fr)}.surface{padding:16px}.summary-grid{grid-template-columns:1fr;gap:14px}.summary-stat strong{font-size:23px}
+th,td{padding:10px;font-size:13px}.fields{grid-template-columns:minmax(110px,.8fr) minmax(0,1.2fr)}}
+@media print{header{background:white;color:#19324a}header p{color:#536a7e}.tabs,.bill-picks,.actions,.offline{display:none}
+main{max-width:none}.bill-layout{grid-template-columns:1.5fr 1fr}.expected{background:white;color:#19324a;border:1px solid #cfdce6}.expected p,.expected .eyebrow{color:#536a7e}.surface{break-inside:avoid}}
+</style>
+</head>
+<body>
+<header><div class="header"><div><div class="eyebrow">MandiBook / Testing companion</div><h1>10 bill entry guide</h1><p>Values yahan dekho. Entry apni MandiBook app mein karo.</p></div><span class="offline">Read-only · No Firebase connection</span></div></header>
+<main>
+<p class="intro">Ye normal browser page hai. Is tab ko Chrome se drag karke alag window bana lo aur MandiBook ke paas rakho. Internet ya local server ke bina bhi ye file khulti hai.</p>
+<div class="tabs" role="tablist" aria-label="Guide sections">
+<button class="tab" id="tab-setup" role="tab" aria-selected="false" aria-controls="setup" tabindex="-1" data-tab="setup">1. Party aur product setup</button>
+<button class="tab" id="tab-bills" role="tab" aria-selected="true" aria-controls="bills" tabindex="0" data-tab="bills">2. B01–B10 bill entries</button>
+<button class="tab" id="tab-results" role="tab" aria-selected="false" aria-controls="results" tabindex="-1" data-tab="results">3. Totals aur backup check</button>
+</div>
+<section class="panel" id="setup" role="tabpanel" aria-labelledby="tab-setup" hidden>
+<h2>Pehle ye 5 parties banao</h2>
+<p>MandiBook ke upar navbar mein <b>Party Master</b> kholo. <b>Add a party</b> form bharo, phir <b>Save Party</b>.</p>
+<div class="flow"><span>Party Master</span><i>→</i><span>Add a party</span><i>→</i><span>Save Party</span></div>
+<div class="table-wrap"><table><caption style="text-align:left;padding:12px 14px;font-weight:650">Exact party names aur villages</caption><thead><tr><th>Party / Firm Name</th><th>Location / Village</th><th>Party Type</th></tr></thead><tbody id="party-rows"></tbody></table></div>
+<ul><li>Har party ka <b>Opening Balance 0</b> aur <b>Credit Limit 0</b>.</li><li>Mobile number required aur unique hai. Apne control/permission wale alag valid numbers use karo; kisi aur ke random numbers nahi.</li><li>Munim, alternate mobile, bank, IFSC aur GSTIN blank. Blacklisted checkbox OFF.</li></ul>
+<div class="section"><h2>2 product templates</h2><p><b>Admin → Settings → Product Templates → New Template</b>. Existing template ko rename nahi karna.</p>
+<div class="table-wrap"><table><thead><tr><th>Product Name</th><th>Bill Series Prefix</th><th>Price Unit</th><th>Deductions</th></tr></thead><tbody><tr><td>QA15 WHEAT</td><td>QW</td><td>Per 20 kg (Man)</td><td>Khali / none</td></tr><tr><td>QA15 MAIZE</td><td>QM</td><td>Per 20 kg (Man)</td><td>Khali / none</td></tr></tbody></table></div><p class="note">WHEAT = ઘઉં; MAIZE = મકાઈ. QA15 sirf test label hai. Varieties: QA STANDARD aur QA PREMIUM. Orders mein bhi same product names use karo.</p></div>
+<div class="section"><h2>Broker aur common date</h2><p>Broker record <b>QA15 BROKER</b>, default commission <b>0</b>. B08/B10 par bill ke andar rate manually bharna hai.</p><p>Har bill, order, payment aur broker payout ki fixed date <b>15/10/2026</b>. Aaj ki date se replace mat karna.</p></div>
+<button class="primary" data-go="bills">Setup ke baad B01 kholo →</button>
+</section>
+<section class="panel" id="bills" role="tabpanel" aria-labelledby="tab-bills">
+<div class="bill-picks" id="bill-picks" aria-label="Choose a bill"></div>
+<div class="bill-head"><div><div class="eyebrow" id="bill-reference"></div><h2 id="bill-title"></h2><p id="bill-subtitle"></p></div><span class="status" id="bill-status"></span></div>
+<div class="notice"><b>Har bill par:</b> Kasar, Kantan/Plastic weight deduction, Utrai, Vakal moisture aur extra-template deductions <b>OFF</b>. Sirf B09 ka weighbridge moisture <b>2% ON</b>. Product/order import ke baad toggles dobara check karo. Core Settings globally mat badlo.</div>
+<div class="bill-layout">
+<div>
+<section class="surface"><h3>New Bill mein ye bharo</h3><dl class="fields" id="bill-fields"></dl>
+<div id="vakal-block"></div><div id="order-block"></div></section>
+<p class="note">Bill number app generate karega. B01 koi button ya actual bill number nahi: Remarks mein QA15-B01 jaisa reference likho. Actual bill number alag note karo.</p>
+</div>
+<aside>
+<div class="expected"><div class="eyebrow">Save se pehle amount match karo</div><strong id="expected-final"></strong><p id="expected-weight"></p></div>
+<section class="surface"><h3>Bill save hone ke baad payment</h3><div id="payment-instructions"></div>
+<div class="result-line"><span>Total credit</span><b id="expected-credit"></b></div>
+<div class="result-line"><span>Remaining due</span><b id="expected-due"></b></div>
+<p class="note">Accounts → Ledger mein exact party aur generated bill select karo. Approval required ho to pehle bill approve karo. Ye guide payment save nahi karti.</p>
+</section>
+</aside>
+</div>
+<div class="actions"><button id="previous" class="secondary">← Previous bill</button><span class="note" id="position"></span><button id="next" class="primary">Next bill →</button></div>
+<p class="note">Mismatch aaye to input badal kar force-match mat karo. Actual bill number, input screen aur result ka screenshot bhejo.</p>
+</section>
+<section class="panel" id="results" role="tabpanel" aria-labelledby="tab-results" hidden>
+<h2>Sirf in 10 bills ke expected totals</h2>
+<p>Purane testing records ho to poore Dashboard ka total alag hoga. Sirf QA15 references/actual IDs aur same date range ko compare karo.</p>
+<div class="summary-grid"><div class="summary-stat"><span>Bill final total</span><strong>₹1,22,165.00</strong></div><div class="summary-stat"><span>Cash + deductions credit</span><strong>₹76,815.50</strong></div><div class="summary-stat"><span>Remaining due</span><strong>₹45,349.50</strong></div></div>
+<div class="table-wrap"><table><caption style="text-align:left;padding:12px 14px;font-weight:650">Bill-wise final, credit aur remaining due</caption><thead><tr><th>Reference</th><th class="num">Bill final</th><th class="num">Credit</th><th class="num">Due</th><th>Status</th></tr></thead><tbody id="summary-rows"></tbody></table></div>
+<ul><li>10 bills · 3 orders · 5 farmer parties · 1 broker.</li><li>8 farmer-payment records; 3 Unpaid, 3 Partial, 4 Paid.</li><li>Cash <b>₹74,695.50</b> + deductions <b>₹2,120</b> = credit <b>₹76,815.50</b>.</li><li>Gross weight 4,750 kg; net weight 4,740 kg.</li></ul>
+<h3>Party-wise due</h3><ul id="party-dues"></ul>
+<h3>Broker payout alag hai</h3><p>B08 commission ₹60 + B10 commission ₹80 = <b>₹140</b>. Accounts → Brokers mein QA15 BROKER ka <b>₹50</b> payout save karo, date 15/10/2026, remark QA15 BROKER PAYOUT. Expected broker due <b>₹90</b>. Ye farmer credit total mein include nahi hai.</p>
+<h3 style="margin-top:24px">Backup ka last check</h3><ol><li>Saved bills reopen karo; B03/B05/B10 ke order links aur payments match karo. Print/PDF preview bhi dekho; test WhatsApp messages mat bhejo.</li><li>Sab data sync ho jaye tab sab devices par entries pause karo.</li><li>Admin → Settings → Backup: <b>Prepare recovery backup → Save JSON recovery file → Choose a saved recovery file</b> se wahi saved copy verify karo.</li><li>Excel full backup nahi. Independent protected copy rakho. Old/archived records ki wajah se backup ka total count 10 se zyada ho sakta hai.</li><li>Isi database mein restore/delete karke test mat karo. Restore ke liye alag isolated target chahiye.</li></ol>
+</section>
+<footer><b>Reference only.</b> Aapne confirm kiya hai ki database sirf testing ka hai. Is file mein Firebase SDK, sign-in, database read/write ya external scripts nahi hain. Calculator ke 10 cases offline passed; app entry, order links, payment saving, print, phone aur downloaded backup ka actual test alag hai. Plan MB-QA-20261015-v1. Baseline configurable deductions OFF rakhta hai; all possible scenarios covered nahi hain.</footer>
+<noscript><p>Is interactive guide ke liye browser JavaScript ON hona chahiye. Same folder mein TEN-BILL-ENTRY-GUIDE.md mein poori text guide hai.</p></noscript>
+</main>
+<script id="entry-plan" type="application/json">{"planId":"MB-QA-20261015-v1","date":"2026-10-15","purpose":"Synthetic manual-entry acceptance dataset, not an import or production seed","parties":[{"id":"A","name":"QA15 FARMER A","village":"QA15 VILLAGE A","type":"Kisan (Farmer)","openingBalance":0,"bills":["QA15-B01","QA15-B02"],"expectedFinal":12500,"expectedCredit":2500,"expectedDue":10000},{"id":"B","name":"QA15 FARMER B","village":"QA15 VILLAGE B","type":"Kisan (Farmer)","openingBalance":0,"bills":["QA15-B03","QA15-B04"],"expectedFinal":26000,"expectedCredit":26000,"expectedDue":0},{"id":"C","name":"QA15 FARMER C","village":"QA15 VILLAGE C","type":"Kisan (Farmer)","openingBalance":0,"bills":["QA15-B05","QA15-B06"],"expectedFinal":32050,"expectedCredit":10500,"expectedDue":21550},{"id":"D","name":"QA15 FARMER D","village":"QA15 VILLAGE D","type":"Kisan (Farmer)","openingBalance":0,"bills":["QA15-B07","QA15-B08"],"expectedFinal":20195,"expectedCredit":16195.5,"expectedDue":3999.5},{"id":"E","name":"QA15 FARMER E","village":"QA15 VILLAGE E","type":"Kisan (Farmer)","openingBalance":0,"bills":["QA15-B09","QA15-B10"],"expectedFinal":31420,"expectedCredit":21620,"expectedDue":9800}],"products":[{"name":"QA15 WHEAT","prefix":"QW","priceUnit":"20kg","extraDeductions":[]},{"name":"QA15 MAIZE","prefix":"QM","priceUnit":"20kg","extraDeductions":[]}],"broker":{"name":"QA15 BROKER","defaultCommission":0,"payout":50,"expectedCommission":140,"expectedBalance":90},"bills":[{"ref":"QA15-B01","party":"QA15 FARMER A","village":"QA15 VILLAGE A","date":"2026-10-15","product":"QA15 WHEAT","mode":"Loose","supplyType":"લૂઝ","weighbridgeKg":200,"looseRatePer20kg":500,"kantanFilled":0,"plasticFilled":0,"emptyBags":0,"vakals":[],"expense":0,"expenseName":"","freight":0,"weighbridgeMoisturePct":0,"broker":"","brokerRatePer100kg":0,"vehicle":"QA15-VEH-01","order":"","expected":{"netKg":200,"brokerCommission":0,"final":5000,"credit":0,"due":5000,"status":"Unpaid"},"paymentSteps":[]},{"ref":"QA15-B02","party":"QA15 FARMER A","village":"QA15 VILLAGE A","date":"2026-10-15","product":"QA15 WHEAT","mode":"Loose","supplyType":"લૂઝ","weighbridgeKg":300,"looseRatePer20kg":500,"kantanFilled":0,"plasticFilled":0,"emptyBags":0,"vakals":[],"expense":0,"expenseName":"","freight":0,"weighbridgeMoisturePct":0,"broker":"","brokerRatePer100kg":0,"vehicle":"QA15-VEH-02","order":"","expected":{"netKg":300,"brokerCommission":0,"final":7500,"credit":2500,"due":5000,"status":"Partial"},"paymentSteps":[{"step":1,"cash":2500,"deduction":0,"reason":"","credit":2500,"expectedDue":5000}]},{"ref":"QA15-B03","party":"QA15 FARMER B","village":"QA15 VILLAGE B","date":"2026-10-15","product":"QA15 WHEAT","mode":"Bag","supplyType":"લૂઝ","weighbridgeKg":500,"looseRatePer20kg":0,"kantanFilled":10,"plasticFilled":0,"emptyBags":0,"vakals":[{"bags":10,"ratePer20kg":600,"variety":"QA STANDARD"}],"expense":0,"expenseName":"","freight":0,"weighbridgeMoisturePct":0,"broker":"","brokerRatePer100kg":0,"vehicle":"QA15-VEH-03","order":"QA15 O03","expected":{"netKg":500,"brokerCommission":0,"final":15000,"credit":15000,"due":0,"status":"Paid"},"paymentSteps":[{"step":1,"cash":15000,"deduction":0,"reason":"","credit":15000,"expectedDue":0}]},{"ref":"QA15-B04","party":"QA15 FARMER B","village":"QA15 VILLAGE B","date":"2026-10-15","product":"QA15 WHEAT","mode":"Bag","supplyType":"લૂઝ","weighbridgeKg":400,"looseRatePer20kg":0,"kantanFilled":0,"plasticFilled":8,"emptyBags":0,"vakals":[{"bags":8,"ratePer20kg":550,"variety":"QA STANDARD"}],"expense":0,"expenseName":"","freight":0,"weighbridgeMoisturePct":0,"broker":"","brokerRatePer100kg":0,"vehicle":"QA15-VEH-04","order":"","expected":{"netKg":400,"brokerCommission":0,"final":11000,"credit":11000,"due":0,"status":"Paid"},"paymentSteps":[{"step":1,"cash":4000,"deduction":0,"reason":"","credit":4000,"expectedDue":7000},{"step":2,"cash":7000,"deduction":0,"reason":"","credit":7000,"expectedDue":0}]},{"ref":"QA15-B05","party":"QA15 FARMER C","village":"QA15 VILLAGE C","date":"2026-10-15","product":"QA15 WHEAT","mode":"Bag","supplyType":"લૂઝ","weighbridgeKg":1000,"looseRatePer20kg":0,"kantanFilled":20,"plasticFilled":0,"emptyBags":0,"vakals":[{"bags":12,"ratePer20kg":500,"variety":"QA STANDARD"},{"bags":8,"ratePer20kg":600,"variety":"QA PREMIUM"}],"expense":0,"expenseName":"","freight":0,"weighbridgeMoisturePct":0,"broker":"","brokerRatePer100kg":0,"vehicle":"QA15-VEH-05","order":"QA15 O05","expected":{"netKg":1000,"brokerCommission":0,"final":27000,"credit":10500,"due":16500,"status":"Partial"},"paymentSteps":[{"step":1,"cash":10000,"deduction":500,"reason":"QA15 agreed test deduction","credit":10500,"expectedDue":16500}]},{"ref":"QA15-B06","party":"QA15 FARMER C","village":"QA15 VILLAGE C","date":"2026-10-15","product":"QA15 WHEAT","mode":"Loose","supplyType":"લૂઝ","weighbridgeKg":250,"looseRatePer20kg":400,"kantanFilled":0,"plasticFilled":0,"emptyBags":0,"vakals":[],"expense":150,"expenseName":"QA15 Loading","freight":200,"weighbridgeMoisturePct":0,"broker":"","brokerRatePer100kg":0,"vehicle":"QA15-VEH-06","order":"","expected":{"netKg":250,"brokerCommission":0,"final":5050,"credit":0,"due":5050,"status":"Unpaid"},"paymentSteps":[]},{"ref":"QA15-B07","party":"QA15 FARMER D","village":"QA15 VILLAGE D","date":"2026-10-15","product":"QA15 MAIZE","mode":"Loose","supplyType":"લૂઝ","weighbridgeKg":200,"looseRatePer20kg":525.5,"kantanFilled":0,"plasticFilled":0,"emptyBags":0,"vakals":[],"expense":0,"expenseName":"","freight":0,"weighbridgeMoisturePct":0,"broker":"","brokerRatePer100kg":0,"vehicle":"QA15-VEH-07","order":"","expected":{"netKg":200,"brokerCommission":0,"final":5255,"credit":1255.5,"due":3999.5,"status":"Partial"},"paymentSteps":[{"step":1,"cash":1255.5,"deduction":0,"reason":"","credit":1255.5,"expectedDue":3999.5}]},{"ref":"QA15-B08","party":"QA15 FARMER D","village":"QA15 VILLAGE D","date":"2026-10-15","product":"QA15 MAIZE","mode":"Bag","supplyType":"લૂઝ","weighbridgeKg":600,"looseRatePer20kg":0,"kantanFilled":12,"plasticFilled":0,"emptyBags":0,"vakals":[{"bags":12,"ratePer20kg":500,"variety":"QA STANDARD"}],"expense":0,"expenseName":"","freight":0,"weighbridgeMoisturePct":0,"broker":"QA15 BROKER","brokerRatePer100kg":10,"vehicle":"QA15-VEH-08","order":"","expected":{"netKg":600,"brokerCommission":60,"final":14940,"credit":14940,"due":0,"status":"Paid"},"paymentSteps":[{"step":1,"cash":14940,"deduction":0,"reason":"","credit":14940,"expectedDue":0}]},{"ref":"QA15-B09","party":"QA15 FARMER E","village":"QA15 VILLAGE E","date":"2026-10-15","product":"QA15 MAIZE","mode":"Loose","supplyType":"લૂઝ","weighbridgeKg":500,"looseRatePer20kg":400,"kantanFilled":0,"plasticFilled":0,"emptyBags":0,"vakals":[],"expense":0,"expenseName":"","freight":0,"weighbridgeMoisturePct":2,"broker":"","brokerRatePer100kg":0,"vehicle":"QA15-VEH-09","order":"","expected":{"netKg":490,"brokerCommission":0,"final":9800,"credit":0,"due":9800,"status":"Unpaid"},"paymentSteps":[]},{"ref":"QA15-B10","party":"QA15 FARMER E","village":"QA15 VILLAGE E","date":"2026-10-15","product":"QA15 MAIZE","mode":"Bag","supplyType":"લૂઝ","weighbridgeKg":800,"looseRatePer20kg":0,"kantanFilled":16,"plasticFilled":0,"emptyBags":0,"vakals":[{"bags":10,"ratePer20kg":500,"variety":"QA STANDARD"},{"bags":6,"ratePer20kg":600,"variety":"QA PREMIUM"}],"expense":100,"expenseName":"QA15 Loading","freight":300,"weighbridgeMoisturePct":0,"broker":"QA15 BROKER","brokerRatePer100kg":10,"vehicle":"QA15-VEH-10","order":"QA15 O10","expected":{"netKg":800,"brokerCommission":80,"final":21620,"credit":21620,"due":0,"status":"Paid"},"paymentSteps":[{"step":1,"cash":20000,"deduction":1620,"reason":"QA15 agreed test deduction","credit":21620,"expectedDue":0}]}],"expectedTotals":{"bills":10,"orders":3,"parties":5,"broker":1,"paymentRecords":8,"unpaid":3,"partial":3,"paid":4,"grossKg":4750,"netKg":4740,"billFinal":122165,"cash":74695.5,"deductions":2120,"credit":76815.5,"due":45349.5}}</script>
+<script>
+"use strict";
+const plan = JSON.parse(document.getElementById("entry-plan").textContent);
+const money = n => "₹" + n.toLocaleString("en-IN", {minimumFractionDigits:2, maximumFractionDigits:2});
+const $ = id => document.getElementById(id);
+let selected = 0;
+function cell(text, numeric=false) {const td=document.createElement("td");td.textContent=String(text);if(numeric)td.className="num";return td;}
+function tableRow(values, numeric=[]) {const row=document.createElement("tr");values.forEach((v,i)=>row.append(cell(v,numeric.includes(i))));return row;}
+plan.parties.forEach(p=>{
+  $("party-rows").append(tableRow([p.name,p.village,p.type]));
+  const li=document.createElement("li");li.textContent=p.name+": "+money(p.expectedDue);$("party-dues").append(li);
+});
+plan.bills.forEach((b,i)=>{
+  const button=document.createElement("button");button.className="pick";button.textContent=b.ref.slice(-3);button.setAttribute("aria-label",b.ref);button.addEventListener("click",()=>{location.hash="b"+String(i+1).padStart(2,"0");});$("bill-picks").append(button);
+  $("summary-rows").append(tableRow([b.ref,money(b.expected.final),money(b.expected.credit),money(b.expected.due),b.expected.status],[1,2,3]));
+});
+function showTab(name) {
+  document.querySelectorAll(".tab").forEach(button=>{const active=button.dataset.tab===name;button.setAttribute("aria-selected",String(active));button.tabIndex=active?0:-1;});
+  document.querySelectorAll(".panel").forEach(panel=>{panel.hidden=panel.id!==name;});
+}
+document.querySelectorAll("[data-tab]").forEach(button=>{
+  button.addEventListener("click",()=>{location.hash=button.dataset.tab==="bills"?"b"+String(selected+1).padStart(2,"0"):button.dataset.tab;});
+  button.addEventListener("keydown",event=>{
+    if(!["ArrowLeft","ArrowRight","Home","End"].includes(event.key))return;
+    event.preventDefault();const tabs=[...document.querySelectorAll(".tab")];const i=tabs.indexOf(button);
+    const j=event.key==="Home"?0:event.key==="End"?tabs.length-1:(i+(event.key==="ArrowRight"?1:-1)+tabs.length)%tabs.length;tabs[j].click();tabs[j].focus();
+  });
+});
+document.querySelectorAll("[data-go]").forEach(button=>button.addEventListener("click",()=>{location.hash="b01";}));
+function renderBill(i){
+ selected=i;const b=plan.bills[i];
+ [...$("bill-picks").children].forEach((button,j)=>button.setAttribute("aria-pressed",String(i===j)));
+ $("bill-reference").textContent=b.ref+" / FIXED DATE 15 OCT 2026";
+ $("bill-title").textContent=b.party;
+ $("bill-subtitle").textContent=b.product+" · "+b.mode+" bill"+(b.order?" · Order-linked":" · Direct entry");
+ $("bill-status").textContent="After payment: "+b.expected.status;
+ const fields=[
+ ["Party / Firm",b.party],["Location / Village",b.village],["Product / Template",b.product],
+ ["Bill Date","15/10/2026"],["Vehicle",b.vehicle+" (test label)"],["Remarks",b.ref],
+ ["Loose Supply toggle",b.mode==="Loose"?"ON":"OFF — Bag bill"],["Supply type","કંતાન લૂઝ"],
+ ["Weighbridge weight",b.weighbridgeKg+" kg"],
+ ...(b.mode==="Loose"?[["Loose price",money(b.looseRatePer20kg)+" / 20 kg"],["All filled / empty bags","0"]]:
+ [["Kantan filled / empty",b.kantanFilled+" / 0"],["Plastic filled / empty",b.plasticFilled+" / 0"]]),
+ ["Weighbridge moisture",b.weighbridgeMoisturePct?"ON · 2% (10 kg cut)":"OFF / 0"],
+ ["Expense",b.expense?b.expenseName+" · "+money(b.expense):"0 / no expense row"],
+ ["Truck freight",money(b.freight)+" — adds to final"],
+ ["Broker",b.broker||"Blank"],
+ ["Broker commission",b.broker?"ON · ₹10 per 100 kg = "+money(b.expected.brokerCommission):"OFF / 0"]
+ ];
+ $("bill-fields").replaceChildren();fields.forEach(([label,value])=>{const dt=document.createElement("dt"),dd=document.createElement("dd");dt.textContent=label;dd.textContent=value;$("bill-fields").append(dt,dd);});
+ $("vakal-block").replaceChildren();
+ if(b.vakals.length){
+   const wrap=document.createElement("div");wrap.className="table-wrap";const table=document.createElement("table"),caption=document.createElement("caption");caption.textContent="Vakal entries · Bhav per 20 kg";caption.style.cssText="text-align:left;padding:12px;font-weight:650";table.append(caption);
+   const thead=document.createElement("thead"),head=document.createElement("tr");["Vakal / Variety","Bags","Bhav"].forEach(t=>{const th=document.createElement("th");th.textContent=t;head.append(th);});thead.append(head);table.append(thead);
+   const tbody=document.createElement("tbody");b.vakals.forEach((v,j)=>tbody.append(tableRow([(j+1)+". "+v.variety,v.bags,money(v.ratePer20kg)])));table.append(tbody);wrap.append(table);$("vakal-block").append(wrap);
+ }
+ $("order-block").replaceChildren();
+ if(b.order){
+   const div=document.createElement("div");div.className="order-box";const title=document.createElement("b");title.textContent="Pehle order banao: "+b.order;
+   const p=document.createElement("p");p.textContent="Orders mein supplier "+b.party+", village "+b.village+", product "+b.product+". Date 15/10/2026; Notes "+b.order+".";
+   const rows=document.createElement("p");rows.textContent=b.vakals.map(v=>v.variety+": "+v.bags+" Bag @ "+money(v.ratePer20kg)+"/20kg").join("; ")+". Delivered So Far 0. Broker "+(b.broker||"blank")+".";
+   const how=document.createElement("p");how.textContent="Save order → New Bill mein wahi order select/import → is guide ka weight, bags aur switches check karo. Actual order number app generate karega. Order total aur bill final extras ki wajah se alag ho sakte hain.";
+   div.append(title,p,rows,how);$("order-block").append(div);
+ }
+ $("expected-final").textContent=money(b.expected.final);
+ $("expected-weight").textContent="Expected net: "+b.expected.netKg+" kg · Broker commission: "+money(b.expected.brokerCommission);
+ $("expected-credit").textContent=money(b.expected.credit);$("expected-due").textContent=money(b.expected.due);
+ $("payment-instructions").replaceChildren();
+ if(!b.paymentSteps.length){const p=document.createElement("p");p.textContent="Koi payment mat banao. Zero-amount entry bhi nahi. Poora final amount due rahega.";$("payment-instructions").append(p);}
+ else{
+   const list=document.createElement("ol");list.className="payments";
+   b.paymentSteps.forEach(s=>{
+     const li=document.createElement("li");li.textContent="Cash "+money(s.cash)+" + deduction "+money(s.deduction)+". Date 15/10/2026; remark "+b.ref+"-P"+s.step+"."+(s.reason?" Deduction reason: "+s.reason+".":"");
+     const due=document.createElement("span");due.className="payment-due";due.textContent="Is save ke baad due: "+money(s.expectedDue);li.append(due);list.append(li);
+   });$("payment-instructions").append(list);
+   if(b.paymentSteps.some(s=>s.deduction)){const note=document.createElement("p");note.className="note";note.textContent="Deduction ko doosri cash payment ki tarah dobara add nahi karna.";$("payment-instructions").append(note);}
+ }
+ $("previous").disabled=i===0;$("next").disabled=i===9;$("position").textContent="Bill "+(i+1)+" of 10";
+}
+$("previous").addEventListener("click",()=>{if(selected>0)location.hash="b"+String(selected).padStart(2,"0");});
+$("next").addEventListener("click",()=>{if(selected<9)location.hash="b"+String(selected+2).padStart(2,"0");});
+function route(){const hash=location.hash.slice(1).toLowerCase();if(hash==="setup"||hash==="results"){showTab(hash);return;}const match=/^b(0[1-9]|10)$/.exec(hash);renderBill(match?Number(match[1])-1:0);showTab("bills");}
+addEventListener("hashchange",route);route();
+</script>
+</body>
+</html>
+
