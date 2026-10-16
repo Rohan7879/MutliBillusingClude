@@ -14,6 +14,7 @@
 window.activeTemplate = null;
 
 let allProductTemplates = {}; // Loaded from Firestore: { id: templateData }
+window.getBillTemplateSnapshot = id => allProductTemplates[id] ? { ...allProductTemplates[id], id } : null;
 
 // ═══════════════════════════════════════════════════════════════════════════════
 // INIT

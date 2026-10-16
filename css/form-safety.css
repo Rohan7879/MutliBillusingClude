@@ -1,0 +1,53 @@
+/* Shared save/draft feedback; scoped modal repairs, no desktop navbar changes. */
+.form-draft-status, .form-operation-status {
+  display: flex; align-items: center; flex-wrap: wrap; gap: 10px;
+  margin: 0 0 16px; padding: 12px 14px; border: 1px solid #cddfec;
+  border-radius: 12px; background: #f2f8fd; color: #36566e;
+  font-size: 13px; line-height: 1.5; overflow-wrap: anywhere;
+}
+.form-draft-status > span { flex: 1 1 240px; }
+.form-draft-status button { padding: 9px 12px; border: 1px solid #bed5e6; border-radius: 8px; background: white; color: #075a9c; font: inherit; font-weight: 700; cursor: pointer; }
+.form-draft-status button[hidden] { display: none; }
+.form-operation-status[data-state="busy"] { border-color: #8ebce0; color: #075a9c; }
+.form-operation-status[data-state="busy"]::before { content: ""; width: 15px; height: 15px; border: 2px solid #bcd6e9; border-top-color: #075a9c; border-radius: 50%; animation: form-save-spin .8s linear infinite; flex: 0 0 auto; }
+.form-operation-status[data-state="success"] { background: #edf9f1; border-color: #b9dfc5; color: #1d6540; }
+.form-operation-status[data-state="error"], .form-draft-status[data-state="error"] { background: #fff3ee; border-color: #eac7b4; color: #954020; }
+.form-operation-status[data-state="warning"] { background: #fff8e8; border-color: #e9d59b; color: #815f12; }
+[aria-busy="true"] button:disabled { cursor: wait; opacity: .7; }
+.form-draft-status button:focus-visible { outline: 3px solid #8ac5ef; outline-offset: 2px; }
+@keyframes form-save-spin { to { transform: rotate(360deg); } }
+@media (prefers-reduced-motion: reduce) { .form-operation-status[data-state="busy"]::before { animation: none; } }
+
+#order-modal, #payment-modal, #template-modal {
+  padding: max(12px, env(safe-area-inset-top, 0px)) max(12px, env(safe-area-inset-right, 0px)) max(12px, env(safe-area-inset-bottom, 0px)) max(12px, env(safe-area-inset-left, 0px));
+  align-items: flex-start; overflow-y: auto; overscroll-behavior: contain;
+}
+#order-modal .modal-box, #payment-modal .modal-content, #template-modal .tmodal-content {
+  min-width: 0; max-height: calc(100vh - 24px);
+  max-height: calc(100dvh - max(12px, env(safe-area-inset-top, 0px)) - max(12px, env(safe-area-inset-bottom, 0px)));
+  overflow-y: auto; overscroll-behavior: contain; scroll-padding-block: 12px 90px;
+}
+#payment-modal .modal-content { margin: auto; width: min(100%, 520px); }
+#order-modal .modal-footer, #payment-modal .modal-button-container, #template-modal .tmodal-footer {
+  position: sticky; bottom: -1px; z-index: 2; background: #fff;
+  padding: 12px 0 0; border-top: 1px solid #e2eaf1; flex-wrap: wrap;
+}
+#order-modal :is(.supplier-grid, .order-editor-fields) > * { min-width: 0; }
+#order-modal :is(input, select) { max-width: 100%; min-width: 0; }
+
+@media (max-width: 700px) {
+  #order-modal .modal-box, #payment-modal .modal-content, #template-modal .tmodal-content { padding: 18px 14px; border-radius: 14px; }
+  #order-modal .order-editor-fields { grid-template-columns: minmax(0, 1fr) !important; gap: 4px !important; }
+  #order-modal .supplier-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  #order-modal :is(input, select), #payment-modal :is(input, select), #template-modal :is(input, select, textarea) { font-size: 16px; }
+  #order-modal .supplier-entry { padding: 12px; }
+  #order-modal .supplier-entry-header { flex-wrap: wrap; gap: 8px; }
+  #order-modal .modal-footer button, #payment-modal .modal-button-container button, #template-modal .tmodal-footer button { flex: 1 1 120px; min-height: 44px; padding: 11px; }
+  .order-toolbar > div:first-child { display: block; }
+  #template-modal .ded-row { align-items: flex-start; flex-wrap: wrap; padding: 10px; }
+  #template-modal .ded-fields { min-width: 0; flex-basis: calc(100% - 34px); }
+  #template-modal .ded-fields :is(input, select, textarea) { min-width: 0; max-width: 100%; }
+  #template-modal .ded-fields .ded-name { width: 100%; flex-basis: 100%; }
+  #template-modal .ded-fields .ded-apply { width: 100%; flex-basis: 100%; }
+  #template-modal .tmodal-header { gap: 12px; }
+}

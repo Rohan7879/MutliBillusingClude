@@ -504,6 +504,7 @@ function updateSelectionSummary() {
 }
 
 function openPaymentModal() {
+  if (window.MandiFormSafety?.isBusy("payment")) return;
   // 🛡️ Safety Fix: Agar currentCustomer missing ho toh URL se naam nikal kar set kar lo
   if (!currentCustomer) {
     const urlParams = new URLSearchParams(window.location.search);
@@ -561,29 +562,34 @@ function openPaymentModal() {
   } else {
     if (modalTitle) modalTitle.textContent = "Record a General Payment";
     if (modalDescription)
-      modalDescription.innerHTML = `Enter details for a general payment to <strong>${currentCustomer.name}</strong>.`;
+      modalDescription.innerHTML = `Enter details for a general payment to <strong>${escapeHtml(currentCustomer.name)}</strong>.`;
   }
 
   if (paymentModal) {
+    paymentModal.querySelector(".form-operation-status")?.remove();
     paymentModal.style.display = "flex";
   } else {
     console.error("Payment modal element not found in DOM!");
   }
 }
 
-function closePaymentModal() {
+let paymentAttemptRef = null;
+function closePaymentModal(saved = false) {
+  if (saved !== true && window.MandiFormSafety?.isBusy("payment")) return;
+  paymentAttemptRef = null;
   paymentModal.style.display = "none";
 }
 
 async function savePayment() {
+  if (window.MandiFormSafety.isBusy("payment")) return;
   const selectedCheckboxes = document.querySelectorAll(".bill-checkbox-ledger:checked");
-  const cashAmount = Number(amountInput.value) || 0;
-  const deductionAmount = Number(deductionAmountInput.value) || 0;
+  const cashAmount = Number(amountInput.value);
+  const deductionAmount = Number(deductionAmountInput.value);
   const deductionReason = deductionReasonInput.value;
   const dateStr = dateInput.value;
   const totalCredit = cashAmount + deductionAmount;
 
-  if (totalCredit <= 0 || !dateStr) {
+  if (amountInput.validity.badInput || deductionAmountInput.validity.badInput || ![cashAmount, deductionAmount, totalCredit].every(Number.isFinite) || cashAmount < 0 || deductionAmount < 0 || totalCredit <= 0 || !dateStr || !Number.isFinite(new Date(dateStr).getTime())) {
     Swal.fire("Invalid Input", "Please enter a date and at least one amount.", "error");
     return;
   }
@@ -609,15 +615,12 @@ async function savePayment() {
     }
   }
 
-  // 🛡️ SAFETY LOCK: Double-click / Duplicate entries se bachne ke liye button disable karo
-  if (saveBtn) {
-    saveBtn.disabled = true;
-    saveBtn.style.opacity = "0.6";
-    saveBtn.style.cursor = "not-allowed";
-    saveBtn.innerHTML = "Saving...";
-  }
+  const operation = MandiFormSafety.begin("payment", { container: paymentModal.querySelector(".modal-content"), button: saveBtn, label: "Saving payment" });
+  if (!operation) return;
+  let committed = false;
+  const paymentRef = paymentAttemptRef ||= paymentsCollection.doc();
 
-  showLoading();
+  showLoading("Saving payment — waiting for server confirmation...");
   let orderSyncFailed = false;
   try {
     const paymentDate = firebase.firestore.Timestamp.fromDate(new Date(dateStr));
@@ -635,12 +638,13 @@ async function savePayment() {
     // (or vice versa) — this is what caused the mismatch you saw.
     await db.runTransaction(async (transaction) => {
       // --- READS FIRST (Firestore transactions require this) ---
+      const existingPayment = await transaction.get(paymentRef);
+      if (existingPayment.exists) return;
       const billRefs = selectedBillIds.map((id) => billsCollection.doc(id));
       const billDocs = await Promise.all(billRefs.map((ref) => transaction.get(ref)));
       const partyDoc = partyRef ? await transaction.get(partyRef) : null;
 
       // --- THEN COMPUTE ---
-      const paymentRef = paymentsCollection.doc();
       const paymentPayload = {
         customerName: currentCustomer.name,
         customerVillage: currentCustomer.village,
@@ -658,7 +662,7 @@ async function savePayment() {
       if (selectedBillIds.length > 0) {
         let remainingCredit = totalCredit;
         billDocs.forEach((billDoc, i) => {
-          if (!billDoc.exists) return;
+          if (!billDoc.exists || billDoc.data().deleted === true) throw new Error("A selected bill is no longer available. Refresh the ledger before paying.");
           const billData = billDoc.data();
           const currentAmountPaid = Number(billData.amountPaid || 0);
           const billTotal = Number(
@@ -681,6 +685,7 @@ async function savePayment() {
           });
           remainingCredit -= paymentForThisBill;
         });
+        if (remainingCredit > 0.01) throw new Error("The selected bills' pending amount changed. Refresh the ledger before paying.");
       }
 
       // --- WRITES LAST ---
@@ -698,6 +703,8 @@ async function savePayment() {
         if (billSerial) affectedOrderIds.add(billSerial);
       });
     });
+    committed = true;
+    operation.message("Payment saved. Checking linked order status...", true);
 
     // Order-status recalculation still runs as a separate step afterwards
     // (it needs a collection query, which Firestore transactions can't do).
@@ -731,7 +738,8 @@ async function savePayment() {
       }
     }
 
-    closePaymentModal();
+    operation.finish("Payment saved and confirmed by the server.");
+    closePaymentModal(true);
     if (orderSyncFailed) {
       Swal.fire(
         "Payment Saved",
@@ -744,17 +752,19 @@ async function savePayment() {
     showCustomerLedger(currentCustomer);
   } catch (error) {
     console.error("Error saving payment:", error);
-    Swal.fire("Error", "Could not save the payment. Kuch bhi save nahi hua — dubara try karein.", "error");
+    hideLoading();
+    if (committed) {
+      operation.finish("Payment saved; the display needs refreshing.", "warning");
+      closePaymentModal(true);
+      Swal.fire("Payment saved", "The payment is saved but a follow-up failed. Refresh the ledger; do not enter it again.", "warning");
+    } else {
+      operation.fail(error);
+      Swal.fire("Payment not confirmed", error.code ? MandiFormSafety.errorMessage(error) : error.message, "error");
+    }
   } finally {
     hideLoading();
 
-    // 🔓 UNLOCK BUTTON: Process khatam hone par button wapas normal karo
-    if (saveBtn) {
-      saveBtn.disabled = false;
-      saveBtn.style.opacity = "1";
-      saveBtn.style.cursor = "pointer";
-      saveBtn.innerHTML = "💾 Save Entry"; // Aapka original button text
-    }
+    operation.finish("Save finished. Review the ledger.", "warning");
   }
 }
 function printLedger() {

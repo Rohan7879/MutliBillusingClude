@@ -218,6 +218,7 @@ async function loadOrderIntoForm() {
     hiddenLinks.value = JSON.stringify(
       selectedSupplierIds.map((supplierIdx, index) => ({ supplierIdx, vakalIndex: index + 1 }))
     );
+    if (typeof billDraft !== "undefined") billDraft?.touch();
 
     Swal.fire({
       icon: "success",

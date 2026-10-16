@@ -3,13 +3,15 @@
 // a stale signed-in screen or accounting data while offline.
 // Bump whenever a core/login script changes so installed phones fetch the
 // current authentication and progress experience on their next launch.
-const STATIC_CACHE = "mandibook-static-v16";
+const STATIC_CACHE = "mandibook-static-v17";
 const STATIC_PATHS = [
   "/manifest.webmanifest",
   "/assets/logo.jpg",
   "/assets/icon-192.jpg",
   "/assets/icon-512.jpg",
   "/css/main.css",
+  "/css/form-safety.css",
+  "/js/core/form-safety.js",
   "/css/workspaces.css?v=16",
   "/js/core/pwa.js",
 ];

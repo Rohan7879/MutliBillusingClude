@@ -78,6 +78,60 @@ document.addEventListener("DOMContentLoaded", () => {
 
 let uniqueCustomers = []; // To hold our customer list
 let uniqueBrokers = []; // 🚀 YE NAYI LINE ADD KARNI HAI
+let billDraft = null;
+let billSaveRef = null;
+let billCommittedId = null;
+let billFormReady = false;
+let billTemplatesReady = false;
+let billEditReady = !new URLSearchParams(location.search).has("editId") && !new URLSearchParams(location.search).has("correctionOf");
+
+function initializeBillDraft() {
+  const form = document.getElementById("estimateForm");
+  if (!form || billDraft || !billFormReady || !billTemplatesReady || !billEditReady) return;
+  const kind = "bill:" + (form.dataset.editId ? "edit:" + form.dataset.editId : form.dataset.correctionOf ? "correction:" + form.dataset.correctionOf : "new");
+  billDraft = window.MandiFormSafety?.createDraft({
+    container: form, kind,
+    capture: () => ({ fields: MandiFormSafety.fields(form),
+      templateId: window.activeTemplate?.id || "", template: JSON.stringify(window.activeTemplate || null),
+      expenses: form.querySelectorAll(".expense-row").length,
+      version: JSON.stringify(editModeLastUpdatedAt), requestId: billSaveRef?.id || "",
+      closeOrder: document.getElementById("close_order_checkbox")?.checked || false,
+    }),
+    restore: async data => {
+      if (!Array.isArray(data.fields) || data.fields.length > 500 || !Number.isInteger(data.expenses) || data.expenses < 0 || data.expenses > 100) throw new Error("Invalid draft structure. Saved copy retained.");
+      if (form.dataset.editId && data.version !== JSON.stringify(editModeLastUpdatedAt)) throw new Error("This bill changed since the draft was made. Review the fresh bill; the draft was not applied.");
+      const template = window.getBillTemplateSnapshot?.(data.templateId);
+      if (data.templateId && (!template || JSON.stringify(template) !== data.template)) throw new Error("The product template changed or is unavailable. This draft was not applied; review the template first.");
+      if (data.templateId) window.selectProductTemplateForBill({ id: data.templateId });
+      else {
+        window.activeTemplate = null;
+        renderTemplateDeductionsInForm();
+      }
+      const expenses = document.getElementById("expense_list");
+      expenses.replaceChildren();
+      for (let i = 0; i < data.expenses; i++) addExpense();
+      for (const name of ["linked_order_id", "linked_supplier_idx", "linked_order_supplier_links"]) {
+        if (!form.querySelector(`[name="${name}"]`) && data.fields.some(field => field.key === `name:${name}`)) {
+          const field = document.createElement("input"); field.type = "hidden"; field.name = name;
+          field.id = { linked_order_id: "linked-order-id", linked_supplier_idx: "linked-supplier-idx", linked_order_supplier_links: "linked-order-supplier-links" }[name];
+          form.append(field);
+        }
+      }
+      MandiFormSafety.restoreFields(form, data.fields);
+      const closeOrder = document.getElementById("close_order_checkbox");
+      if (closeOrder) closeOrder.checked = !!data.closeOrder;
+      const linked = form.querySelector('[name="linked_order_id"]')?.value;
+      const orderInfo = document.getElementById("order-info");
+      if (orderInfo && linked) { orderInfo.style.display = "block"; orderInfo.textContent = "Linked order restored from draft. Review this order before generating the bill."; }
+      const closeWrap = document.getElementById("close-order-wrap");
+      if (closeWrap) closeWrap.style.display = linked ? "flex" : "none";
+      if (/^[A-Za-z0-9]{20}$/.test(data.requestId || "")) billSaveRef = billsCollection.doc(data.requestId);
+      updateTotalBags(); updateExpensesSubtotal(); updateLiveBillSummary();
+    },
+  });
+}
+document.addEventListener("mandibook:product-templates-ready", () => { billTemplatesReady = true; initializeBillDraft(); });
+window.addEventListener("mandibook:access-ready", initializeBillDraft);
 function lockSelectedCustomer(customer) {
   const name = document.querySelector('input[name="customer_name"]');
   const village = document.querySelector('input[name="village"]');
@@ -336,6 +390,8 @@ function initializeIndexPage() {
       .then((doc) => {
         if (doc.exists) {
           populateFormForEdit({ ...doc.data(), id: doc.id }, { correction: Boolean(correctionOf) });
+          billEditReady = true;
+          initializeBillDraft();
         } else {
           Swal.fire({
             icon: "error",
@@ -360,6 +416,8 @@ function initializeIndexPage() {
 
   // Update the total immediately when the page loads
   updateTotalBags();
+  billFormReady = true;
+  initializeBillDraft();
 }
 
 function updateLiveBillSummary() {
@@ -450,43 +508,14 @@ function initializeBillWorkspace() {
 let editModeLastUpdatedAt = null;
 
 window.cancelEditMode = function () {
+  if (window.MandiFormSafety?.isBusy("bill")) return;
+  if (billDraft && !billDraft.confirmLeave()) return;
+  billDraft?.dispose(); billDraft = null;
+  // Start with a fresh form and URL; don't mix edit/correction drafts into new bills.
+  window.location.href = "bill-create.html";
+  return;
   console.log("Cancel Edit trigger hua! 🚀"); // Debugging ke liye (console mein check karna)
 
-  // 1. Form ko saaf (reset) karo aur Edit ID hatao
-  const form = document.getElementById("estimateForm");
-  if (form) {
-    form.reset();
-    if (form.dataset.editId) {
-      delete form.dataset.editId;
-    }
-    if (form.dataset.correctionOf) {
-      delete form.dataset.correctionOf;
-    }
-  }
-
-  // 2. Orange wala banner screen se hatao
-  const banner = document.getElementById("edit-mode-banner");
-  if (banner) {
-    banner.remove();
-  }
-
-  // 3. Form ke chaaro taraf se orange border (class) hatao
-  const formCard = document.getElementById("bill_creation_form");
-  if (formCard) {
-    formCard.classList.remove("edit-mode-active");
-  }
-
-  // 4. Edit mode ka time reset karo (taaki naya bill ban sake)
-  if (typeof editModeLastUpdatedAt !== "undefined") {
-    editModeLastUpdatedAt = null;
-  }
-
-  // 🔓 5. Cancel karne par Product/Template dropdown ko wapas khol do
-  const templateDropdown = document.querySelector('#product, #productTemplate, #productId, select[name="product"]');
-  if (templateDropdown) {
-    templateDropdown.disabled = false;
-    templateDropdown.title = "";
-  }
 };
 
 function populateFormForEdit(data, options = {}) {
@@ -688,8 +717,8 @@ function addExpense(name = "", amount = "") {
   const newRow = document.createElement("div");
   newRow.classList.add("expense-row");
   newRow.innerHTML = `
-        <input type="text" name="expense_name" placeholder="ખર્ચનું નામ (Expense Name)" value="${name}">
-        <input type="number" name="expense_amount" min="0" placeholder="રકમ (Amount)" value="${amount}">
+        <input type="text" name="expense_name" placeholder="ખર્ચનું નામ (Expense Name)" value="${escapeHtml(name)}">
+        <input type="number" name="expense_amount" min="0" placeholder="રકમ (Amount)" value="${escapeHtml(amount)}">
         <button type="button" class="remove-expense-btn" onclick="this.parentElement.remove(); updateExpensesSubtotal();">Remove</button>
     `;
   expenseList.appendChild(newRow);
@@ -1173,10 +1202,12 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
   return data;
 }
 async function collectData() {
-  showLoading();
+  if (billCommittedId) { window.location.href = `final.html?id=${billCommittedId}`; return; }
   const form = document.getElementById("estimateForm");
   const submitButton = form.querySelector('button[type="submit"]');
-  submitButton.disabled = true;
+  const operation = MandiFormSafety.begin("bill", { container: form, button: submitButton, label: "Saving bill" });
+  if (!operation) return;
+  showLoading("Saving bill — waiting for server confirmation...");
 
   try {
     // 1. Determine the current financial year
@@ -1243,11 +1274,14 @@ async function collectData() {
     // failure). A crash/network drop between any of those could leave a
     // bill created with the customer's balance never updated to match —
     // same bug class already fixed for payments, now closed here too. ---
-    const billRef = billsCollection.doc();
+    const billRef = billSaveRef ||= billsCollection.doc();
+    billDraft?.touch(); billDraft?.flush();
     const partyRef = customerId ? db.collection("parties").doc(customerId) : null;
 
-    const { newSerialNo, balanceUpdated } = await db.runTransaction(async (transaction) => {
+    const { alreadySaved = false } = await db.runTransaction(async (transaction) => {
       // READS FIRST (Firestore transactions require this)
+      const existing = await transaction.get(billRef);
+      if (existing.exists) return { alreadySaved: true };
       const counterDoc = await transaction.get(counterRef);
       const partyDoc = partyRef ? await transaction.get(partyRef) : null;
 
@@ -1293,6 +1327,15 @@ async function collectData() {
       return { newSerialNo: newCounterValue, balanceUpdated: didUpdateBalance };
     });
 
+    billCommittedId = billRef.id;
+    billDraft?.saved();
+    operation.message("Bill saved. Finishing linked updates; do not create it again.", true);
+    if (alreadySaved) {
+      operation.finish("This bill was already saved. Opening its details.");
+      window.location.href = `final.html?id=${billRef.id}`;
+      return;
+    }
+
     const docRef = billRef;
     await recordAudit(correctionOf ? "bill.correction_created" : "bill.created", "bill", docRef.id, {
       after: billAuditSnapshot(data),
@@ -1327,86 +1370,35 @@ async function collectData() {
 
     await checkAndSendWhatsApp(data, docRef.id);
     window.location.href = `final.html?id=${docRef.id}`;
-    // ==================== SMART WHATSAPP AUTOMATION (WITH ON-THE-FLY NUMBER PROMPT) ====================
-
-    window.checkAndSendWhatsApp = function (billData) {
-      const isAutoSendOn = localStorage.getItem("whatsapp_auto_send") === "true";
-      if (!isAutoSendOn) return; // Agar toggle OFF hai toh kuch mat karo
-
-      let phone = billData.farmerPhone;
-
-      // 🔍 AGAR PHONE NUMBER NAHI HAI, TOH WAHIN SE POPUP MEIN MAANG LO!
-      if (!phone || phone.trim() === "" || phone === "undefined" || phone.length < 10) {
-        Swal.fire({
-          title: "📱 Kisan ka Number Darj Nahi Hai",
-          text: "Kya aap WhatsApp par parchi bhejne ke liye kisan ka 10-digit mobile number yahan enter karna chahte hain?",
-          input: "text",
-          inputPlaceholder: "Enter 10-digit mobile number...",
-          showCancelButton: true,
-          confirmButtonText: "Send WhatsApp",
-          cancelButtonText: "Skip",
-          confirmButtonColor: "#27ae60",
-          cancelButtonColor: "#e74c3c",
-        }).then((result) => {
-          if (result.isConfirmed && result.value) {
-            let enteredPhone = result.value.trim();
-            if (enteredPhone.length >= 10) {
-              billData.farmerPhone = enteredPhone;
-              executeWhatsAppSend(billData);
-            } else {
-              Swal.fire({
-                icon: "error",
-                title: "Invalid Number",
-                text: "Kripya sahi 10-digit mobile number dalein.",
-              });
-            }
-          }
-        });
-        return;
-      }
-
-      // Agar number pehle se hi form mein hai, toh seedha bhej do
-      executeWhatsAppSend(billData);
-    };
-
-    // Internal helper to trigger WhatsApp URL
-    function executeWhatsAppSend(billData) {
-      let message =
-        `Namaste Kisan Ji, ${
-          globalSettings && globalSettings.companyName ? globalSettings.companyName : "Hamari Company"
-        } mein aapka swagat hai. 🙏\n\n` +
-        `📋 *Bill No:* ${billData["Serial No"] || "-"}\n` +
-        `🌾 *Item:* ${billData.itemName}\n` +
-        `⚖️ *Weight / Bori:* ${billData.bags} Bori (${billData.weight} Quintal)\n` +
-        `💰 *Rate:* ₹${billData.rate} / Quintal\n` +
-        `💵 *Total Amount:* ₹${billData.totalAmount}\n\n` +
-        `Aapka maal darj ho chuka hai. Dhanyawad! - ${
-          globalSettings && globalSettings.companyName ? globalSettings.companyName : "Company"
-        }`;
-
-      let encodedMessage = encodeURIComponent(message);
-      let whatsappUrl = `https://wa.me/91${billData.farmerPhone}?text=${encodedMessage}`;
-
-      window.open(whatsappUrl, "_blank");
-    }
   } catch (error) {
+    hideLoading();
+    if (billCommittedId) {
+      operation.finish("Bill saved; a follow-up update needs review.", "warning");
+      await Swal.fire("Bill saved — follow-up needs review", "The bill is saved. A linked order, commission or sharing update did not finish. Do not create this bill again; review its details and linked records.", "warning");
+      window.location.href = `final.html?id=${billCommittedId}`;
+      return;
+    }
+    operation.fail(error);
     if (error.message && error.message.startsWith("VALIDATION_ERROR:")) {
       const msg = error.message.replace("VALIDATION_ERROR: ", "");
       Swal.fire({ icon: "error", title: "⚠️ Validation Error", text: msg, confirmButtonColor: "#005a9e" });
     } else {
       console.error("Transaction failed or error adding document: ", error);
-      alert("Could not save the bill. Please try again.");
+      Swal.fire("Bill not confirmed", MandiFormSafety.errorMessage(error), "error");
     }
   } finally {
-    submitButton.disabled = false;
+    operation.finish(billCommittedId ? "Bill saved and confirmed by the server." : "Review your inputs before retrying.", billCommittedId ? "success" : "error");
     hideLoading();
   }
 }
 async function updateData(docId) {
-  showLoading("Updating bill...");
+  if (billCommittedId) { window.location.href = `final.html?id=${billCommittedId}`; return; }
   const form = document.getElementById("estimateForm");
   const submitButton = form.querySelector('button[type="submit"]');
-  submitButton.disabled = true;
+  const operation = MandiFormSafety.begin("bill", { container: form, button: submitButton, label: "Updating bill" });
+  if (!operation) return;
+  billDraft?.flush();
+  showLoading("Updating bill — waiting for server confirmation...");
 
   const billRef = billsCollection.doc(docId);
   try {
@@ -1508,6 +1500,9 @@ async function updateData(docId) {
         }
       }
     });
+    billCommittedId = docId;
+    billDraft?.saved();
+    operation.message("Bill update saved. Finishing follow-up work; do not submit again.", true);
     await recordAudit("bill.updated", "bill", docId, {
       before: billAuditSnapshot(originalData),
       after: billAuditSnapshot({ ...originalData, ...newData }),
@@ -1524,6 +1519,14 @@ async function updateData(docId) {
     window.location.href = `final.html?id=${docId}`;
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
+    hideLoading();
+    if (billCommittedId) {
+      operation.finish("Bill update saved; a follow-up needs review.", "warning");
+      await Swal.fire("Bill updated", "The bill update is saved, but a follow-up did not finish. Do not submit it again. Review its details.", "warning");
+      window.location.href = `final.html?id=${docId}`;
+      return;
+    }
+    operation.fail(error);
     if (message.startsWith("VALIDATION_ERROR:")) {
       const msg = message.replace("VALIDATION_ERROR: ", "");
       Swal.fire({ icon: "error", title: "⚠️ Validation Error", text: msg, confirmButtonColor: "#005a9e" });
@@ -1553,10 +1556,10 @@ async function updateData(docId) {
       });
     } else {
       console.error("Error updating document: ", error);
-      alert("Could not update the bill. Please try again.");
+      Swal.fire("Update not confirmed", MandiFormSafety.errorMessage(error), "error");
     }
   } finally {
-    submitButton.disabled = false;
+    operation.finish(billCommittedId ? "Bill update confirmed by the server." : "Review your inputs before retrying.", billCommittedId ? "success" : "error");
     hideLoading();
   }
 }

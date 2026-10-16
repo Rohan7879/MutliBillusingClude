@@ -196,6 +196,9 @@ async function saveBillWorkflowSettings() {
   const itemLabelSelect = document.getElementById("item-label-mode-select");
   const status = document.getElementById("print-policy-status");
   if (!select) return;
+  const container = select.closest(".section-card");
+  const operation = MandiFormSafety.begin("print-policy", { container, button: container.querySelector("button"), label: "Saving print policy" });
+  if (!operation) return;
   try {
     await billWorkflowRef.set(
       {
@@ -211,9 +214,11 @@ async function saveBillWorkflowSettings() {
           ? "Only approved or locked bills can be printed."
           : "Draft bills can also be printed.";
     showToast("✅ Print policy saved.", "success");
+    operation.finish("Print policy and item label saved and confirmed.");
   } catch (error) {
     console.error("Could not save print policy", error);
-    showToast("Could not save print policy.", "error");
+    operation.fail(error);
+    showToast(MandiFormSafety.errorMessage(error), "error");
   }
 }
 
@@ -381,6 +386,9 @@ function movePrintLayoutItem(gridKey, index, direction) {
 }
 
 async function savePrintLayoutSettings() {
+  const container = document.getElementById("print-layout-details-list").closest(".section-card");
+  const operation = MandiFormSafety.begin("print-layout", { container, button: container.querySelector(".save-btn"), label: "Saving print layout" });
+  if (!operation) return;
   try {
     await db.collection("settings").doc("printLayout").set({
       detailsGridOrder: printLayoutState.detailsGridOrder,
@@ -388,9 +396,11 @@ async function savePrintLayoutSettings() {
       updatedAt: firebase.firestore.FieldValue.serverTimestamp(),
     });
     showToast("✅ Print layout order saved!");
+    operation.finish("Print layout saved and confirmed by the server.");
   } catch (e) {
     console.error("Error saving print layout order:", e);
-    showToast("Could not save layout order.", "error");
+    operation.fail(e);
+    showToast(MandiFormSafety.errorMessage(e), "error");
   }
 }
 window.movePrintLayoutItem = movePrintLayoutItem;
@@ -581,6 +591,10 @@ function setupDeductionForm() {
   if (!form) return;
   form.addEventListener("submit", async (e) => {
     e.preventDefault();
+    const values = ["kasarPercentage", "kantanWeight", "plasticWeight", "utraiPercentage"].map(key => Number(getVal(key)));
+    if (values.some(value => !Number.isFinite(value) || value < 0)) { showToast("Enter valid, non-negative deduction values.", "error"); return; }
+    const operation = MandiFormSafety.begin("settings", { container: form, button: form.querySelector('[type="submit"]'), label: "Saving settings" });
+    if (!operation) return;
     try {
       await deductionsRef.set({
         kasarPercentage: Number(getVal("kasarPercentage")),
@@ -589,8 +603,10 @@ function setupDeductionForm() {
         utraiPercentage: Number(getVal("utraiPercentage")),
       });
       showToast("✅ Core settings saved!", "success");
+      operation.finish("Core settings saved and confirmed by the server.");
     } catch (e) {
-      showToast("Could not save settings.", "error");
+      operation.fail(e);
+      showToast(MandiFormSafety.errorMessage(e), "error");
     }
   });
 }
@@ -666,6 +682,8 @@ function renderTemplateList() {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 function openNewTemplateModal() {
+  if (MandiFormSafety.isBusy("template")) return;
+  document.querySelector("#template-modal .form-operation-status")?.remove();
   activeTemplateId = null;
   document.getElementById("modal-template-name").value = "";
   document.getElementById("modal-series-prefix").value = "";
@@ -676,6 +694,8 @@ function openNewTemplateModal() {
 }
 
 function editTemplate(id) {
+  if (MandiFormSafety.isBusy("template")) return;
+  document.querySelector("#template-modal .form-operation-status")?.remove();
   const t = currentTemplates[id];
   if (!t) return;
   activeTemplateId = id;
@@ -689,6 +709,7 @@ function editTemplate(id) {
 }
 
 function closeTemplateModal() {
+  if (window.MandiFormSafety?.isBusy("template")) return;
   document.getElementById("template-modal").style.display = "none";
   activeTemplateId = null;
 }
@@ -1312,6 +1333,7 @@ function reorderDeductions(from, to) {
 // ═══════════════════════════════════════════════════════════════════════════════
 
 async function saveTemplate() {
+  if (window.MandiFormSafety.isBusy("template")) return;
   const name = document.getElementById("modal-template-name").value.trim();
   const prefix = document.getElementById("modal-series-prefix").value.trim().toUpperCase();
   const priceUnit = document.getElementById("modal-price-unit").value;
@@ -1375,15 +1397,22 @@ async function saveTemplate() {
   }
 
   const id = activeTemplateId || `tpl_${Date.now()}`;
+  const operation = MandiFormSafety.begin("template", { container: document.querySelector(".tmodal-content"), button: document.querySelector('.tmodal-footer .btn-save'), label: "Saving template" });
+  if (!operation) return;
+  const previous = currentTemplates[id];
   currentTemplates[id] = { name, seriesPrefix: prefix, priceUnit, deductions };
 
   try {
     await templatesRef.set({ templates: currentTemplates });
+    operation.finish("Template saved and confirmed by the server.");
     showToast(`✅ Template "${name}" saved!`, "success");
     closeTemplateModal();
     renderTemplateList();
   } catch (e) {
-    showToast("Could not save template.", "error");
+    if (previous) currentTemplates[id] = previous;
+    else delete currentTemplates[id];
+    operation.fail(e);
+    showToast(MandiFormSafety.errorMessage(e), "error");
   }
 }
 

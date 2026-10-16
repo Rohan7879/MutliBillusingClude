@@ -10,6 +10,9 @@ let allOrders = [];
 let currentFilter = "All";
 let editingOrderId = null;
 let supplierCount = 0;
+let orderDraft = null;
+let orderSaveRef = null;
+let orderEditVersion = null;
 
 function setOrderSyncStatus(message, isError = false) {
   const target = document.getElementById("orderSyncStatus");
@@ -407,9 +410,15 @@ async function togglePaymentStatus(orderId) {
     }
   }
 }
-function closeOrderModal() {
+function closeOrderModal(saved = false) {
+  if (saved !== true && window.MandiFormSafety?.isBusy("order")) return;
+  if (saved !== true && orderDraft && !orderDraft.confirmLeave()) return;
+  if (saved === true) orderDraft?.saved();
+  orderDraft?.dispose();
+  orderDraft = null;
   document.getElementById("order-modal").classList.remove("open");
   editingOrderId = null;
+  orderSaveRef = null;
 }
 function addSupplierEntry(data = {}) {
   supplierCount++;
@@ -421,14 +430,14 @@ function addSupplierEntry(data = {}) {
   div.innerHTML = `
     <div class="supplier-entry-header" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;">
       <span style="font-weight: bold; color: #005a9e; font-size: 15px;">Vakal ${idx}</span>
-      <button class="remove-supplier-btn" onclick="document.getElementById('supplier-${idx}').remove()">✕ Remove</button>
+      <button type="button" class="remove-supplier-btn" onclick="document.getElementById('supplier-${idx}').remove(); orderDraft?.touch()">✕ Remove</button>
     </div>
 
     <!-- Variety Dropdown -->
   <div style="margin-bottom: 10px;">
       <label style="font-size: 12px; font-weight: 600; color: #495057; display: block; margin-bottom: 2px;">Variety *</label>
       <input type="text" name="s-variety-${idx}" list="variety-options-list" placeholder="Type or select variety..." value="${
-    data.variety || ""
+    escapeHtml(data.variety || "")
   }" oninput="this.value = this.value.toUpperCase()" style="width: 100%; padding: 10px 13px; border: 1.5px solid #dee2e6; border-radius: 8px; font-size: 14px; outline: none; text-transform: uppercase;"/>
       
       <datalist id="variety-options-list">
@@ -444,7 +453,7 @@ function addSupplierEntry(data = {}) {
       </div>
       <div class="ff" style="margin:0;">
         <label>Quantity</label>
-        <input type="number" name="s-qty-${idx}" placeholder="0" value="${data.quantity || ""}"/>
+        <input type="number" name="s-qty-${idx}" min="0" step="any" placeholder="0" value="${escapeHtml(data.quantity ?? "")}"/>
       </div>
       <div class="ff" style="margin:0;">
         <label>Unit</label>
@@ -457,7 +466,7 @@ function addSupplierEntry(data = {}) {
       </div>
       <div class="ff" style="margin:0;">
         <label>Rate (Price)</label>
-        <input type="number" name="s-price-${idx}" placeholder="0" step="any" value="${data.price || ""}"/>
+        <input type="number" name="s-price-${idx}" min="0" placeholder="0" step="any" value="${escapeHtml(data.price ?? "")}"/>
       </div>
       <div class="ff" style="margin:0;">
         <label>Price Per</label>
@@ -468,10 +477,11 @@ function addSupplierEntry(data = {}) {
       </div>
       <div class="ff" style="margin:0;">
         <label>Delivered So Far</label>
-        <input type="number" name="s-delivered-${idx}" placeholder="0" value="${data.delivered || 0}"/>
+        <input type="number" name="s-delivered-${idx}" min="0" step="any" placeholder="0" value="${escapeHtml(data.delivered ?? 0)}"/>
       </div>
     </div>`;
   document.getElementById("supplier-entries").appendChild(div);
+  orderDraft?.touch();
 }
 
 // =====================================================================
@@ -480,203 +490,142 @@ function addSupplierEntry(data = {}) {
 // =====================================================================
 // Order Number Generator (Matched with your 'counters' DB collection)
 // =====================================================================
-async function getNextOrderNumber() {
-  // 1. Financial Year nikalne ka logic
-  const now = new Date();
-  const currentYear = now.getFullYear();
-  const currentMonth = now.getMonth();
-
-  let fy = "";
-  if (currentMonth < 3) {
-    fy = String(currentYear - 1).slice(-2) + String(currentYear).slice(-2);
-  } else {
-    fy = String(currentYear).slice(-2) + String(currentYear + 1).slice(-2);
-  }
-
-  // 2. Naya Path: "counters" collection aur document ka naam "orderCounter_FY2627"
-  const counterRef = db.collection("counters").doc("orderCounter_FY" + fy);
-
-  try {
-    return await db.runTransaction(async (transaction) => {
-      const doc = await transaction.get(counterRef);
-      let nextNum = 1;
-
-      // Aapke DB ke hisaab se 'currentNumber' check kar rahe hain
-      if (doc.exists && doc.data().currentNumber) {
-        nextNum = doc.data().currentNumber + 1;
-      }
-
-      // Naya number 'currentNumber' field mein hi save karenge
-      transaction.set(counterRef, { currentNumber: nextNum }, { merge: true });
-
-      // Zero lagakar format karo (0001, 0002)
-      const formattedNum = String(nextNum).padStart(4, "0");
-
-      // Output: ORD-2627-0001
-      return "ORD-" + fy + "-" + formattedNum;
-    });
-  } catch (error) {
-    console.error("Order Number generate karne mein error:", error);
-    return "ORD-" + fy + "-" + Date.now().toString().slice(-4);
-  }
+function orderNumberSeries(now = new Date()) {
+  const year = now.getFullYear() - (now.getMonth() < 3 ? 1 : 0);
+  return String(year).slice(-2) + String(year + 1).slice(-2);
 }
 
-// =====================================================================
-// Aapka Updated saveOrder Function (Strict Validation Ke Sath)
-// =====================================================================
-async function saveOrder() {
-  const rawDate = document.getElementById("order-date")?.value || "";
-  let formattedDate = rawDate;
-  if (rawDate.includes("-")) {
-    const parts = rawDate.split("-");
-    if (parts.length === 3) {
-      formattedDate = `${parts[2]}/${parts[1]}/${parts[0]}`;
-    }
-  }
-
-  const brokerName = document.getElementById("order-broker")?.value || "";
-  const notes = document.getElementById("order-notes")?.value || "";
-
-  const baseName = document.getElementById("order-supplier")?.value?.trim().toUpperCase() || "";
-  const villageVal = document.getElementById("order-village")?.value?.trim().toUpperCase() || "";
-
-  if (!baseName) {
-    Swal.fire("Error", "Please enter Supplier / Customer name.", "error");
-    return;
-  }
-
-  // 🚨 STRICT VALIDATION: Agar Party Master mein naam nahi hai toh error dekar rok do
-  if (!window.validPartyNames || !window.validPartyNames.includes(baseName)) {
-    Swal.fire({
-      icon: "error",
-      title: "Party Not Found! 🛑",
-      text: `"${baseName}" Party Master mein nahi hai. Pehle Party Master mein khata banayein, tabhi order book hoga.`,
-      confirmButtonColor: "#d33",
-    });
-    return; // Code yahin ruk jayega, order save nahi hoga
-  }
-
-  const supplierName = villageVal ? `${baseName} (${villageVal})` : baseName;
-
-  // Purana 'customers' collection auto-sync yahan se hata diya gaya hai
-  // kyunki ab hum sirf Party Master par depend kar rahe hain.
-
-  const prodDropdowns = document.querySelectorAll('select[name^="s-product-"]');
-  if (prodDropdowns.length === 0) {
-    Swal.fire("Error", "Please add at least one Vakal item.", "error");
-    return;
-  }
-
-  let suppliers = [];
-  let valid = true;
-
-  prodDropdowns.forEach((prodDropdown) => {
-    const nameAttr = prodDropdown.getAttribute("name") || "";
-    const idx = nameAttr.split("-")[2] || "1";
-
-    const vakalTitle = document.querySelector(`[name="s-title-${idx}"]`)?.value?.trim() || `Vakal ${idx}`;
-    const prodId = prodDropdown.value || "";
-    const varietyVal = (document.querySelector(`[name="s-variety-${idx}"]`)?.value || "").trim().toUpperCase();
-
-    if (!prodId) {
-      valid = false;
-      return;
-    }
-
-    const prodName =
-      prodDropdown.options[prodDropdown.selectedIndex]?.getAttribute("data-name") ||
-      prodDropdown.options[prodDropdown.selectedIndex]?.text ||
-      "";
-
-    suppliers.push({
-      variety: varietyVal,
-      vakalTitle: vakalTitle,
-      productId: prodId,
-      product: prodName,
-      quantity: Number(document.querySelector(`[name="s-qty-${idx}"]`)?.value) || 0,
-      unit: document.querySelector(`[name="s-unit-${idx}"]`)?.value || "Man",
-      price: Number(document.querySelector(`[name="s-price-${idx}"]`)?.value) || 0,
-      priceUnit: document.querySelector(`[name="s-priceunit-${idx}"]`)?.value || "20kg",
-      delivered: Number(document.querySelector(`[name="s-delivered-${idx}"]`)?.value) || 0,
-    });
-
-    if (varietyVal) {
-      const varietyId = varietyVal.toLowerCase().replace(/\s+/g, "_");
-      db.collection("varieties")
-        .doc(varietyId)
-        .set({ name: varietyVal }, { merge: true })
-        .catch(() => {});
-    }
-  });
-
-  if (!valid) {
-    Swal.fire({
-      icon: "error",
-      title: "Fill all required fields!",
-      toast: true,
-      position: "top-end",
-      showConfirmButton: false,
-      timer: 2000,
-    });
-    return;
-  }
-
-  try {
-    const orderData = {
-      date: formattedDate,
-      broker: brokerName,
-      supplierName: supplierName,
-      notes: notes,
-      suppliers: suppliers,
-      updatedAt: Date.now(),
+function readOrderItems() {
+  return [...document.querySelectorAll('#supplier-entries .supplier-entry')].map(row => {
+    const select = row.querySelector('[name^="s-product-"]');
+    const value = part => row.querySelector('[name^="s-' + part + '-"]')?.value ?? "";
+    return {
+      variety: value("variety").trim().toUpperCase(), vakalTitle: value("title"),
+      productId: value("product"),
+      product: select?.selectedOptions[0]?.dataset.name || select?.selectedOptions[0]?.textContent || "",
+      quantity: value("qty"), unit: value("unit"), price: value("price"),
+      priceUnit: value("priceunit"), delivered: value("delivered"),
     };
+  });
+}
 
-    if (typeof editingOrderId !== "undefined" && editingOrderId) {
-      await db.collection("orders").doc(editingOrderId).update(orderData);
-      Swal.fire({
-        icon: "success",
-        title: "Order Updated Successfully!",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2000,
-      });
-    } else {
-      orderData.status = "Pending";
-      orderData.createdAt = Date.now();
-
-      let manualOrderNo = document.getElementById("orderNo")?.value;
-      if (!manualOrderNo || manualOrderNo.trim() === "") {
-        orderData.orderNo = await getNextOrderNumber();
-      } else {
-        orderData.orderNo = manualOrderNo;
-      }
-
-      await db.collection("orders").add(orderData);
-      Swal.fire({
-        icon: "success",
-        title: "Order Saved Successfully!",
-        toast: true,
-        position: "top-end",
-        showConfirmButton: false,
-        timer: 2000,
-      });
+function collectValidatedOrder() {
+  const date = document.getElementById("order-date").value;
+  const parsed = new Date(date + "T12:00:00");
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date) || !Number.isFinite(parsed.getTime()) ||
+      parsed.getFullYear() !== Number(date.slice(0, 4)) ||
+      parsed.getMonth() + 1 !== Number(date.slice(5, 7)) || parsed.getDate() !== Number(date.slice(8, 10))) {
+    throw new Error("Choose a valid order date.");
+  }
+  const name = document.getElementById("order-supplier").value.trim().toUpperCase();
+  const village = document.getElementById("order-village").value.trim().toUpperCase();
+  if (!name || !window.validPartyNames?.includes(name)) throw new Error("Select an existing Party Master supplier. Wait for the party list to load if needed.");
+  const items = readOrderItems();
+  if (!items.length || items.length > 100) throw new Error("Add between 1 and 100 Vakal items.");
+  const suppliers = items.map((item, i) => {
+    const fail = message => { throw new Error("Vakal " + (i + 1) + ": " + message); };
+    if (!masterProducts.some(product => product.id === item.productId)) fail("Select an available product.");
+    if (!item.variety) fail("Enter a variety.");
+    for (const key of ["quantity", "price", "delivered"]) {
+      const raw = String(item[key]).trim();
+      if ((key !== "delivered" && !raw) || !Number.isFinite(Number(raw)) || Number(raw) < 0) fail("Enter a valid, non-negative " + key + ".");
+      item[key] = Number(raw);
     }
+    if (item.quantity <= 0 || item.price <= 0) fail("Quantity and rate must be greater than zero.");
+    if (!["Man", "Khadi", "Bag", "Quintal"].includes(item.unit) || !["20kg", "100kg"].includes(item.priceUnit)) fail("Select a valid unit.");
+    if (item.unit === "Bag" && (!Number.isInteger(item.quantity) || !Number.isInteger(item.delivered))) fail("Bag quantities must be whole numbers.");
+    if (item.delivered > item.quantity) fail("Delivered quantity cannot exceed ordered quantity.");
+    return { ...item, vakalTitle: item.vakalTitle || "Vakal " + (i + 1) };
+  });
+  const [yyyy, mm, dd] = date.split("-");
+  return { date: dd + "/" + mm + "/" + yyyy, supplierName: village ? name + " (" + village + ")" : name,
+    broker: document.getElementById("order-broker").value.trim(),
+    notes: document.getElementById("order-notes").value.trim(), suppliers, updatedAt: Date.now() };
+}
 
-    if (typeof closeOrderModal === "function") closeOrderModal();
-    // The real-time listener refreshes the list. Avoid a second full Firestore
-    // query here: on slower phones that duplicate fetch made a successful save
-    // look like the screen was stuck.
-  } catch (e) {
-    console.error("Error saving order:", e);
-    Swal.fire("Error", "Could not save order.", "error");
+function initializeOrderDraft() {
+  const editor = document.getElementById("order-editor");
+  if (!editor || !document.getElementById("order-modal").classList.contains("open") || orderDraft) return;
+  orderDraft = window.MandiFormSafety?.createDraft({
+    container: editor, kind: "order:" + (editingOrderId || "new"),
+    capture: () => ({
+      fields: MandiFormSafety.fields(editor).filter(field => field.key.startsWith("id:")),
+      suppliers: readOrderItems(), version: orderEditVersion, requestId: orderSaveRef?.id || "",
+    }),
+    restore: async data => {
+      if (!Array.isArray(data.suppliers) || !data.suppliers.length || data.suppliers.length > 100) throw new Error("Invalid draft items. Saved copy retained.");
+      if (editingOrderId && data.version !== orderEditVersion) throw new Error("This order changed since the draft was made. Review the current order; the old draft has not been applied.");
+      if (data.suppliers.some(item => !masterProducts.some(product => product.id === item.productId))) throw new Error("A draft product is unavailable or still loading. Retry after the product list loads.");
+      MandiFormSafety.restoreFields(editor, data.fields);
+      document.getElementById("supplier-entries").replaceChildren();
+      supplierCount = 0;
+      data.suppliers.forEach(addSupplierEntry);
+      if (!editingOrderId && /^[A-Za-z0-9]{20}$/.test(data.requestId || "")) orderSaveRef = ordersCollection.doc(data.requestId);
+    },
+  });
+}
+window.addEventListener("mandibook:access-ready", initializeOrderDraft);
+
+// Validate everything before any write. Counter + order + variety names commit
+// together. Keep a stable document ID when retrying an uncertain request.
+async function saveOrder() {
+  if (window.MandiFormSafety.isBusy("order")) return;
+  let data;
+  try { data = collectValidatedOrder(); }
+  catch (error) { await Swal.fire("Check order details", error.message, "warning"); return; }
+  const operation = MandiFormSafety.begin("order", {
+    container: document.getElementById("order-editor"), button: document.getElementById("save-order-btn"), label: "Saving order",
+  });
+  if (!operation) return;
+  const editId = editingOrderId;
+  const version = orderEditVersion;
+  const ref = editId ? ordersCollection.doc(editId) : (orderSaveRef ||= ordersCollection.doc());
+  orderDraft?.touch(); orderDraft?.flush();
+  const fy = orderNumberSeries();
+  const counter = db.collection("counters").doc("orderCounter_FY" + fy);
+  try {
+    await db.runTransaction(async transaction => {
+      const existing = await transaction.get(ref);
+      if (editId) {
+        if (!existing.exists) throw new Error("Order no longer exists. Your inputs have been kept.");
+        if (JSON.stringify(existing.data().updatedAt ?? null) !== version) throw new Error("Order changed on another screen. Close and reopen it before editing; your draft is kept.");
+        if (["Deleted", "Cancelled"].includes(existing.data().status)) throw new Error("This order is deleted/cancelled. Reopen its current details first.");
+      } else if (existing.exists) {
+        return; // This same request already committed. Never create another order.
+      } else {
+        const counterDoc = await transaction.get(counter);
+        const previous = counterDoc.exists ? Number(counterDoc.data().currentNumber || 0) : 0;
+        if (!Number.isSafeInteger(previous) || previous < 0 || previous >= Number.MAX_SAFE_INTEGER) throw new Error("Order counter is invalid. Ask the owner to review it.");
+        data = { ...data, orderNo: "ORD-" + fy + "-" + String(previous + 1).padStart(4, "0"), status: "Pending", createdAt: Date.now() };
+        transaction.set(counter, { currentNumber: previous + 1 }, { merge: true });
+      }
+      if (editId) transaction.update(ref, data);
+      else transaction.set(ref, data);
+      const varieties = new Map(data.suppliers.map(item => [item.variety.toLowerCase().replace(/\s+/g, "_").replace(/\//g, "_"), item.variety]));
+      varieties.forEach((name, id) => transaction.set(db.collection("varieties").doc(id), { name }, { merge: true }));
+    });
+    orderDraft?.saved();
+    operation.finish("Order saved and confirmed by the server.");
+    closeOrderModal(true);
+    Swal.fire({ icon: "success", title: editId ? "Order updated" : "Order saved", text: "Server confirmed. The order list will refresh automatically." });
+  } catch (error) {
+    console.error("Order save failed:", error);
+    operation.fail(error);
+    await Swal.fire("Order not confirmed", error.code ? MandiFormSafety.errorMessage(error) : error.message, "error");
+  } finally {
+    // finish() is idempotent; errors have already supplied the useful message.
+    if (MandiFormSafety.isBusy("order")) operation.finish("Save finished. Review the order list.", "warning");
   }
 }
 // ── EDIT ORDER ────────────────────────────────────────────────────────────────
 function editOrder(id) {
+  if (MandiFormSafety.isBusy("order")) return;
+  document.querySelector("#order-editor .form-operation-status")?.remove();
+  orderDraft?.dispose(); orderDraft = null; orderSaveRef = null;
   const order = allOrders.find((o) => o.id === id);
   if (!order) return;
   editingOrderId = id;
+  orderEditVersion = JSON.stringify(order.updatedAt ?? null);
   document.getElementById("order-modal-title").textContent = `✏️ Edit Order #${order.orderNo}`;
 
   const [dd, mm, yyyy] = order.date.split("/");
@@ -697,6 +646,7 @@ function editOrder(id) {
   (order.suppliers || []).forEach((s) => addSupplierEntry(s));
 
   document.getElementById("order-modal").classList.add("open");
+  initializeOrderDraft();
 }
 
 // ── UPDATE STATUS ─────────────────────────────────────────────────────────────
@@ -1074,11 +1024,15 @@ let allCustomersList = [];
 let allBrokersList = [];
 
 function openNewOrderModal() {
+  if (MandiFormSafety.isBusy("order")) return;
+  document.querySelector("#order-editor .form-operation-status")?.remove();
+  orderDraft?.dispose(); orderDraft = null; orderSaveRef = null; orderEditVersion = null;
   editingOrderId = null;
   document.getElementById("order-modal-title").textContent = "➕ New Order";
   document.getElementById("order-broker").value = "";
   document.getElementById("order-notes").value = "";
   document.getElementById("order-supplier").value = "";
+  document.getElementById("order-village").value = "";
   setDefaultDate();
 
   // 🚀 NAYA: Har baar modal khulne par Party Master se fresh list layega
@@ -1088,6 +1042,7 @@ function openNewOrderModal() {
   supplierCount = 0;
   addSupplierEntry();
   document.getElementById("order-modal").classList.add("open");
+  initializeOrderDraft();
 }
 
 // ── SHARE ORDER ON WHATSAPP (CLEAN & WORKING VERSION) ──────────────────────
