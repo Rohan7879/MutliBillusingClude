@@ -2,6 +2,29 @@
   "planId": "MB-QA-20261015-v1",
   "date": "2026-10-15",
   "purpose": "Synthetic manual-entry acceptance dataset, not an import or production seed",
+  "orderIntegrationRevision": "2026-10-17",
+  "orderChecks": [
+    { "billRef": "QA15-B03", "orderRef": "QA15 O03", "unit": "Bag", "delivered": [10], "remaining": [0], "deliveryStatus": "Completed", "paymentBefore": "Unpaid", "paymentAfter": "Paid", "dueAfter": 0 },
+    { "billRef": "QA15-B05", "orderRef": "QA15 O05", "unit": "Bag", "delivered": [12, 8], "remaining": [0, 0], "deliveryStatus": "Completed", "paymentBefore": "Unpaid", "paymentAfter": "Partial", "dueAfter": 16500 },
+    { "billRef": "QA15-B10", "orderRef": "QA15 O10", "unit": "Bag", "delivered": [10, 6], "remaining": [0, 0], "deliveryStatus": "Completed", "paymentBefore": "Unpaid", "paymentAfter": "Paid", "dueAfter": 0 }
+  ],
+  "splitOrderCheck": {
+    "outsideBaseline": true,
+    "orderRef": "QA15 O11 SPLIT",
+    "party": "QA15 FARMER A",
+    "product": "QA15 WHEAT",
+    "variety": "QA STANDARD",
+    "quantity": 10,
+    "unit": "Bag",
+    "ratePer20kg": 500,
+    "trucks": [
+      { "ref": "QA15-X01", "bags": 4, "kg": 200, "final": 5000, "delivered": 4, "remaining": 6, "deliveryStatus": "Partial", "initialCash": 2500, "paymentStatus": "Partial", "combinedDue": 2500 },
+      { "ref": "QA15-X02", "bags": 6, "kg": 300, "final": 7500, "delivered": 10, "remaining": 0, "deliveryStatus": "Completed", "initialCash": 0, "paymentStatus": "Partial", "combinedDue": 10000 }
+    ],
+    "finalPayments": [2500, 7500],
+    "finalPaymentStatus": "Paid",
+    "finalDue": 0
+  },
   "parties": [
     {
       "id": "A",

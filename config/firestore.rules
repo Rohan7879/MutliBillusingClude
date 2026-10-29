@@ -69,13 +69,71 @@ service cloud.firestore {
         || resource.data.get('paymentStatus', 'Unpaid') in ['Paid', 'Partial', 'Partially Paid'];
     }
 
+    function accounting() {
+      return exists(/databases/$(database)/documents/settings/accountingControl)
+        ? get(/databases/$(database)/documents/settings/accountingControl).data : {};
+    }
+    function accountingReady() {
+      return !accounting().get('maintenance', false)
+        && (!existsAfter(/databases/$(database)/documents/settings/accountingControl)
+          || !getAfter(/databases/$(database)/documents/settings/accountingControl).data.get('maintenance', false));
+    }
+    function dayKey(value) {
+      return value is timestamp
+        ? (value + duration.value(330, 'm')).year() * 10000 + (value + duration.value(330, 'm')).month() * 100 + (value + duration.value(330, 'm')).day()
+        : value is string && value.matches('[0-9]{2}/[0-9]{2}/[0-9]{4}')
+          ? int(value.split('/')[2]) * 10000 + int(value.split('/')[1]) * 100 + int(value.split('/')[0])
+          : value is string && value.matches('[0-9]{4}-[0-9]{2}-[0-9]{2}')
+            ? int(value.split('-')[0]) * 10000 + int(value.split('-')[1]) * 100 + int(value.split('-')[2]) : 0;
+    }
+    function dateOpen(value) {
+      let key = dayKey(value);
+      let year = int(key / 10000);
+      let month = int(key % 10000 / 100);
+      let day = key % 100;
+      let leap = year % 400 == 0 || (year % 4 == 0 && year % 100 != 0);
+      let days = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
+      return year >= 1900 && year <= 9999 && month >= 1 && month <= 12 && day >= 1 && day <= days[month - 1]
+        && key > accounting().get('closedThrough', 0);
+    }
+    function fiscalYear(value) {
+      let key = dayKey(value);
+      return int(key / 10000) - (key % 10000 < 401 ? 1 : 0);
+    }
+    function revisionRequest(billId) {
+      let after = request.resource.data;
+      let snapshotId = after.get('revisionSnapshotId', '');
+      return anyRole(['admin', 'manager']) && openBill()
+        && resource.data.get('deleted', false) == false
+        && resource.data.get('workflowStatus', 'draft') == 'approved'
+        && after.workflowStatus == 'draft' && after.revisionPending == true
+        && after.revisionNumber == resource.data.get('revisionNumber', 0) + 1
+        && after.revisionReason is string && after.revisionReason.size() >= 10 && after.revisionReason.size() <= 1000
+        && after.revisionRequestedBy == request.auth.uid && after.revisionRequestedAt == request.time
+        && after.diff(resource.data).affectedKeys().hasOnly(['workflowStatus', 'revisionPending', 'revisionNumber', 'revisionSnapshotId', 'revisionReason', 'revisionRequestedBy', 'revisionRequestedAt', 'lastUpdatedAt'])
+        && !exists(/databases/$(database)/documents/billRevisions/$(snapshotId))
+        && getAfter(/databases/$(database)/documents/billRevisions/$(snapshotId)).data.snapshot == resource.data
+        && getAfter(/databases/$(database)/documents/billRevisions/$(snapshotId)).data.billId == billId;
+    }
+    function billDatesOpen() {
+      return dateOpen(resource.data.Date)
+        && (request.resource.data.Date == resource.data.Date || dateOpen(request.resource.data.Date));
+    }
+    function billUpdateAllowed(billId) {
+      let beforeStatus = resource.data.get('workflowStatus', 'draft');
+      let afterStatus = request.resource.data.get('workflowStatus', 'draft');
+      return beforeStatus != afterStatus
+        ? billDatesOpen() && (afterStatus == 'approved' ? billApprover() : afterStatus == 'locked' ? billLocker() : revisionRequest(billId))
+        : billPaymentUpdater() || (billDatesOpen() && (resource.data.get('deleted', false) ? billRestorer() : billEditor()));
+    }
+
     function approvalRequired() {
       return exists(/databases/$(database)/documents/settings/billWorkflow)
         && get(/databases/$(database)/documents/settings/billWorkflow).data.printPolicy == 'approved_only';
     }
 
     function billApprovedForRelease() {
-      return !approvalRequired()
+      return (!resource.data.get('revisionPending', false) && !approvalRequired())
         || resource.data.get('workflowStatus', 'draft') in ['approved', 'locked']
         || resource.data.get('locked', false) == true;
     }
@@ -87,17 +145,24 @@ service cloud.firestore {
 
     function billEditor() {
       return anyRole(['admin', 'manager', 'biller']) && openBill()
+        && resource.data.get('workflowStatus', 'draft') == 'draft'
         && resource.data.get('deleted', false) == false
         && request.resource.data.get('locked', false) == resource.data.get('locked', false)
         && request.resource.data.get('workflowStatus', 'draft') == resource.data.get('workflowStatus', 'draft')
+        && request.resource.data.get('Serial No', '') == resource.data.get('Serial No', '')
+        && fiscalYear(request.resource.data.Date) == fiscalYear(resource.data.Date)
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['revisionPending', 'revisionNumber', 'revisionSnapshotId', 'revisionReason', 'revisionRequestedBy', 'revisionRequestedAt', 'approvedAt', 'approvedBy'])
+        && (!billHasPayment() || request.resource.data.diff(resource.data).affectedKeys().hasOnly(['Date', 'Remarks', 'lastUpdatedAt']))
         && !(request.resource.data.get('deleted', false) == true && billHasPayment())
+        && !(resource.data.get('revisionPending', false) && request.resource.data.get('deleted', false))
         // A "normal edit" (item/rate/customer changes etc.) must never be able
         // to also move amountPaid/amountDue/paymentStatus — that would let a
         // manager/biller silently bypass billPaymentUpdater()'s admin/accountant
         // + value checks by smuggling a payment field into an ordinary edit.
         // Only billPaymentUpdater() may ever touch these three fields.
-        && !request.resource.data.diff(resource.data).affectedKeys()
-          .hasAny(['amountPaid', 'amountDue', 'paymentStatus']);
+        && !request.resource.data.diff(resource.data).affectedKeys().hasAny(['amountPaid', 'paymentStatus'])
+        && (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['amountDue'])
+          || (!billHasPayment() && request.resource.data.amountDue == request.resource.data['Final Total']));
     }
 
     // Archived bills are accounting evidence. Only an Admin can restore one,
@@ -115,8 +180,14 @@ service cloud.firestore {
         && resource.data.get('workflowStatus', 'draft') == 'draft'
         && request.resource.data.get('workflowStatus', 'draft') == 'approved'
         && request.resource.data.get('locked', false) == false
+        && resource.data.get('deleted', false) == false
+        && request.resource.data.get('revisionPending', false) == false
+        && request.resource.data.approvedBy == request.auth.uid && request.resource.data.approvedAt == request.time
+        && (!resource.data.get('revisionPending', false) || (
+          request.resource.data.revisionPending == false
+          && getAfter(/databases/$(database)/documents/billRevisionApprovals/$(resource.data.revisionSnapshotId)).data.snapshot == resource.data))
         && request.resource.data.diff(resource.data).affectedKeys()
-          .hasOnly(['workflowStatus', 'approvedAt', 'approvedBy', 'lastUpdatedAt']);
+          .hasOnly(['workflowStatus', 'approvedAt', 'approvedBy', 'lastUpdatedAt', 'revisionPending']);
     }
 
     function billLocker() {
@@ -167,6 +238,59 @@ service cloud.firestore {
         && request.resource.data.get('currentBalance', 'invalid') is number;
     }
 
+    // A correction is one immutable, negative counter-entry per original payment.
+    // Legacy multi-bill payments have no precise allocations and need review.
+    function reversalBillMatches(original, billId) {
+      let before = get(/databases/$(database)/documents/bills/$(billId)).data;
+      let after = getAfter(/databases/$(database)/documents/bills/$(billId)).data;
+      return before.get('deleted', false) == false
+        && before.get('locked', false) == false
+        && before.get('workflowStatus', 'draft') != 'locked'
+        && before.get('customerId', null) == original.get('customerId', null)
+        && (original.get('customerId', null) != null
+          || (before.get('Customer Name', '') == original.get('customerName', '')
+            && before.get('Village', 'N/A') == original.get('customerVillage', 'N/A')))
+        && after.amountPaid >= before.amountPaid - original.totalCredit - 0.001
+        && after.amountPaid <= before.amountPaid - original.totalCredit + 0.001;
+    }
+
+    function reversalPartyMatches(original) {
+      let partyId = original.get('customerId', null);
+      return partyId == null || (
+        getAfter(/databases/$(database)/documents/parties/$(partyId)).data.currentBalance
+          >= get(/databases/$(database)/documents/parties/$(partyId)).data.currentBalance + original.totalCredit - 0.001
+        && getAfter(/databases/$(database)/documents/parties/$(partyId)).data.currentBalance
+          <= get(/databases/$(database)/documents/parties/$(partyId)).data.currentBalance + original.totalCredit + 0.001);
+    }
+
+    function validPaymentReversal(paymentId) {
+      let correction = request.resource.data;
+      let originalId = correction.reversalOf;
+      let original = get(/databases/$(database)/documents/payments/$(originalId)).data;
+      let bills = original.get('appliedToBills', []);
+      return originalId is string && paymentId == 'reversal_' + originalId
+        && original.get('reversalOf', '') == ''
+        && original.cashAmount >= 0 && original.get('deductionAmount', 0) >= 0 && original.totalCredit > 0
+        && original.totalCredit >= original.cashAmount + original.get('deductionAmount', 0) - 0.001
+        && original.totalCredit <= original.cashAmount + original.get('deductionAmount', 0) + 0.001
+        && correction.cashAmount == -original.cashAmount
+        && correction.deductionAmount == -original.get('deductionAmount', 0)
+        && correction.totalCredit == -original.totalCredit
+        && correction.customerId == original.get('customerId', null)
+        && correction.customerName == original.get('customerName', '')
+        && correction.customerVillage == original.get('customerVillage', 'N/A')
+        && correction.paymentMethod == original.get('paymentMethod', 'Cash')
+        && correction.appliedToBills == bills
+        && bills.size() <= 1
+        && (bills.size() == 0 || reversalBillMatches(original, bills[0]))
+        && reversalPartyMatches(original)
+        && correction.reason is string && correction.reason.size() >= 3 && correction.reason.size() <= 500
+        && correction.createdBy == request.auth.uid
+        && correction.createdAt == request.time && correction.paymentDate == request.time
+        && getAfter(/databases/$(database)/documents/auditLogs/$(paymentId)).data.action == 'payment.reversed'
+        && getAfter(/databases/$(database)/documents/auditLogs/$(paymentId)).data.entityId == originalId;
+    }
+
     function orderPaymentStatusUpdater() {
       return anyRole(['admin', 'manager', 'biller', 'accountant'])
         && request.resource.data.diff(resource.data).affectedKeys()
@@ -213,6 +337,7 @@ service cloud.firestore {
         || (resource.data.expiresAt > request.time && resource.data.get('revoked', false) == false);
       allow list: if admin();
       allow create: if anyRole(['admin', 'manager', 'biller'])
+        && !request.resource.data.bill.get('revisionPending', false)
         && (!approvalRequired() || request.resource.data.bill.workflowStatus in ['approved', 'locked']);
       allow update, delete: if admin();
     }
@@ -224,7 +349,7 @@ service cloud.firestore {
       allow read: if admin();
       allow create: if active()
         && request.resource.data.keys().hasOnly(['action', 'entityType', 'entityId', 'before', 'after', 'reason', 'actor', 'createdAt'])
-        && request.resource.data.action in ['bill.shared', 'bill.share_revoked', 'bill.deleted', 'bill.restored', 'bill.created', 'bill.correction_created', 'bill.updated', 'bill.approved', 'bill.locked', 'payment.created', 'staff.access_updated']
+        && request.resource.data.action in ['bill.shared', 'bill.share_revoked', 'bill.deleted', 'bill.restored', 'bill.created', 'bill.correction_created', 'bill.updated', 'bill.approved', 'bill.locked', 'payment.created', 'payment.reversed', 'staff.access_updated']
         && request.resource.data.entityType in ['bill', 'payment', 'staff']
         && request.resource.data.actor.uid == request.auth.uid
         && request.resource.data.actor.email == profile().data.get('email', '')
@@ -237,24 +362,41 @@ service cloud.firestore {
     match /bills/{billId} {
       allow read: if active();
       allow create: if anyRole(['admin', 'manager', 'biller'])
+          && accountingReady() && dateOpen(request.resource.data.Date)
+          && request.resource.data.get('revisionNumber', 0) == 0 && !request.resource.data.get('revisionPending', false)
           && request.resource.data.get('locked', false) == false
           && request.resource.data.get('workflowStatus', 'draft') == 'draft';
-      allow update: if billEditor() || billRestorer() || billApprover() || billLocker() || billPaymentUpdater();
-      allow delete: if admin() && !billHasPayment();
+      allow update: if accountingReady() && billUpdateAllowed(billId);
+      allow delete: if false;
     }
 
     match /orders/{orderId} {
       allow read: if active();
-      allow create: if anyRole(['admin', 'manager', 'biller']);
-      allow update: if anyRole(['admin', 'manager', 'biller']) || orderPaymentStatusUpdater();
-      allow delete: if admin();
+      allow create: if accountingReady() && anyRole(['admin', 'manager', 'biller']);
+      allow update: if accountingReady() && (anyRole(['admin', 'manager', 'biller']) || orderPaymentStatusUpdater());
+      allow delete: if false;
     }
 
     match /parties/{partyId} {
       allow read: if active();
-      allow create: if anyRole(['admin', 'manager', 'biller']);
-      allow update: if anyRole(['admin', 'manager', 'biller']) || partyBalanceUpdater();
-      allow delete: if admin();
+      allow create: if anyRole(['admin', 'manager', 'biller'])
+        && accountingReady() && (accounting().get('closedThrough', 0) == 0 || request.resource.data.get('opBal', 0) == 0)
+        && request.resource.data.get('deleted', false) == false;
+      // No soft or hard deletion: linked records may use IDs or legacy names.
+      allow update: if (anyRole(['admin', 'manager', 'biller']) || partyBalanceUpdater())
+        && accountingReady() && (accounting().get('closedThrough', 0) == 0
+          || !request.resource.data.diff(resource.data).affectedKeys().hasAny(['opBal', 'opBalType', 'type', 'name']))
+        && request.resource.data.get('deleted', false) == false;
+      allow delete: if false;
+    }
+
+    // Legacy directory remains readable; all new brokers belong in parties.
+    match /brokers/{brokerId} {
+      allow read: if active();
+      allow create, delete: if false;
+      allow update: if anyRole(['admin', 'manager', 'biller'])
+        && accountingReady()
+        && request.resource.data.get('deleted', false) == false;
     }
 
     // Payments are the money-moving record, so they get their own block
@@ -262,21 +404,92 @@ service cloud.firestore {
     // instead of just a role check.
     match /payments/{paymentId} {
       allow read: if active();
-      allow create: if anyRole(['admin', 'accountant']) && validPaymentDoc();
+      allow create: if accountingReady() && dateOpen(request.resource.data.paymentDate) && anyRole(['admin', 'accountant']) && (
+        (!paymentId.matches('reversal_.*') && !request.resource.data.keys().hasAny(['reversalOf']) && validPaymentDoc())
+        || (request.resource.data.keys().hasAll(['reversalOf']) && validPaymentReversal(paymentId)));
       // Payments are immutable after creation. Reversals must be entered as
       // a new counter-entry so bill/party balances retain their evidence.
       allow update: if false;
       allow delete: if false;
     }
 
+    match /billRevisions/{revisionId} {
+      allow read: if active();
+      allow create: if anyRole(['admin', 'manager']) && accountingReady()
+        && request.resource.data.keys().hasOnly(['billId', 'revisionNumber', 'snapshot', 'reason', 'createdBy', 'createdAt'])
+        && request.resource.data.createdBy == request.auth.uid && request.resource.data.createdAt == request.time
+        && request.resource.data.snapshot == get(/databases/$(database)/documents/bills/$(request.resource.data.billId)).data
+        && getAfter(/databases/$(database)/documents/bills/$(request.resource.data.billId)).data.revisionSnapshotId == revisionId
+        && getAfter(/databases/$(database)/documents/bills/$(request.resource.data.billId)).data.revisionNumber == request.resource.data.revisionNumber
+        && getAfter(/databases/$(database)/documents/bills/$(request.resource.data.billId)).data.revisionReason == request.resource.data.reason
+        && getAfter(/databases/$(database)/documents/bills/$(request.resource.data.billId)).data.revisionPending == true;
+      allow update, delete: if false;
+    }
+    match /billRevisionApprovals/{revisionId} {
+      allow read: if active();
+      allow create: if anyRole(['admin', 'manager']) && accountingReady()
+        && request.resource.data.keys().hasOnly(['billId', 'revisionNumber', 'snapshot', 'approvedBy', 'approvedAt'])
+        && request.resource.data.approvedBy == request.auth.uid && request.resource.data.approvedAt == request.time
+        && request.resource.data.snapshot == get(/databases/$(database)/documents/bills/$(request.resource.data.billId)).data
+        && request.resource.data.snapshot.revisionSnapshotId == revisionId
+        && request.resource.data.snapshot.revisionNumber == request.resource.data.revisionNumber
+        && request.resource.data.snapshot.revisionPending == true
+        && getAfter(/databases/$(database)/documents/bills/$(request.resource.data.billId)).data.revisionPending == false
+        && getAfter(/databases/$(database)/documents/bills/$(request.resource.data.billId)).data.workflowStatus == 'approved';
+      allow update, delete: if false;
+    }
+    function validCutoff(value) {
+      return value is int && value >= 19000331 && value % 10000 == 331
+        && value < dayKey(request.time);
+    }
+    function controlAcquire(before, after) {
+      return !before.get('maintenance', false) && after.maintenance == true
+        && after.closedThrough == before.get('closedThrough', 0)
+        && after.maintenanceOwner == request.auth.uid && after.maintenanceStartedAt == request.time
+        && after.maintenanceToken is string && after.maintenanceToken.size() > 0
+        && after.diff(before).affectedKeys().hasOnly(['closedThrough', 'maintenance', 'maintenanceToken', 'maintenanceOwner', 'maintenanceStartedAt']);
+    }
+    function controlRelease(before, after) {
+      return before.get('maintenance', false) && before.maintenanceOwner == request.auth.uid
+        && after.maintenance == false && !after.keys().hasAny(['maintenanceToken', 'maintenanceOwner', 'maintenanceStartedAt'])
+        && (after.diff(before).affectedKeys().hasOnly(['maintenance', 'maintenanceToken', 'maintenanceOwner', 'maintenanceStartedAt'])
+          || (validCutoff(after.closedThrough) && after.closedThrough != before.closedThrough
+            && after.eventId == before.maintenanceToken && after.updatedBy == request.auth.uid && after.updatedAt == request.time
+            && after.reason is string && after.reason.size() >= 10 && after.reason.size() <= 1000
+            && !exists(/databases/$(database)/documents/yearCloseEvents/$(after.eventId))
+            && getAfter(/databases/$(database)/documents/yearCloseEvents/$(after.eventId)).data.closedThrough == after.closedThrough
+            && getAfter(/databases/$(database)/documents/yearCloseEvents/$(after.eventId)).data.previousClosedThrough == before.closedThrough
+            && after.diff(before).affectedKeys().hasOnly(['closedThrough', 'reason', 'updatedAt', 'updatedBy', 'eventId', 'maintenance', 'maintenanceToken', 'maintenanceOwner', 'maintenanceStartedAt'])));
+    }
+    match /settings/accountingControl {
+      allow read: if active();
+      allow create: if roleIs('admin') && controlAcquire({}, request.resource.data);
+      allow update: if roleIs('admin') && (controlAcquire(resource.data, request.resource.data) || controlRelease(resource.data, request.resource.data));
+      allow delete: if false;
+    }
+    match /yearCloseEvents/{eventId} {
+      allow read: if active();
+      allow create: if roleIs('admin')
+        && request.resource.data.keys().hasOnly(['closedThrough', 'previousClosedThrough', 'reason', 'actorId', 'createdAt'])
+        && request.resource.data.actorId == request.auth.uid && request.resource.data.createdAt == request.time
+        && accounting().maintenanceOwner == request.auth.uid && accounting().maintenanceToken == eventId
+        && request.resource.data.previousClosedThrough == accounting().closedThrough
+        && request.resource.data.closedThrough == getAfter(/databases/$(database)/documents/settings/accountingControl).data.closedThrough
+        && request.resource.data.reason == getAfter(/databases/$(database)/documents/settings/accountingControl).data.reason
+        && getAfter(/databases/$(database)/documents/settings/accountingControl).data.eventId == eventId;
+      allow update, delete: if false;
+    }
+
     match /{collection}/{document} {
       allow read: if collection != 'auditLogs' && active();
-      allow create, update: if collection in ['products', 'varieties', 'customers', 'counters', 'brokers']
-          && anyRole(['admin', 'manager', 'biller']);
-      allow create, update, delete: if collection == 'broker_payments'
+      allow create, update: if collection in ['products', 'varieties', 'customers', 'counters']
+          && accountingReady() && anyRole(['admin', 'manager', 'biller']);
+      allow create: if collection == 'broker_payments' && accountingReady() && dateOpen(request.resource.data.date)
           && anyRole(['admin', 'accountant']);
-      allow write: if collection == 'settings' && admin();
-      allow delete: if collection in ['products', 'varieties', 'customers', 'counters', 'brokers'] && admin();
+      allow update: if collection == 'broker_payments' && accountingReady() && dateOpen(resource.data.date) && dateOpen(request.resource.data.date)
+          && anyRole(['admin', 'accountant']);
+      allow write: if collection == 'settings' && document != 'accountingControl' && accountingReady() && admin();
+      allow delete: if collection in ['products', 'varieties', 'customers', 'counters'] && accountingReady() && admin();
     }
   }
 }

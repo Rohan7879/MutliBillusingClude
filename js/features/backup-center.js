@@ -159,7 +159,7 @@
       }
       const result = await inspectText(text, password);
       showManifest(result);
-      if (result.legacy) { status(`Legacy backup checksum passed, but ${result.missingCollections.join(", ")} are not included and its source project is unverified. Keep it; prepare a new full app backup.`, "warning"); return; }
+      if (result.legacy || result.missingCollections.length) { status(`Older backup checksum passed, but ${result.missingCollections.join(", ")} are not included${result.legacy ? " and its source project is unverified" : ""}. Keep it; prepare a new full app backup.`, "warning"); return; }
       if (!result.projectMatches) { status(`Checksum passed for project ${result.backup.projectId}, not ${projectId()}. This is not a recovery copy for the current app.`, "warning"); return; }
       state.verified = result;
       const tracked = await recordVerified(result, file.name, "selected-local-file");

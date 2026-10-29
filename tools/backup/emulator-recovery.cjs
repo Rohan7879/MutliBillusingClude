@@ -63,7 +63,7 @@ async function restore(backup, db, sdk, { batchSize = 100, beforeBatch = () => {
   assertLocalTarget(host, backup?.projectId);
   const verified = await engine.verify(backup);
   if (verified.legacy || backup.projectId === projectId) throw new Error('Use a current backup and a different disposable demo target.');
-  if (backup.collections.length !== engine.COLLECTIONS.length) throw new Error('Only the 15 known root collections are supported by this drill.');
+  if (backup.collections.length !== engine.COLLECTIONS.length) throw new Error('The recovery drill requires every currently supported root collection, including revision and year-close history.');
   if (!Number.isInteger(batchSize) || batchSize < 1 || batchSize > 100) throw new Error('Invalid restore batch size.');
 
   // Validate and decode ALL records before any write. Rebinding references is

@@ -14,7 +14,8 @@ async function updateSeriesPreview() {
     return;
   }
 
-  const now = new Date();
+  const now = MandiFinancialYear.parseDate(document.getElementById("bill_date_input")?.value);
+  if (!now) { previewEl.textContent = "Select a valid bill date to see its financial-year series."; return; }
   let year = now.getFullYear();
   const month = now.getMonth();
   if (month < 3) year = year - 1;
@@ -22,11 +23,12 @@ async function updateSeriesPreview() {
   const nextShortYear = (year + 1).toString().slice(-2);
   const financialYearId = `FY${shortYear}${nextShortYear}`;
 
-  const seriesPrefix =
-    window.activeTemplate && window.activeTemplate.seriesPrefix ? window.activeTemplate.seriesPrefix : null;
-  const counterDocId = seriesPrefix
-    ? `billCounter_${seriesPrefix}_${financialYearId}`
-    : `billCounter_${financialYearId}`;
+  const seriesPrefix = window.activeTemplate?.seriesPrefix?.trim() || "";
+  if (!seriesPrefix) {
+    previewEl.textContent = "⚠️ Product template select karo — tabhi bill number generate hoga.";
+    return;
+  }
+  const counterDocId = `billCounter_${seriesPrefix}_${financialYearId}`;
 
   previewEl.textContent = "⏳ Agla bill number check ho raha hai...";
 
@@ -35,16 +37,10 @@ async function updateSeriesPreview() {
     const lastNumber = counterDoc.exists ? counterDoc.data().currentNumber : 0;
     const nextNumber = lastNumber + 1;
     const paddedNext = String(nextNumber).padStart(5, "0");
-    const currentMonth = String(now.getMonth() + 1).padStart(2, "0");
-    const nextBillNo = seriesPrefix
-      ? `${seriesPrefix}-${shortYear}${nextShortYear}-${paddedNext}`
-      : `${shortYear}/${currentMonth}-${paddedNext}`;
+    const nextBillNo = `${seriesPrefix}-${shortYear}${nextShortYear}-${paddedNext}`;
     const lastBillText =
       lastNumber > 0
-        ? `${seriesPrefix ? seriesPrefix + "-" + shortYear + nextShortYear + "-" : ""}${String(lastNumber).padStart(
-            5,
-            "0"
-          )}`
+        ? `${seriesPrefix}-${shortYear}${nextShortYear}-${String(lastNumber).padStart(5, "0")}`
         : "koi nahi (pehla bill)";
 
     previewEl.textContent = `📄 Yeh bill banega: ${nextBillNo}   |   Last bill: ${lastBillText}`;
@@ -70,8 +66,8 @@ async function updateSeriesPreview() {
   });
 })();
 
-// Also show a preview immediately on load for the "Direct Bill" (no
-// template selected yet) case, and again once editId data has loaded.
+// Show the required-template prompt on load, and refresh it after a template
+// or edit record is loaded.
 document.addEventListener("DOMContentLoaded", () => {
   setTimeout(updateSeriesPreview, 300);
 });
@@ -81,6 +77,14 @@ let uniqueBrokers = []; // 🚀 YE NAYI LINE ADD KARNI HAI
 let billDraft = null;
 let billSaveRef = null;
 let billCommittedId = null;
+
+function openConfirmedBill(url) {
+  // A saved bill is safe to open even while the visual progress UI is cleaning up.
+  // Manual refresh/close while a save is still pending remains protected.
+  billDraft?.saved();
+  window.MandiFormSafety?.allowConfirmedNavigation?.();
+  window.location.href = url;
+}
 let billFormReady = false;
 let billTemplatesReady = false;
 let billEditReady = !new URLSearchParams(location.search).has("editId") && !new URLSearchParams(location.search).has("correctionOf");
@@ -121,7 +125,7 @@ function initializeBillDraft() {
       const closeOrder = document.getElementById("close_order_checkbox");
       if (closeOrder) closeOrder.checked = !!data.closeOrder;
       const linked = form.querySelector('[name="linked_order_id"]')?.value;
-      const orderInfo = document.getElementById("order-info");
+      const orderInfo = document.getElementById("order-link-info");
       if (orderInfo && linked) { orderInfo.style.display = "block"; orderInfo.textContent = "Linked order restored from draft. Review this order before generating the bill."; }
       const closeWrap = document.getElementById("close-order-wrap");
       if (closeWrap) closeWrap.style.display = linked ? "flex" : "none";
@@ -189,77 +193,70 @@ async function setupAutocomplete() {
         village: p.address || "",
       }));
 
-    // 4. Sirf Brokers ke liye ek alag list banayein
-    // 4. Sirf Brokers ke liye alag list (with Village format)
-    uniqueBrokers = window.partiesMasterList
-      .filter((p) => {
-        const type = (p.type || "").toLowerCase();
-        return type === "broker";
-      })
-      .map((p) => {
-        return {
-          value: p.name || "",
-          address: p.address || "",
-          defaultComm: p.defaultComm || 0,
-        };
+    // Broker directory stores records separately from Party Master.
+    const brokerSnapshot = await db.collection("brokers").get();
+    const brokerMap = new Map();
+    const records = [
+      ...window.partiesMasterList.filter(p => String(p.type || "").trim().toLowerCase() === "broker"),
+      ...brokerSnapshot.docs.map(doc => doc.data()),
+    ];
+    records.forEach(p => {
+      const name = String(p.name || "").trim();
+      if (!name || p.deleted === true) return;
+      const key = name.toUpperCase().replace(/\s+/g, " ");
+      if (!brokerMap.has(key)) brokerMap.set(key, {
+        value: name, address: p.address || "", defaultComm: Number(p.defaultComm) || 0,
       });
-
-    // 🚀 CUSTOM JS AUTOCOMPLETE (Bilkul Customer Jaisa!)
+    });
+    uniqueBrokers = Array.from(brokerMap.values());
     const brokerInput = document.getElementById("broker_name");
-    const brokerSuggestionsBox = document.getElementById("broker-suggestions");
-
-    if (brokerInput && brokerSuggestionsBox) {
-      brokerInput.addEventListener("input", () => {
-        const value = brokerInput.value.toLowerCase();
-        brokerSuggestionsBox.innerHTML = "";
-
-        if (!value) return;
-
-        const filteredBrokers = uniqueBrokers.filter((broker) => broker.value.toLowerCase().includes(value));
-
-        const suggestionsList = document.createElement("div");
-        // Customer wali same CSS class laga rahe hain taaki design ekdum sundar aaye
-        suggestionsList.classList.add("autocomplete-items");
-
-        filteredBrokers.forEach((broker) => {
-          const item = document.createElement("div");
-          // HTML format: BOLD Naam (Gaon ka naam)
-          item.innerHTML = `<strong>${escapeHtml(broker.value)}</strong> ${
-            broker.address ? `(${escapeHtml(broker.address)})` : ""
-          }`;
-
-          item.addEventListener("click", () => {
-            // 1. Select karne par sirf Broker ka naam dabbe me jayega
-            brokerInput.value = broker.value;
-            brokerSuggestionsBox.innerHTML = "";
-
-            // 2. Agar Broker ka default commission hai toh auto-fill kar dega
-            const commInput = document.querySelector('input[name="broker_commission_per_bag"]');
-            const commToggle = document.getElementById("broker-commission-toggle");
-            const commBox = document.getElementById("broker-commission-input");
-
-            if (commInput && broker.defaultComm > 0) {
-              commInput.value = broker.defaultComm;
-              if (commToggle && !commToggle.checked) {
-                commToggle.checked = true;
-                if (commBox) commBox.style.display = "block";
-              }
-            }
-          });
-          suggestionsList.appendChild(item);
-        });
-        brokerSuggestionsBox.appendChild(suggestionsList);
-      });
-
-      // Box ke bahar click karne par dropdown band ho jaye
-      document.addEventListener("click", (e) => {
-        if (e.target !== brokerInput) {
-          brokerSuggestionsBox.innerHTML = "";
+    const box = document.getElementById("broker-suggestions");
+    if (brokerInput && box) {
+      const showSuggestions = () => {
+        const value = brokerInput.value.trim().toLowerCase();
+        box.innerHTML = "";
+        const matches = uniqueBrokers.filter(broker => broker.value.toLowerCase().includes(value));
+        box.style.display = "block";
+        const list = document.createElement("div");
+        list.className = "autocomplete-items";
+        if (!matches.length) {
+          const empty = document.createElement("div");
+          empty.textContent = "No matching saved broker.";
+          list.appendChild(empty);
         }
+        matches.forEach(broker => {
+          const item = document.createElement("button");
+          item.type = "button";
+          item.style.cssText = "display:block;width:100%;text-align:left;padding:10px 14px;background:white;color:#005a9e;border:0;border-bottom:1px solid #e6edf4;cursor:pointer";
+          item.textContent = broker.value + (broker.address ? " (" + broker.address + ")" : "");
+          item.addEventListener("click", () => {
+            window.applyBrokerDetails(broker.value, broker.defaultComm);
+            brokerInput.dispatchEvent(new Event("change", { bubbles: true }));
+          });
+          list.appendChild(item);
+        });
+        box.appendChild(list);
+      };
+      brokerInput.addEventListener("input", showSuggestions);
+      brokerInput.addEventListener("focus", showSuggestions);
+      document.addEventListener("click", event => {
+        if (event.target !== brokerInput && !box.contains(event.target)) box.style.display = "none";
       });
+      document.addEventListener("focusin", event => {
+        if (event.target !== brokerInput && !box.contains(event.target)) box.style.display = "none";
+      });
+      brokerInput.addEventListener("keydown", event => {
+        if (event.key === "Escape") box.style.display = "none";
+      });
+      if (document.activeElement === brokerInput) showSuggestions();
     }
   } catch (error) {
     console.error("Could not fetch party list for autocomplete:", error);
+    const box = document.getElementById("broker-suggestions");
+    if (box) {
+      box.textContent = "Broker list could not load. Please reload the page and try again.";
+      box.style.display = "block";
+    }
   }
   // 2. Get references to the input fields (no change here)
   const nameInput = document.querySelector('input[name="customer_name"]');
@@ -294,6 +291,7 @@ function initializeIndexPage() {
 
   // Phase 1: Default the date field to today (user can still change it)
   const dateInput = document.getElementById("bill_date_input");
+  dateInput?.addEventListener("change", updateSeriesPreview);
   if (dateInput && !dateInput.value) {
     const now = new Date();
     const yyyy = now.getFullYear();
@@ -389,6 +387,13 @@ function initializeIndexPage() {
       .catch(() => billsCollection.doc(sourceBillId).get())
       .then((doc) => {
         if (doc.exists) {
+          const saved = doc.data();
+          if (editId && (saved.locked === true || ['approved', 'locked'].includes(saved.workflowStatus))) {
+            Swal.fire("Approved bill protected", "Approved bills cannot be edited. The original date, items and amounts must remain unchanged.", "info");
+            document.getElementById("estimateForm")?.querySelector('[type="submit"]')?.setAttribute("disabled", "disabled");
+            window.location.replace(`final.html?id=${encodeURIComponent(doc.id)}`);
+            return;
+          }
           populateFormForEdit({ ...doc.data(), id: doc.id }, { correction: Boolean(correctionOf) });
           billEditReady = true;
           initializeBillDraft();
@@ -662,6 +667,18 @@ function populateFormForEdit(data, options = {}) {
   }
 
   // --- Yeh sabse last mein daalna hai, function ke khatam hone se pehle ---
+  if (!isCorrection && data.revisionPending) {
+    const note = document.createElement("p");
+    note.textContent = `Revision ${data.revisionNumber}: ${data.revisionReason}. Save, then review and re-approve on the bill page.`;
+    banner.appendChild(note);
+    if (Number(data.amountPaid || 0) > 0 || ["Paid", "Partial", "Partially Paid"].includes(data.paymentStatus)) {
+      form.dataset.metadataRevision = "true";
+      form.querySelectorAll("input, select, textarea").forEach(el => {
+        if (el.id !== "bill_date_input" && el.name !== "bill_remarks") el.disabled = true;
+      });
+      note.textContent += " Payments exist: only date and remarks can change.";
+    }
+  }
   const loader = document.getElementById("global-loader-ui");
   if (loader) {
     loader.style.display = "none";
@@ -1118,7 +1135,8 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
     const [yyyy, mm, dd] = selectedDateValue.split("-");
     data["Date"] = `${dd}/${mm}/${yyyy}`;
   } else {
-    const now = new Date();
+    const now = MandiFinancialYear.parseDate(document.getElementById("bill_date_input")?.value);
+    if (!now) throw new Error("VALIDATION_ERROR: Select a valid bill date.");
     data["Date"] = `${String(now.getDate()).padStart(2, "0")}/${String(now.getMonth() + 1).padStart(
       2,
       "0"
@@ -1202,16 +1220,29 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
   return data;
 }
 async function collectData() {
-  if (billCommittedId) { window.location.href = `final.html?id=${billCommittedId}`; return; }
+  if (billCommittedId) { openConfirmedBill(`final.html?id=${billCommittedId}`); return; }
   const form = document.getElementById("estimateForm");
+  const isNewBill = !form.dataset.editId && !form.dataset.correctionOf;
+  const selectedTemplate = window.activeTemplate;
+  if (isNewBill && (!selectedTemplate?.id || !selectedTemplate.seriesPrefix?.trim())) {
+    const productSelect = document.getElementById("product-template-select");
+    Swal.fire({
+      icon: "warning",
+      title: "Product template required",
+      text: "Bill banane se pehle product template select karo. Isi template ki series se bill number generate hoga.",
+      confirmButtonColor: "#005a9e",
+    }).then(() => productSelect?.focus());
+    return;
+  }
   const submitButton = form.querySelector('button[type="submit"]');
   const operation = MandiFormSafety.begin("bill", { container: form, button: submitButton, label: "Saving bill" });
   if (!operation) return;
   showLoading("Saving bill — waiting for server confirmation...");
 
   try {
-    // 1. Determine the current financial year
-    const now = new Date();
+    // Use the bill date, never the computer date, for its number series.
+    const now = MandiFinancialYear.parseDate(document.getElementById("bill_date_input")?.value);
+    if (!now) throw new Error("VALIDATION_ERROR: Select a valid bill date.");
     let year = now.getFullYear();
     const month = now.getMonth(); // 0 = January, 3 = April
 
@@ -1223,14 +1254,14 @@ async function collectData() {
     const nextShortYear = (year + 1).toString().slice(-2);
     const financialYearId = `FY${shortYear}${nextShortYear}`; // e.g., "FY2526"
 
-    // --- Phase 1: Use product template's series prefix if one is selected ---
-    const seriesPrefix =
-      window.activeTemplate && window.activeTemplate.seriesPrefix ? window.activeTemplate.seriesPrefix : null;
+    // --- Phase 1: A product template and its series prefix are mandatory. ---
+    // This defensive guard prevents a caller/draft from ever falling back to
+    // the old generic YY/MM series after the form-level validation above.
+    const seriesPrefix = window.activeTemplate?.seriesPrefix?.trim() || "";
+    if (!seriesPrefix) throw new Error("VALIDATION_ERROR: Select a product template with a bill series before generating the bill.");
     // Each product series gets its own independent counter so numbering
     // doesn't clash between e.g. Wheat (WH-...) and Groundnut (GN-...).
-    const counterDocId = seriesPrefix
-      ? `billCounter_${seriesPrefix}_${financialYearId}`
-      : `billCounter_${financialYearId}`;
+    const counterDocId = `billCounter_${seriesPrefix}_${financialYearId}`;
 
     // 2. Set the correct counter document reference
     const counterRef = db.collection("counters").doc(counterDocId);
@@ -1277,21 +1308,25 @@ async function collectData() {
     const billRef = billSaveRef ||= billsCollection.doc();
     billDraft?.touch(); billDraft?.flush();
     const partyRef = customerId ? db.collection("parties").doc(customerId) : null;
+    const linkedOrderId = formData.get("linked_order_id") || "";
+    const linkedOrderRef = linkedOrderId ? db.collection("orders").doc(linkedOrderId) : null;
 
     const { alreadySaved = false } = await db.runTransaction(async (transaction) => {
+      await MandiFinancialYear.assertPostingOpen(db, transaction, [data.Date]);
       // READS FIRST (Firestore transactions require this)
       const existing = await transaction.get(billRef);
       if (existing.exists) return { alreadySaved: true };
       const counterDoc = await transaction.get(counterRef);
       const partyDoc = partyRef ? await transaction.get(partyRef) : null;
+      const linkedOrder = linkedOrderRef ? await transaction.get(linkedOrderRef) : null;
+      if (linkedOrderRef && (!linkedOrder.exists || !["Pending", "Partial"].includes(linkedOrder.data().status))) {
+        throw new Error("VALIDATION_ERROR: This order is no longer pending/partial. Reload and review it before billing.");
+      }
 
       // COMPUTE
       const newCounterValue = counterDoc.exists ? counterDoc.data().currentNumber + 1 : 1;
-      const currentMonth = String(now.getMonth() + 1).padStart(2, "0");
       const paddedSerialNo = String(newCounterValue).padStart(5, "0");
-      const formattedBillNo = seriesPrefix
-        ? `${seriesPrefix}-${shortYear}${nextShortYear}-${paddedSerialNo}`
-        : `${shortYear}/${currentMonth}-${paddedSerialNo}`;
+      const formattedBillNo = `${seriesPrefix}-${shortYear}${nextShortYear}-${paddedSerialNo}`;
 
       data["Serial No"] = formattedBillNo;
       data["LinkedOrderId"] = formData.get("linked_order_id") || "";
@@ -1310,9 +1345,23 @@ async function collectData() {
       data["createdAt"] = firebase.firestore.FieldValue.serverTimestamp();
       data["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
 
+      if (linkedOrder) {
+        if (!window.MandiOrderSync) throw new Error("Order sync module is unavailable. Reload the page.");
+        // Reject ambiguous mappings / Loose bills against Bag orders before saving.
+        MandiOrderSync.deliveredSuppliers(linkedOrder.data(), [data]);
+      }
+
       // WRITES LAST
       transaction.set(counterRef, { currentNumber: newCounterValue });
       transaction.set(billRef, data);
+      if (linkedOrderRef) {
+        // The bill and its order index commit together; a failed follow-up cannot
+        // leave a saved bill invisible to the order's payment/delivery summaries.
+        transaction.update(linkedOrderRef, {
+          linkedBillNos: MandiOrderSync.serials(linkedOrder.data(), data["Serial No"]),
+          updatedAt: Date.now(),
+        });
+      }
 
       let didUpdateBalance = false;
       if (partyRef && partyDoc && partyDoc.exists) {
@@ -1332,7 +1381,7 @@ async function collectData() {
     operation.message("Bill saved. Finishing linked updates; do not create it again.", true);
     if (alreadySaved) {
       operation.finish("This bill was already saved. Opening its details.");
-      window.location.href = `final.html?id=${billRef.id}`;
+      openConfirmedBill(`final.html?id=${billRef.id}`);
       return;
     }
 
@@ -1342,25 +1391,7 @@ async function collectData() {
       reason: correctionOf ? `Correction of bill ${data["Corrects Bill No"] || correctionOf}` : "",
     });
 
-    // --- 🔗 Order Link Update ---
     if (data["LinkedOrderId"]) {
-      await db
-        .collection("orders")
-        .doc(data["LinkedOrderId"])
-        .update({
-          linkedBillNos: firebase.firestore.FieldValue.arrayUnion(data["Serial No"]), // Array mein save hoga
-          updatedAt: Date.now(),
-        });
-    }
-
-    // ═══════════════════════════════════════════════════════════════════
-    // PHASE 4 (items #16, #17) — Automated Order Book Sync
-    // updateOrderDeliveredQty() already existed in order-integration.js but
-    // was never actually called anywhere — order delivered-quantity tracking
-    // was effectively dead. Wiring it in here, with the manual "Close this
-    // Order" checkbox as an override.
-    // ═══════════════════════════════════════════════════════════════════
-    if (data["LinkedOrderId"] && typeof updateOrderDeliveredQty === "function") {
       const closeOrderOverride = document.getElementById("close_order_checkbox")?.checked || false;
       await updateOrderDeliveredQty(data, closeOrderOverride);
     }
@@ -1369,13 +1400,13 @@ async function collectData() {
     }
 
     await checkAndSendWhatsApp(data, docRef.id);
-    window.location.href = `final.html?id=${docRef.id}`;
+    openConfirmedBill(`final.html?id=${docRef.id}`);
   } catch (error) {
     hideLoading();
     if (billCommittedId) {
       operation.finish("Bill saved; a follow-up update needs review.", "warning");
       await Swal.fire("Bill saved — follow-up needs review", "The bill is saved. A linked order, commission or sharing update did not finish. Do not create this bill again; review its details and linked records.", "warning");
-      window.location.href = `final.html?id=${billCommittedId}`;
+      openConfirmedBill(`final.html?id=${billCommittedId}`);
       return;
     }
     operation.fail(error);
@@ -1392,7 +1423,7 @@ async function collectData() {
   }
 }
 async function updateData(docId) {
-  if (billCommittedId) { window.location.href = `final.html?id=${billCommittedId}`; return; }
+  if (billCommittedId) { openConfirmedBill(`final.html?id=${billCommittedId}`); return; }
   const form = document.getElementById("estimateForm");
   const submitButton = form.querySelector('button[type="submit"]');
   const operation = MandiFormSafety.begin("bill", { container: form, button: submitButton, label: "Updating bill" });
@@ -1403,7 +1434,9 @@ async function updateData(docId) {
   const billRef = billsCollection.doc(docId);
   try {
     const formData = new FormData(form);
-    let newData = calculateBillData(formData);
+    let newData = form.dataset.metadataRevision === "true"
+      ? { Date: document.getElementById("bill_date_input").value.split("-").reverse().join("/"), Remarks: formData.get("bill_remarks") || "" }
+      : calculateBillData(formData);
     const matchedCustomer = (window.partiesMasterList || []).find((party) => {
       const type = (party.type || "").toLowerCase();
       return (
@@ -1414,7 +1447,7 @@ async function updateData(docId) {
     newData.customerId = formData.get("customer_id") || (matchedCustomer && matchedCustomer.id) || "";
     newData["lastUpdatedAt"] = firebase.firestore.FieldValue.serverTimestamp();
 
-    let originalData; // captured inside the transaction for the bags-count logic below
+    let originalData; // Preserve the saved order mapping when recalculating an edit.
 
     // ═══════════════════════════════════════════════════════════════════
     // PHASE 3 (item #13) — Optimistic Concurrency
@@ -1437,8 +1470,9 @@ async function updateData(docId) {
       const freshDoc = await transaction.get(billRef);
       if (!freshDoc.exists) throw new Error("NOT_FOUND: Original bill not found!");
       originalData = freshDoc.data();
-      if (originalData.locked === true || originalData.workflowStatus === "locked") {
-        throw new Error("LOCKED: This bill is locked. Create a correction instead of editing the original bill.");
+      await MandiFinancialYear.assertPostingOpen(db, transaction, [originalData.Date, newData.Date]);
+      if (originalData.locked === true || ['approved', 'locked'].includes(originalData.workflowStatus)) {
+        throw new Error("LOCKED: Approved bills cannot be edited. Keep the original bill unchanged and use a reviewed correction.");
       }
 
       const currentTimestamp = originalData.lastUpdatedAt || null;
@@ -1453,6 +1487,16 @@ async function updateData(docId) {
           "CONFLICT: This bill was edited by someone else since you opened it. Please reload and try again."
         );
       }
+
+      if (MandiFinancialYear.financialYearId(originalData.Date) !== MandiFinancialYear.financialYearId(newData.Date)) {
+        throw new Error("VALIDATION_ERROR: A bill cannot move to another financial year under its existing bill number. Review a cancellation/replacement instead.");
+      }
+      if (originalData.revisionPending && (Number(originalData.amountPaid || 0) > 0 || ["Paid", "Partial", "Partially Paid"].includes(originalData.paymentStatus))) {
+        newData = { Date: newData.Date, Remarks: newData.Remarks, lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() };
+        transaction.update(billRef, newData);
+        return;
+      }
+      if (!Number(originalData.amountPaid || 0)) newData.amountDue = newData["Final Total"];
 
       newData["Serial No"] = originalData["Serial No"];
       // Phase 1: Date and Remarks now come from calculateBillData() itself
@@ -1471,6 +1515,12 @@ async function updateData(docId) {
       const newPartyRef = !sameCustomer && newCustomerId ? db.collection("parties").doc(newCustomerId) : null;
       const oldPartyDoc = oldPartyRef ? await transaction.get(oldPartyRef) : null;
       const newPartyDoc = newPartyRef ? await transaction.get(newPartyRef) : null;
+      if (originalData.LinkedOrderId) {
+        const orderDoc = await transaction.get(db.collection("orders").doc(originalData.LinkedOrderId));
+        if (!orderDoc.exists) throw new Error("VALIDATION_ERROR: The linked order is missing. Review its link first.");
+        if (!window.MandiOrderSync) throw new Error("Order sync module is unavailable. Reload the page.");
+        MandiOrderSync.deliveredSuppliers(orderDoc.data(), [{ ...originalData, ...newData }]);
+      }
 
       // --- Writes ---
       transaction.update(billRef, newData);
@@ -1508,22 +1558,18 @@ async function updateData(docId) {
       after: billAuditSnapshot({ ...originalData, ...newData }),
     });
 
-    // Calculate bags in the original bill
-    let bagsInOriginalBill = 0;
-    if (originalData["Bill Type"] === "Bag") {
-      for (let i = 1; i <= 5; i++) {
-        bagsInOriginalBill += originalData[`Vakal ${i} Katta`] || 0;
-      }
-    }
+    // Recalculate from saved bills, including changed bags/weight/amount. Payment
+    // and delivery status are independent; editing must not leave stale totals.
+    if (originalData.LinkedOrderId) await updateOrderDeliveredQty({ ...originalData, ...newData });
 
-    window.location.href = `final.html?id=${docId}`;
+    openConfirmedBill(`final.html?id=${docId}`);
   } catch (error) {
     const message = error && error.message ? error.message : String(error);
     hideLoading();
     if (billCommittedId) {
       operation.finish("Bill update saved; a follow-up needs review.", "warning");
       await Swal.fire("Bill updated", "The bill update is saved, but a follow-up did not finish. Do not submit it again. Review its details.", "warning");
-      window.location.href = `final.html?id=${docId}`;
+      openConfirmedBill(`final.html?id=${docId}`);
       return;
     }
     operation.fail(error);
@@ -1570,72 +1616,6 @@ document.addEventListener("DOMContentLoaded", async () => {
   initializeIndexPage(); // 2. Then, set up the rest of the page
   initializeBillWorkspace();
 });
-document.addEventListener("DOMContentLoaded", () => {
-  const bInput = document.getElementById("broker_name");
-  const bBox = document.getElementById("broker-suggestions");
-
-  if (bInput && bBox) {
-    // async hata diya kyunki ab Firebase call nahi karna padega
-    bInput.addEventListener("input", function () {
-      const val = this.value.trim().toUpperCase();
-      if (!val) {
-        bBox.style.display = "none";
-        return;
-      }
-
-      try {
-        // Agar Master List abhi load nahi hui hai toh wapas jao
-        if (!window.partiesMasterList) return;
-
-        const uniqueBrokers = new Map();
-
-        // Seedha memory (partiesMasterList) se filter karo, DB call ki zaroorat nahi
-        window.partiesMasterList.forEach((data) => {
-          // Sirf 'Broker' ko check karo jo deleted nahi hain
-          if (data.type === "Broker" && data.deleted !== true) {
-            const name = (data.name || "").trim();
-            if (!name) return;
-
-            const brokerId = name.toUpperCase().replace(/\s+/g, "_");
-
-            if (name.toUpperCase().includes(val)) {
-              // Pura object save kar rahe hain taaki commission bhi mil jaye
-              uniqueBrokers.set(brokerId, data);
-            }
-          }
-        });
-
-        const matches = Array.from(uniqueBrokers.values());
-
-        if (matches.length > 0) {
-          bBox.innerHTML = matches
-            .map(
-              (m) => `
-            <div style="padding: 9px 14px; cursor: pointer; border-bottom: 1.5px solid #f0f0f0; background: white; font-weight: 600; color: #333;" 
-                 onmousedown="applyBrokerDetails('${m.name}', ${m.defaultComm || 0})">
-              🤝 ${m.name} ${
-                m.defaultComm ? `<small style="color:gray; font-weight:normal;">(₹${m.defaultComm}/Bag)</small>` : ""
-              }
-            </div>`
-            )
-            .join("");
-          bBox.style.display = "block";
-        } else {
-          bBox.style.display = "none";
-        }
-      } catch (e) {
-        console.error("Broker autocomplete error:", e);
-      }
-    });
-
-    bInput.addEventListener("blur", () => {
-      setTimeout(() => {
-        bBox.style.display = "none";
-      }, 200);
-    });
-  }
-});
-
 // Yeh function Broker ka naam aur Commission dono set karega
 window.applyBrokerDetails = function (brokerName, commission) {
   // 1. Naam set karo

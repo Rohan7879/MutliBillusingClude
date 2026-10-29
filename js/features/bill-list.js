@@ -243,31 +243,84 @@ async function markSelectedBillsAsPaid() {
   const selectedCheckboxes = document.querySelectorAll("#bill_list_view .bill-checkbox:checked");
 
   if (selectedCheckboxes.length === 0) {
-    Swal.fire("No Bills Selected", "Please select one or more bills to mark as paid.", "info");
+    Swal.fire("No Bills Selected", "Select one or more bills before recording a payment.", "info");
+    return;
+  }
+
+  const selectedIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
+  const selectedBills = allBillsForList.filter((billDoc) => selectedIds.includes(billDoc.id));
+  const approvalNeeded = selectedBills.filter((billDoc) => {
+    const bill = billDoc.data();
+    const workflow = String(bill.workflowStatus || (bill.locked ? "locked" : "draft")).toLowerCase();
+    return !["approved", "locked"].includes(workflow);
+  });
+  if (approvalNeeded.length > 0) {
+    const billNumbers = approvalNeeded
+      .map((billDoc) => billDoc.data()["Serial No"] || "an unnamed bill")
+      .join(", ");
+    Swal.fire({
+      icon: "info",
+      title: "Payment not saved",
+      html: `<p style="margin:0 0 10px">${approvalNeeded.length === 1 ? "This bill is" : "These bills are"} still <strong>Draft</strong>:</p><p style="margin:0 0 14px;font-weight:800;color:#075a9c">${escapeHtml(billNumbers)}</p><p style="margin:0">Open the bill, choose <strong>Approve Bill</strong>, then record payment. No payment was created.</p>`,
+      confirmButtonColor: "#005a9e",
+    });
+    return;
+  }
+  const selectedDue = selectedBills.reduce((total, billDoc) => {
+    const bill = billDoc.data();
+    const finalTotal = Number(bill["Final Total"] || 0);
+    const paid = Math.max(0, Number(bill.amountPaid || 0));
+    return total + Math.max(0, finalTotal - paid);
+  }, 0);
+  if (selectedDue <= 0.01) {
+    Swal.fire("Nothing due", "All selected bills are already fully paid.", "info");
     return;
   }
 
   const result = await Swal.fire({
-    title: "Are you sure?",
-    text: `You are about to mark ${selectedCheckboxes.length} bill(s) as Paid with today's date.`,
-    icon: "question",
+    title: "Record payment",
+    customClass: { popup: "mb-payment-popup" },
+    html: `<p>Payment will be allocated across ${selectedBills.length} selected bill(s).</p>` + window.MandiPaymentUI.fields(true),
+    didOpen: () => { document.getElementById("bulk-payment-cash").value = selectedDue.toFixed(2); },
     showCancelButton: true,
-    input: "text",
-    inputLabel: "Payment reason / reference",
-    inputPlaceholder: "Example: Cash received at counter",
-    inputValidator: (value) => !value.trim() && "Payment reason is required.",
     confirmButtonColor: "#28a745",
-    confirmButtonText: "Yes, mark as Paid!",
+    confirmButtonText: "Save payment",
+    preConfirm: () => {
+      const cashAmount = Number(document.getElementById("bulk-payment-cash")?.value || 0);
+      const deductionAmount = Number(document.getElementById("bulk-payment-deduction")?.value || 0);
+      const paymentDate = document.getElementById("bulk-payment-date")?.value || "";
+      const paymentMethod = document.getElementById("bulk-payment-method")?.value || "Cash";
+      const deductionReason = document.getElementById("bulk-payment-deduction-reason")?.value.trim() || "";
+      const reason = document.getElementById("bulk-payment-reason")?.value.trim() || "";
+      const totalCredit = cashAmount + deductionAmount;
+      if (![cashAmount, deductionAmount, totalCredit].every(Number.isFinite) || cashAmount < 0 || deductionAmount < 0 || totalCredit <= 0) {
+        Swal.showValidationMessage("Enter a valid received amount or deduction."); return false;
+      }
+      if (totalCredit > selectedDue + 0.01) {
+        Swal.showValidationMessage(`Selected bills have only ₹${selectedDue.toFixed(2)} pending.`); return false;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate) || !Number.isFinite(new Date(`${paymentDate}T12:00:00`).getTime())) {
+        Swal.showValidationMessage("Choose a valid payment date."); return false;
+      }
+      if (deductionAmount > 0 && !deductionReason) {
+        Swal.showValidationMessage("Enter a deduction reason."); return false;
+      }
+      if (!reason) { Swal.showValidationMessage("Enter a payment reference."); return false; }
+      return { cashAmount, deductionAmount, paymentDate, paymentMethod, deductionReason, reason };
+    },
   });
 
   if (result.isConfirmed) {
     showLoading("Updating bills and recording payments...");
     let failedCount = 0;
     let alreadyPaidCount = 0;
+    let unallocatedCount = 0;
+    let approvalRequiredCount = 0;
 
     try {
-      const selectedIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
-      const billsToUpdate = allBillsForList.filter((billDoc) => selectedIds.includes(billDoc.id));
+      const billsToUpdate = selectedBills;
+      let remainingCash = result.value.cashAmount;
+      let remainingDeduction = result.value.deductionAmount;
 
       for (const billDoc of billsToUpdate) {
         const billId = billDoc.id;
@@ -286,21 +339,30 @@ async function markSelectedBillsAsPaid() {
           const paymentRef = db.collection("payments").doc();
 
           const paymentCreated = await db.runTransaction(async (transaction) => {
+            await MandiFinancialYear.assertPostingOpen(db, transaction, [result.value.paymentDate]);
             const freshBillDoc = await transaction.get(billRef);
             if (!freshBillDoc.exists) throw new Error("Bill not found");
             const billData = freshBillDoc.data();
+            const workflow = String(billData.workflowStatus || (billData.locked ? "locked" : "draft")).toLowerCase();
+            if (!["approved", "locked"].includes(workflow)) return { skipped: "approvalRequired" };
             const currentPaid = Number(billData.amountPaid || 0);
             const finalTotal = Number(billData["Final Total"] || 0);
-            const remainingDue = finalTotal - currentPaid;
-            if (remainingDue <= 0.01) return false; // already fully paid — no payment/audit should be created
+            const remainingDue = Math.max(0, finalTotal - currentPaid);
+            if (remainingDue <= 0.01) return { skipped: "alreadyPaid" }; // no payment/audit should be created
+
+            const creditAvailable = remainingCash + remainingDeduction;
+            if (creditAvailable <= 0.01) return { skipped: "unallocated" };
+            const creditForBill = Math.min(remainingDue, creditAvailable);
+            const deductionForBill = Math.min(remainingDeduction, creditForBill);
+            const cashForBill = creditForBill - deductionForBill;
 
             const partyRef = billData.customerId ? db.collection("parties").doc(billData.customerId) : null;
             const partyDoc = partyRef ? await transaction.get(partyRef) : null;
 
             transaction.update(billRef, {
-              paymentStatus: "Paid",
-              amountPaid: finalTotal,
-              amountDue: 0,
+              paymentStatus: currentPaid + creditForBill >= finalTotal - 0.01 ? "Paid" : "Partial",
+              amountPaid: roundCurrency(currentPaid + creditForBill),
+              amountDue: roundCurrency(Math.max(0, finalTotal - currentPaid - creditForBill)),
               lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
 
@@ -308,37 +370,48 @@ async function markSelectedBillsAsPaid() {
               customerName: billData["Customer Name"] || "",
               customerVillage: billData["Village"] || "N/A",
               customerId: billData.customerId || null,
-              cashAmount: remainingDue,
-              deductionAmount: 0,
-              totalCredit: remainingDue,
-              paymentDate: firebase.firestore.Timestamp.fromDate(new Date()),
+              cashAmount: cashForBill,
+              paymentMethod: result.value.paymentMethod,
+              deductionAmount: deductionForBill,
+              deductionReason: deductionForBill > 0 ? result.value.deductionReason : "",
+              totalCredit: creditForBill,
+              paymentDate: firebase.firestore.Timestamp.fromDate(new Date(`${result.value.paymentDate}T12:00:00`)),
               appliedToBills: [billId],
-              reason: result.value.trim(),
+              reason: result.value.reason,
               createdAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
 
             if (partyRef && partyDoc && partyDoc.exists) {
               const currentBalance = Number(partyDoc.data().currentBalance || 0);
               transaction.update(partyRef, {
-                currentBalance: roundCurrency(currentBalance - remainingDue),
+                currentBalance: roundCurrency(currentBalance - creditForBill),
                 lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
               });
             }
-            return true;
+            return { cashForBill, deductionForBill, creditForBill };
           });
 
-          if (paymentCreated) {
+          if (paymentCreated?.skipped === "alreadyPaid") {
+            alreadyPaidCount++;
+          } else if (paymentCreated?.skipped === "approvalRequired") {
+            approvalRequiredCount++;
+          } else if (paymentCreated?.skipped === "unallocated") {
+            unallocatedCount++;
+          } else if (paymentCreated) {
+            remainingCash -= paymentCreated.cashForBill;
+            remainingDeduction -= paymentCreated.deductionForBill;
             await recordAudit("payment.created", "payment", paymentRef.id, {
               before: billAuditSnapshot(billDoc.data()),
               after: {
                 billId,
                 serialNo: billDoc.data()["Serial No"] || "",
-                paymentStatus: "Paid",
+                paymentStatus: paymentCreated.creditForBill >= Number(billDoc.data()["Final Total"] || 0) - Number(billDoc.data().amountPaid || 0) - 0.01 ? "Paid" : "Partial",
+                cashAmount: paymentCreated.cashForBill,
+                deductionAmount: paymentCreated.deductionForBill,
+                paymentMethod: result.value.paymentMethod,
               },
-              reason: result.value.trim(),
+              reason: result.value.reason,
             });
-          } else {
-            alreadyPaidCount++;
           }
         } catch (billError) {
           console.error(`Could not mark bill ${billId} as paid:`, billError);
@@ -346,17 +419,23 @@ async function markSelectedBillsAsPaid() {
         }
       }
 
-      const updatedCount = selectedCheckboxes.length - failedCount - alreadyPaidCount;
-      if (failedCount === 0 && alreadyPaidCount === 0) {
+      const updatedCount = selectedCheckboxes.length - failedCount - alreadyPaidCount - unallocatedCount - approvalRequiredCount;
+      if (failedCount === 0 && alreadyPaidCount === 0 && unallocatedCount === 0) {
         Swal.fire(
           "Success!",
-          `${selectedCheckboxes.length} bill(s) have been marked as Paid with today's date.`,
+          `${updatedCount} bill(s) payment saved. ${remainingCash + remainingDeduction > 0.01 ? `₹${(remainingCash + remainingDeduction).toFixed(2)} was not applied because selected bill dues changed.` : ""}`,
           "success"
         );
+      } else if (updatedCount === 0 && approvalRequiredCount > 0) {
+        Swal.fire("Payment not saved", `${approvalRequiredCount} selected bill(s) are Draft. Approve the bill first, then record payment. No payment was created.`, "info");
       } else {
         Swal.fire(
           "Partially completed",
-          `${updatedCount} bill(s) marked Paid.${alreadyPaidCount ? ` ${alreadyPaidCount} already paid tha, isliye duplicate payment nahi banaya.` : ""}${
+          `${updatedCount} bill(s) payment saved.${alreadyPaidCount ? ` ${alreadyPaidCount} already paid tha, isliye duplicate payment nahi banaya.` : ""}${
+            unallocatedCount ? ` ${unallocatedCount} bill(s) unpaid raha because entered payment amount unke due tak nahi pahuncha.` : ""
+          }${
+            approvalRequiredCount ? ` ${approvalRequiredCount} bill(s) Draft tha; approve karne ke baad hi payment hoga.` : ""
+          }${
             failedCount ? ` ${failedCount} failed — inmein koi half-update nahi hua.` : ""
           }`,
           "warning"
@@ -426,7 +505,8 @@ window.deleteSelectedBills = deleteSelectedBills;
 async function softDeleteBillSilently(docId) {
   try {
     if (typeof changeBillArchive !== "function") throw new Error("Safe archive module is unavailable; reload before archiving.");
-    return await changeBillArchive(docId, false);
+    const result = await changeBillArchive(docId, false);
+    return result?.changed === true;
   } catch (error) { console.warn("One bill was not archived:", error.message); return false; }
 }
 
@@ -479,7 +559,7 @@ function renderBillList(docs) {
       <td class="action-buttons">
           <button class="view-btn" data-id="${doc.id}">View</button>
           <button class="edit-btn" data-id="${doc.id}" ${
-      bill.paymentStatus === "Paid" || bill.locked === true ? "disabled" : ""
+      bill.paymentStatus === "Paid" || bill.locked === true || ['approved', 'locked'].includes(bill.workflowStatus) ? "disabled" : ""
     }>Edit</button>
           <button class="delete-btn" data-id="${doc.id}" data-serial="${serialNo}">Delete</button>
       </td>
@@ -523,6 +603,12 @@ function viewBill(docId) {
   window.location.href = `final.html?id=${docId}`;
 }
 function editBill(docId) {
+  const entry = allBillsForList.find(doc => doc.id === docId);
+  const bill = entry?.data();
+  if (bill && (bill.locked === true || ['approved', 'locked'].includes(bill.workflowStatus))) {
+    Swal.fire("Approved bill protected", "Approved bills cannot be edited. The original date, items and amounts must remain unchanged.", "info");
+    return;
+  }
   // Phase 3 (item #14): no more pre-fetch + localStorage — bill-create.html
   // fetches the bill fresh itself using ?editId=, so it's always up to date.
   window.location.href = `bill-create.html?editId=${docId}`;
@@ -533,7 +619,7 @@ async function deleteBill(docId, serialNo) {
     const bill = billDoc.exists ? billDoc.data() : null;
     const hasRecordedPayment =
       bill && (Number(bill.amountPaid || 0) > 0 || ["Paid", "Partial", "Partially Paid"].includes(bill.paymentStatus));
-    if (bill && (bill.locked === true || bill.workflowStatus === "locked")) {
+    if (bill && (bill.locked === true || ['approved', 'locked'].includes(bill.workflowStatus))) {
       Swal.fire(
         "Delete blocked",
         "This bill is locked as a final accounting record. Create a correction bill if a change is needed.",

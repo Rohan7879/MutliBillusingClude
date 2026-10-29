@@ -134,6 +134,12 @@ function check(name, value) { assert(value, name); checks++; console.log("PASS",
     await order.getByRole("button", { name: "Restore draft", exact: true }).click();
     check("Draft restores all order rows and safely escapes text", await order.evaluate(() => document.getElementById("order-notes").value === "DRAFT TO RECOVER" && document.querySelectorAll(".supplier-entry").length === 2 && document.querySelector('[name="s-variety-2"]').value === 'SAFE " <B>TEXT</B>' && !document.querySelector(".supplier-entry b")));
     check("Unsaved navigation is guarded", await order.evaluate(() => { const event = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(event); return event.defaultPrevented; }));
+    check("Confirmed receipt navigation bypasses only the next unload guard", await order.evaluate(() => {
+      MandiFormSafety.allowConfirmedNavigation();
+      const allowed = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(allowed);
+      const guardedAgain = new Event("beforeunload", { cancelable: true }); window.dispatchEvent(guardedAgain);
+      return !allowed.defaultPrevented && guardedAgain.defaultPrevented;
+    }));
     const savedDrafts = await order.evaluate(() => Object.keys(localStorage).filter(key => key.startsWith("mandibook:form-draft:")).length);
     await order.evaluate(() => { uid = "another-user"; orderDraft.touch(); orderDraft.flush(); });
     check("Account switch cannot overwrite another user's draft", await order.evaluate(count => Object.keys(localStorage).filter(key => key.startsWith("mandibook:form-draft:")).length === count, savedDrafts));

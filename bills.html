@@ -16,11 +16,14 @@
     <script src="js/core/firebase-init.js"></script>
     <script src="js/core/utils.js"></script>
     <script src="js/core/core-engine.js"></script>
+    <script src="js/core/order-sync.js"></script>
     <script src="js/features/company-profile.js"></script>
     <script id="backup-health-script" src="js/core/backup-health.js?v=16" defer></script>
     <script src="js/core/backup-engine.js?v=16" defer></script>
     <script src="js/features/backup-center.js?v=16" defer></script>
     <script src="js/features/backup.js?v=15" defer></script>
+    <script src="js/core/payment-ui.js" defer></script>
+    <script src="js/core/financial-year.js" defer></script>
     <script src="js/features/bill-list.js?v=15" defer></script>
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/dashboard.css" />
@@ -1193,7 +1196,7 @@
             </button>
             <button class="tbtn tbtn-new" onclick="window.location.href='bill-create.html'">✏️ New Bill</button>
             <button class="tbtn tbtn-print" onclick="printSelectedBills()">🖨️ Print</button>
-            <button class="tbtn tbtn-paid" id="mark_paid_btn">✅ Mark Paid</button>
+            <button class="tbtn tbtn-paid" id="mark_paid_btn">💰 Record Selected Payment</button>
             <button class="tbtn" style="background: #dc3545; color: #fff" onclick="deleteSelectedBills()">
               Archive Selected
             </button>

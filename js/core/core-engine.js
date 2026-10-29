@@ -548,6 +548,7 @@ async function applyPrintLayoutOrder() {
 // ═══════════════════════════════════════════════════════════════════════════
 
 const NAV_ITEMS = [
+  { href: "financial-years.html", icon: "📅", label: "Financial Years", description: "April–March balances and year locks", roles: ["admin", "manager", "accountant"], group: "Accounts" },
   { href: "bill-create.html", icon: "🧾", label: "New Bill", roles: ["admin", "manager", "biller"] },
   { href: "bills.html", icon: "📋", label: "Bills" },
   { href: "dashboard.html", icon: "📊", label: "Dashboard" },
@@ -577,6 +578,7 @@ const NAV_GROUPS = [
 ];
 
 const PAGE_ROLE_REQUIREMENTS = {
+  "financial-years.html": ["admin", "manager", "accountant"],
   "bill-create.html": ["admin", "manager", "biller"],
   "broker-ledger.html": ["admin", "manager", "accountant"],
   "broker-detail.html": ["admin", "manager", "accountant"],

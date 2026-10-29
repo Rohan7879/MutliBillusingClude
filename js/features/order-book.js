@@ -13,6 +13,7 @@ let supplierCount = 0;
 let orderDraft = null;
 let orderSaveRef = null;
 let orderEditVersion = null;
+let orderEditBaseline = null;
 
 function setOrderSyncStatus(message, isError = false) {
   const target = document.getElementById("orderSyncStatus");
@@ -181,6 +182,9 @@ function renderOrders() {
           Cancelled: "❌",
           Deleted: "🗑️",
         }[order.status] || "⏳";
+      const manualCloseBadge = order.deliveryClosedManually === true
+        ? `<span class="status-badge" style="background:#fff3cd;color:#7a5200;border:1px solid #f5cf74;margin-left:4px;" title="This order was manually closed. It is not proof that all bags were billed or delivered.">✋ Manually closed</span>`
+        : "";
 
       // 1️⃣ PEHLE Supplier Name yahan nikal lo (Taki error na aaye)
       let mainSupplierName = order.supplier || order.supplierName || order.partyName || order.party || "";
@@ -322,6 +326,7 @@ function renderOrders() {
           <!-- Right Side: Status Badges & Bills -->
           <div style="text-align: right;">
             <span class="status-badge ${statusClass}">${statusEmoji} ${order.status}</span>
+            ${manualCloseBadge}
             ${paymentBadgeHtml}
             ${billBadgesHtml ? `<br>${billBadgesHtml}` : ""}
           </div>
@@ -349,9 +354,9 @@ function renderOrders() {
             <button class="btn-primary" style="padding:7px 14px;font-size:12px;" onclick="editOrder('${
               order.id
             }')">✏️ Edit</button>
-            <button style="padding:7px 14px;font-size:12px;background:#28a745;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
-              order.id
-            }','Completed')">✅ Complete</button>
+            ${order.deliveryClosedManually === true
+              ? `<button style="padding:7px 14px;font-size:12px;background:#f59e0b;color:#1f2937;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="reopenOrder('${order.id}')">↩ Reopen</button>`
+              : `<button style="padding:7px 14px;font-size:12px;background:#28a745;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${order.id}','Completed')">✅ Complete</button>`}
             <button style="padding:7px 14px;font-size:12px;background:#17a2b8;color:#fff;border:none;border-radius:8px;cursor:pointer;font-weight:700;" onclick="updateOrderStatus('${
               order.id
             }','Partial')">🔄 Partial</button>
@@ -410,15 +415,29 @@ async function togglePaymentStatus(orderId) {
     }
   }
 }
-function closeOrderModal(saved = false) {
+async function closeOrderModal(saved = false) {
   if (saved !== true && window.MandiFormSafety?.isBusy("order")) return;
-  if (saved !== true && orderDraft && !orderDraft.confirmLeave()) return;
+  if (saved !== true && orderDraft?.dirty) {
+    orderDraft.flush();
+    const result = await Swal.fire({
+      icon: "question",
+      title: "Discard unsaved order changes?",
+      text: "Your changes are saved only as a local browser draft. Firebase order data will not change.",
+      showCancelButton: true,
+      confirmButtonColor: "#dc3545",
+      cancelButtonColor: "#0b6fb3",
+      confirmButtonText: "Discard changes",
+      cancelButtonText: "Keep editing",
+    });
+    if (!result.isConfirmed) return;
+  }
   if (saved === true) orderDraft?.saved();
   orderDraft?.dispose();
   orderDraft = null;
   document.getElementById("order-modal").classList.remove("open");
   editingOrderId = null;
   orderSaveRef = null;
+  orderEditBaseline = null;
 }
 function addSupplierEntry(data = {}) {
   supplierCount++;
@@ -476,8 +495,8 @@ function addSupplierEntry(data = {}) {
         </select>
       </div>
       <div class="ff" style="margin:0;">
-        <label>Delivered So Far</label>
-        <input type="number" name="s-delivered-${idx}" min="0" step="any" placeholder="0" value="${escapeHtml(data.delivered ?? 0)}"/>
+        <label>Delivered So Far <small style="color:#64748b;">(from bills)</small></label>
+        <input type="number" name="s-delivered-${idx}" min="0" step="any" readonly title="Delivery is calculated from linked bills" placeholder="0" value="${escapeHtml(data.delivered ?? 0)}"/>
       </div>
     </div>`;
   document.getElementById("supplier-entries").appendChild(div);
@@ -534,7 +553,9 @@ function collectValidatedOrder() {
     if (item.quantity <= 0 || item.price <= 0) fail("Quantity and rate must be greater than zero.");
     if (!["Man", "Khadi", "Bag", "Quintal"].includes(item.unit) || !["20kg", "100kg"].includes(item.priceUnit)) fail("Select a valid unit.");
     if (item.unit === "Bag" && (!Number.isInteger(item.quantity) || !Number.isInteger(item.delivered))) fail("Bag quantities must be whole numbers.");
-    if (item.delivered > item.quantity) fail("Delivered quantity cannot exceed ordered quantity.");
+    if (item.delivered > item.quantity) {
+      fail(`Already delivered: ${item.delivered} ${item.unit}. Ordered quantity cannot be lower than delivered quantity. Correct/archive the linked bill first, then reopen this order.`);
+    }
     return { ...item, vakalTitle: item.vakalTitle || "Vakal " + (i + 1) };
   });
   const [yyyy, mm, dd] = date.split("-");
@@ -573,6 +594,26 @@ async function saveOrder() {
   let data;
   try { data = collectValidatedOrder(); }
   catch (error) { await Swal.fire("Check order details", error.message, "warning"); return; }
+  if (editingOrderId && orderEditBaseline) {
+    const changes = data.suppliers.map((item, index) => {
+      const before = orderEditBaseline.suppliers?.[index] || {};
+      const oldValue = `${before.quantity ?? 0} ${before.unit || ""}`.trim();
+      const newValue = `${item.quantity} ${item.unit}`;
+      return oldValue !== newValue ? `Vakal ${index + 1}: ${oldValue} → ${newValue}` : "";
+    }).filter(Boolean);
+    if (changes.length) {
+      const confirmation = await Swal.fire({
+        icon: "warning",
+        title: "Confirm order quantity change",
+        html: `<p style="margin:0 0 10px">Delivery will be recalculated from active linked bills after save.</p><div style="text-align:left;background:#f8fafc;border:1px solid #dbeafe;border-radius:10px;padding:12px;font-weight:700">${changes.map(change => `<div>${escapeHtml(change)}</div>`).join("")}</div>`,
+        showCancelButton: true,
+        confirmButtonColor: "#005a9e",
+        confirmButtonText: "Save corrected order",
+        cancelButtonText: "Keep editing",
+      });
+      if (!confirmation.isConfirmed) return;
+    }
+  }
   const operation = MandiFormSafety.begin("order", {
     container: document.getElementById("order-editor"), button: document.getElementById("save-order-btn"), label: "Saving order",
   });
@@ -605,6 +646,7 @@ async function saveOrder() {
       varieties.forEach((name, id) => transaction.set(db.collection("varieties").doc(id), { name }, { merge: true }));
     });
     orderDraft?.saved();
+    orderEditBaseline = null;
     operation.finish("Order saved and confirmed by the server.");
     closeOrderModal(true);
     Swal.fire({ icon: "success", title: editId ? "Order updated" : "Order saved", text: "Server confirmed. The order list will refresh automatically." });
@@ -618,12 +660,32 @@ async function saveOrder() {
   }
 }
 // ── EDIT ORDER ────────────────────────────────────────────────────────────────
-function editOrder(id) {
+async function editOrder(id) {
   if (MandiFormSafety.isBusy("order")) return;
   document.querySelector("#order-editor .form-operation-status")?.remove();
   orderDraft?.dispose(); orderDraft = null; orderSaveRef = null;
-  const order = allOrders.find((o) => o.id === id);
+  let order = allOrders.find((o) => o.id === id);
   if (!order) return;
+  // Reconcile before editing. This prevents the editor from using stale
+  // delivery values after a linked bill was archived/restored.
+  try {
+    if (!window.MandiOrderSync) throw new Error("Order reconciliation module is unavailable. Reload this page.");
+    await window.MandiOrderSync.sync(id, { delivery: true });
+    const fresh = await ordersCollection.doc(id).get();
+    if (!fresh.exists) throw new Error("Order no longer exists.");
+    order = { id: fresh.id, ...fresh.data() };
+    const index = allOrders.findIndex(item => item.id === id);
+    if (index >= 0) allOrders[index] = order;
+  } catch (error) {
+    await Swal.fire({
+      icon: "error",
+      title: "Order needs reconciliation",
+      text: error.message || "The latest linked-bill delivery could not be checked. Nothing was changed.",
+      confirmButtonColor: "#005a9e",
+    });
+    return;
+  }
+  orderEditBaseline = structuredClone(order);
   editingOrderId = id;
   orderEditVersion = JSON.stringify(order.updatedAt ?? null);
   document.getElementById("order-modal-title").textContent = `✏️ Edit Order #${order.orderNo}`;
@@ -652,15 +714,18 @@ function editOrder(id) {
 // ── UPDATE STATUS ─────────────────────────────────────────────────────────────
 // ── UPDATE ORDER STATUS (With Safeguard Checkpoint) ─────────────────────
 async function updateOrderStatus(id, newStatus) {
+  const isManualClose = newStatus === "Completed";
   // 1. Ek check point (SweetAlert) lagayenge
   const result = await Swal.fire({
-    title: "Change Status?",
-    text: `Kya aap sach mein is order ko '${newStatus}' status par set karna chahte hain?`,
+    title: isManualClose ? "Manually close this order?" : "Change Status?",
+    text: isManualClose
+      ? "This marks the order Completed even if delivery is still pending. Use only when you intentionally want to close it; Reopen is available later."
+      : `Kya aap sach mein is order ko '${newStatus}' status par set karna chahte hain?`,
     icon: "warning",
     showCancelButton: true,
     confirmButtonColor: "#3085d6",
     cancelButtonColor: "#6c757d",
-    confirmButtonText: `Yes, Make it ${newStatus}`,
+    confirmButtonText: isManualClose ? "Yes, close manually" : `Yes, Make it ${newStatus}`,
     cancelButtonText: "No, Cancel",
   });
 
@@ -673,6 +738,7 @@ async function updateOrderStatus(id, newStatus) {
   try {
     await ordersCollection.doc(id).update({
       status: newStatus,
+      deliveryClosedManually: newStatus === "Completed",
       updatedAt: Date.now(),
     });
 
@@ -693,6 +759,32 @@ async function updateOrderStatus(id, newStatus) {
     Swal.fire("Error", "Status update fail ho gaya.", "error");
   }
 }
+
+async function reopenOrder(id) {
+  const result = await Swal.fire({
+    icon: "question",
+    title: "Reopen this order?",
+    text: "The manual close will be removed. Status and delivered quantity will be recalculated only from active linked bills.",
+    showCancelButton: true,
+    confirmButtonText: "Reopen order",
+    cancelButtonText: "Keep closed",
+    confirmButtonColor: "#0b6cb8",
+  });
+  if (!result.isConfirmed) return;
+  showLoading();
+  try {
+    await ordersCollection.doc(id).update({ deliveryClosedManually: false, updatedAt: Date.now() });
+    if (!window.MandiOrderSync) throw new Error("Order sync is unavailable. Reload this page and try again.");
+    await window.MandiOrderSync.sync(id, { delivery: true });
+    Swal.fire({ icon: "success", title: "Order reopened", text: "Its status now reflects only active linked bills and delivered quantities.", timer: 2200, showConfirmButton: false });
+  } catch (error) {
+    console.error("Could not reopen order:", error);
+    Swal.fire({ icon: "error", title: "Order was not reopened", text: error.message || "Please reload and try again." });
+  } finally {
+    hideLoading();
+  }
+}
+window.reopenOrder = reopenOrder;
 // ── DELETE ORDER ──────────────────────────────────────────────────────────────
 // ── CANCEL / SOFT DELETE ORDER (Naya Safe Tarika) ────────────────────────────
 async function deleteOrder(id) {
@@ -1026,7 +1118,7 @@ let allBrokersList = [];
 function openNewOrderModal() {
   if (MandiFormSafety.isBusy("order")) return;
   document.querySelector("#order-editor .form-operation-status")?.remove();
-  orderDraft?.dispose(); orderDraft = null; orderSaveRef = null; orderEditVersion = null;
+  orderDraft?.dispose(); orderDraft = null; orderSaveRef = null; orderEditVersion = null; orderEditBaseline = null;
   editingOrderId = null;
   document.getElementById("order-modal-title").textContent = "➕ New Order";
   document.getElementById("order-broker").value = "";

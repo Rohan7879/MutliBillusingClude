@@ -9,8 +9,9 @@
  */
 
 // ─── Global state read by bill-form.js during calculation ─────────────────────
-// `window.activeTemplate` holds the currently selected product template object
-// (or null if no template selected i.e. plain/manual bill).
+// `window.activeTemplate` holds the currently selected product template object.
+// A new bill must always use one: its configured series prefix is part of the
+// permanent bill-numbering and audit trail.
 window.activeTemplate = null;
 
 let allProductTemplates = {}; // Loaded from Firestore: { id: templateData }
@@ -73,7 +74,7 @@ function renderProductDropdown() {
     <div class="product-select-row">
       <label>🌾 Product</label>
       <select id="product-template-select">
-        <option value="">— Manual Bill (no template) —</option>
+        <option value="" selected disabled>— Select product template (required) —</option>
         ${options}
       </select>
     </div>`;
@@ -108,10 +109,22 @@ function attachProductChangeListener() {
  */
 window.selectProductTemplateForBill = function ({ id = "", name = "" } = {}) {
   const normalise = (value) => String(value || "").trim().toLocaleLowerCase();
+  // Product Master and Bill Templates are stored separately. A Product Master
+  // label can be Gujarati (for example "QA15 ઘઉં") while its matching bill
+  // template is English ("QA15 WHEAT"). When there is exactly one shared
+  // product code, it is safe to select that template automatically.
+  const productCode = (value) => normalise(value).match(/[a-z]+\d+[a-z\d-]*/i)?.[0] || "";
   let templateId = id && allProductTemplates[id] ? id : "";
   if (!templateId && name) {
     const matches = Object.entries(allProductTemplates).filter(([, template]) => normalise(template.name) === normalise(name));
     if (matches.length === 1) templateId = matches[0][0];
+  }
+  if (!templateId && name) {
+    const code = productCode(name);
+    if (code) {
+      const matches = Object.entries(allProductTemplates).filter(([, template]) => productCode(template.name) === code);
+      if (matches.length === 1) templateId = matches[0][0];
+    }
   }
   if (!templateId) return false;
 

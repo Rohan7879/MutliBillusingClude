@@ -1,0 +1,81 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="robots" content="noindex, nofollow" />
+  <title>Financial Years — MandiBook</title>
+  <link rel="icon" href="assets/logo.jpg" />
+  <link rel="stylesheet" href="css/main.css?v=14" />
+  <link rel="stylesheet" href="css/workspaces.css?v=14" />
+  <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/12.17.1/firebase-firestore-compat.js"></script>
+  <script src="js/core/firebase-init.js"></script>
+  <script src="js/core/utils.js"></script>
+  <script src="js/core/core-engine.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/sweetalert2@11"></script>
+  <script src="js/core/financial-year.js" defer></script>
+  <script src="js/core/year-close.js" defer></script>
+  <script src="js/features/financial-years.js" defer></script>
+  <style>
+    .fy-panel { margin:18px 0; } .fy-scroll { overflow:auto; }
+    .fy-scroll table { min-width:650px; } .fy-scroll td:not(:first-child), .fy-scroll th:not(:first-child) { text-align:right; font-variant-numeric:tabular-nums; }
+    .fy-actions { display:flex; flex-wrap:wrap; gap:10px; margin-top:16px; }
+    .fy-reason { display:block; width:100%; min-height:90px; padding:12px; margin-top:8px; font:inherit; border:1px solid #cbdbe6; border-radius:9px; }
+    .fy-help { color:var(--ws-muted); font-size:13px; line-height:1.6; }
+    .fy-warning { padding:14px; border-radius:9px; background:#fff6e3; color:#805d13; font-size:13px; line-height:1.6; }
+    .fy-issues { max-height:280px; overflow:auto; padding-left:24px; line-height:1.7; font-size:13px; }
+    .workspace-action:disabled { opacity:.5; cursor:not-allowed; }
+    #fy-message { overflow-wrap:anywhere; } #fy-message[data-error="true"] { color:#ae3024; }
+  </style>
+</head>
+<body class="workspace-page">
+  <div id="navbar-root"></div>
+  <main class="closing-wrap">
+    <header class="closing-hero">
+      <p class="workspace-kicker">Accounts · April to March</p>
+      <h1>Financial years</h1>
+      <p>Review carried-forward balances and manage your accounting lock.</p>
+      <span class="workspace-sync" id="fy-sync">Waiting for access…</span>
+    </header>
+    <section class="workspace-toolbar" aria-label="Financial year selection">
+      <div class="workspace-field"><label for="fy-select">Financial year</label><select id="fy-select" disabled></select></div>
+      <button class="workspace-action" id="fy-refresh" disabled>Refresh from server</button>
+      <button class="workspace-action" id="fy-export" disabled>Export preview JSON</button>
+    </section>
+    <p id="fy-message" role="status" aria-live="polite"></p>
+    <section class="workspace-panel fy-panel" aria-labelledby="fy-lock-title">
+      <h2 id="fy-lock-title">Accounting lock</h2>
+      <p id="fy-lock">Loading existing cutoff…</p>
+      <p class="fy-help">A close locks <strong>all entries through March 31</strong>, including every earlier year—not only the selected financial year. No closing balance or duplicate opening entries are written.</p>
+      <p id="fy-last-reason" class="fy-help"></p>
+      <details><summary>Year lock / reopen history</summary><ul id="fy-history" class="fy-issues"></ul></details>
+      <button id="fy-release" class="workspace-action" hidden>Release my interrupted preparation</button>
+    </section>
+    <div class="broker-overview" id="fy-totals"></div>
+    <section class="workspace-panel fy-panel">
+      <h2>Party balances</h2>
+      <p class="fy-help">Opening = initial Party Master balance plus every historical debit less credit before April 1. Positive balances are Dr (receivable); negative balances are Cr (advance). Missing opening type defaults to Cr.</p>
+      <div class="fy-scroll"><table class="workspace-detail-table"><thead><tr><th>Party</th><th>Opening</th><th>Debit</th><th>Credit</th><th>Closing</th></tr></thead><tbody id="fy-parties"></tbody></table></div>
+    </section>
+    <section class="workspace-panel fy-panel">
+      <h2>Broker commission &amp; payouts</h2>
+      <p class="fy-help">Positive broker balances are payable: opening payable plus commission less payouts. Initial broker Cr is payable; Dr is an advance.</p>
+      <div class="fy-scroll"><table class="workspace-detail-table"><thead><tr><th>Broker</th><th>Opening payable</th><th>Commission</th><th>Payouts</th><th>Closing payable</th></tr></thead><tbody id="fy-brokers"></tbody></table></div>
+    </section>
+    <section class="workspace-panel fy-panel">
+      <h2 id="fy-validation-title">Close readiness</h2>
+      <p class="fy-help">This is a derived preview, not proof of an immutable snapshot. Final preparation pauses financial writes and re-reads the server under a rules-enforced maintenance gate.</p>
+      <ul id="fy-issues" class="fy-issues"></ul>
+    </section>
+    <section class="workspace-panel fy-panel" id="fy-admin" hidden>
+      <h2>Admin controls</h2>
+      <p class="fy-warning">Preparation temporarily blocks all financial writes. Keep this page open until completion. Reopening the selected year also reopens every later locked year; the cutoff moves to the preceding March 31, never silently to zero.</p>
+      <label for="fy-reason">Required audit reason (10–1000 characters)</label>
+      <textarea id="fy-reason" class="fy-reason" minlength="10" maxlength="1000" placeholder="Explain the review and why this lock should change"></textarea>
+      <div class="fy-actions"><button id="fy-close" class="workspace-action" disabled>Prepare &amp; close through March 31</button><button id="fy-reopen" class="workspace-action" disabled>Reopen selected year &amp; later years</button></div>
+    </section>
+  </main>
+</body>
+</html>

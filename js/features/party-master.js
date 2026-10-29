@@ -1,5 +1,7 @@
 let partiesList = [];
 let billsSummaryMap = {}; // Feature 5: Party-wise bill counts
+let brokerBalances = {};
+let brokerBalancesLoaded = false;
 let currentFilterType = "All";
 
 const partyText = (value) => String(value || "").trim();
@@ -47,6 +49,13 @@ document.addEventListener("DOMContentLoaded", async () => {
     }
   });
 
+  // Broker directory links here instead of creating a separate name-only record.
+  if (new URLSearchParams(window.location.search).get("type") === "Broker") {
+    partyTypeSelect.value = "Broker";
+    partyTypeSelect.dispatchEvent(new Event("change"));
+    document.getElementById("partyName").focus();
+  }
+
   document.getElementById("partyForm").addEventListener("submit", async function (e) {
     e.preventDefault();
     await saveParty();
@@ -63,6 +72,8 @@ async function fetchBillsSummary() {
   try {
     const snap = await db.collection("bills").get();
     billsSummaryMap = {};
+    brokerBalances = {};
+    brokerBalancesLoaded = false;
     snap.forEach((doc) => {
       const data = doc.data();
       if (data.deleted === true) return;
@@ -76,8 +87,17 @@ async function fetchBillsSummary() {
       if (brk) {
         const key = partyKey(brk);
         billsSummaryMap[key] = (billsSummaryMap[key] || 0) + 1;
+        brokerBalances[key] = (brokerBalances[key] || 0) + Number(data.BrokerCommission || 0);
       }
     });
+    const payouts = await db.collection("broker_payments").get();
+    payouts.forEach(doc => {
+      const payment = doc.data();
+      if (payment.deleted === true) return;
+      const key = partyKey(payment.brokerName);
+      brokerBalances[key] = (brokerBalances[key] || 0) - Number(payment.amount || 0);
+    });
+    brokerBalancesLoaded = true;
   } catch (e) {
     console.warn("Could not fetch bills summary:", e);
   }
@@ -305,10 +325,12 @@ function drawTable(data) {
       // opening balance forever, never reflecting real payment activity.
       const billableTypes = ["farmer", "vepari", "kisan", "customer", "buyer", "supplier"];
       const hasLiveLedgerBalance = billableTypes.includes((rawParty.type || "").toLowerCase());
-      const balanceToShow = hasLiveLedgerBalance ? Number(rawParty.currentBalance || 0) : Number(rawParty.opBal || 0);
+      const isBrokerParty = partyKey(rawParty.type) === "broker";
+      const balanceToShow = isBrokerParty ? (brokerBalances[partyKey(rawParty.name)] || 0) : hasLiveLedgerBalance ? Number(rawParty.currentBalance || 0) : Number(rawParty.opBal || 0);
       const balColor = balanceToShow > 0 ? "text-red-600" : "text-green-600";
-      const balAmount =
-        balanceToShow !== 0
+      const balAmount = isBrokerParty
+        ? (brokerBalancesLoaded ? `₹${Math.abs(balanceToShow).toLocaleString("en-IN")} <span class="text-[10px]">${balanceToShow > 0 ? "Payable (dene hain)" : balanceToShow < 0 ? "Advance paid" : "Settled"}</span>` : "Unavailable — open Broker Khata")
+        : balanceToShow !== 0
           ? `₹${Math.abs(balanceToShow).toLocaleString("en-IN")} <span class="text-[10px]">${
               balanceToShow > 0 ? "Dr" : "Cr"
             }</span>`
@@ -379,9 +401,7 @@ function drawTable(data) {
                   <button onclick="editParty('${
                     p.id
                   }')" class="text-blue-600 hover:text-blue-800 p-1 font-bold text-xs bg-blue-50 rounded px-2">Edit</button>
-                  <button onclick="deleteParty('${
-                    p.id
-                  }')" class="text-red-500 hover:text-red-700 p-1 font-bold text-xs bg-red-50 rounded px-2">Delete</button>
+                  <span title="Party records are retained to protect linked history" class="text-slate-500 p-1 text-xs">🔒 Protected</span>
               </div>
           </td>
       </tr>
@@ -611,113 +631,12 @@ window.exportPartiesExcel = function () {
   Swal.fire("Success", "Parties exported to Excel successfully!", "success");
 };
 
-window.deleteParty = async function (id) {
-  const p = partiesList.find((x) => x.id === id);
-  if (!p) return;
-
-  try {
-    const isCustomer = await db.collection("bills").where("customer_name", "==", p.name).limit(1).get();
-    const isBroker = await db.collection("bills").where("broker", "==", p.name).limit(1).get();
-
-    if (!isCustomer.empty || !isBroker.empty) {
-      return Swal.fire({
-        title: "Cannot Delete ⛔",
-        text: `Bills are already generated under the name "${p.name}". Deleting this will corrupt old bills.`,
-        icon: "warning",
-        confirmButtonColor: "#3085d6",
-      });
-    }
-  } catch (e) {
-    console.warn("Dependency check failed:", e);
-  }
-
-  const confirm = await Swal.fire({
-    title: "Are you sure?",
-    text: `Do you want to permanently remove ${p.name} from the master list?`,
-    icon: "question",
-    showCancelButton: true,
-    confirmButtonColor: "#e74c3c",
-    confirmButtonText: "Yes, delete it!",
-  });
-
-  if (confirm.isConfirmed) {
-    try {
-      // 1. Party ka data nikalein
-      const partyDoc = await db.collection("parties").doc(id).get();
-      const partyData = partyDoc.exists ? partyDoc.data() : {};
-      const partyName = (partyData.name || "").trim().toLowerCase();
-
-      // 2. Bills collection ke saare bills fetch karein
-      const billsSnapshot = await db.collection("bills").get();
-      let hasActiveBills = false;
-
-      // 3. JavaScript mein loop chala kar check karein ki kisi bhi bill mein ye party hai ya nahi
-      billsSnapshot.forEach((doc) => {
-        const bill = doc.data();
-        // Bill ke andar jitni bhi values hain, unhe string mein convert karke check kar lo
-        const billValues = Object.values(bill).map((v) => String(v).trim().toLowerCase());
-
-        const matchesId = billValues.includes(id.toLowerCase());
-        const matchesName = partyName && billValues.includes(partyName);
-
-        if (matchesId || matchesName) {
-          hasActiveBills = true;
-        }
-      });
-
-      // 4. Agar bill mil gaya, toh yahin rok do
-      if (hasActiveBills) {
-        Swal.fire(
-          "Error!",
-          "Yeh party delete nahi ho sakti, kyunki iska bill bana hua hai aur paisa dena baaki hai!",
-          "error"
-        );
-        return;
-      }
-
-      console.log("-> ALLOWED: No bills found anywhere, proceeding to delete.");
-      // 5. Agar sach mein koi bill nahi hai, tabhi delete hone do
-      await db.collection("parties").doc(id).update({ deleted: true });
-      Swal.fire("Deleted!", "Party removed successfully.", "success");
-      fetchParties();
-    } catch (error) {
-      console.error("DELETE ERROR:", error);
-      Swal.fire("Error", "Could not delete party.", "error");
-    }
-  }
+// Keep stale callers safe: directory records are retained for linked history.
+window.deleteParty = async function () {
+  return Swal.fire("Party protected", "Party deletion is disabled to protect bills, orders and payment history. You can edit its details.", "info");
 };
-async function handleDeleteParty(partyId, partyName) {
-  try {
-    console.log("Checking bills for Party ID:", partyId, "Name:", partyName);
-
-    // 1. Check karein bills collection mein
-    const checkById = await db.collection("bills").where("partyId", "==", partyId).get();
-    const checkByName = await db.collection("bills").where("partyName", "==", partyName).get();
-
-    console.log("Bills found by ID:", checkById.size);
-    console.log("Bills found by Name:", checkByName.size);
-
-    // 2. Agar koi bhi bill mil gaya, toh rok do
-    if (!checkById.empty || !checkByName.empty) {
-      alert(`⚠️ Error: "${partyName}" ko delete nahi kiya ja sakta, kyunki is party ke bills active hain!`);
-      return;
-    }
-
-    // 3. Agar bill nahi hai tabhi delete hone do
-    const confirmDelete = confirm(`Kya aap sach mein "${partyName}" ko delete karna chahte hain?`);
-    if (!confirmDelete) return;
-
-    await db.collection("parties").doc(partyId).update({
-      deleted: true,
-      updatedAt: new Date().toISOString(),
-    });
-
-    alert("Party successfully deleted.");
-    loadParties();
-  } catch (error) {
-    console.error("Error deleting party:", error);
-    alert("Delete karne mein error aaya. Console check karein.");
-  }
+async function handleDeleteParty() {
+  return window.deleteParty();
 }
 // 🌟 1. Party Row Click karne par Popup Modal dikhane ka function
 window.showPartyDetailsModal = function (id) {

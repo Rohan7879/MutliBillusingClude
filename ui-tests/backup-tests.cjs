@@ -76,7 +76,7 @@ async function main() {
  await test('Prototype-named fields remain data',()=>{const raw=Object.fromEntries([['__proto__',{polluted:true}]]),out=engine.decode(engine.encode(raw,sdk));assert.equal(Object.getPrototypeOf(out),Object.prototype);assert.equal(out.__proto__.polluted,true);assert.equal({}.polluted,undefined);});
  const seed={bills:[{id:'archived',data:{deleted:true,'Final Total':100}},{id:'missing-date',data:{'Final Total':0}}],brokers:[{id:'b',data:{name:'Sample'}}],broker_payments:[{id:'p',data:{amount:25}}],auditLogs:[{id:'a',data:{action:'bill.created'}}],users:[{id:'u',data:{role:'viewer'}}],counters:[{id:'serial',data:{value:15}}]};
  const db=fixtureDB(seed), backup=await capture(db);
- await test('All 15 app collections covered, including empty ones',()=>assert.equal(backup.collections.length,15));
+ await test('All 18 app collections covered, including empty revision/year histories',()=>{assert.equal(backup.collections.length,18);['billRevisions','billRevisionApprovals','yearCloseEvents'].forEach(name=>assert(Array.isArray(backup.data[name])))});
  await test('Archived and missing-date bills included',()=>assert.equal(backup.data.bills.length,2));
  await test('Previously missing collections included',()=>['brokers','broker_payments','users','mobileDirectory','auditLogs','counters'].forEach(name=>assert(Array.isArray(backup.data[name]))));
  await test('Server-only capture makes no writes',()=>assert.equal(db.metadataWrites.length,0));
@@ -86,7 +86,7 @@ async function main() {
  const bigDB=fixtureDB({bills:Array.from({length:1001},(_,i)=>({id:String(i).padStart(5,'0'),data:{n:i}}))});const big=await capture(bigDB);
  await test('Pagination does not silently cap records',()=>assert.equal(big.data.bills.length,1001));
  await test('Both passes page every record',()=>assert.equal(bigDB.calls.filter(c=>c.name==='bills').length,6));
- await test('Read allowance covers both passes and empty queries',async()=>{const empty=await capture(fixtureDB(),{readLimit:30});assert.equal(empty.readUsage.documentReads,30);assert.equal(empty.totalDocuments,0)});
+ await test('Read allowance covers both passes and empty queries',async()=>{const minimum=engine.COLLECTIONS.length*2;const empty=await capture(fixtureDB(),{readLimit:minimum});assert.equal(empty.readUsage.documentReads,minimum);assert.equal(empty.totalDocuments,0)});
  await test('Invalid allowance fails before any server read',async()=>{const source=fixtureDB();await assert.rejects(()=>capture(source,{readLimit:20001}),/allowance/);assert.equal(source.calls.length,0)});
  await test('Allowance stops before excess reads without partial copy',async()=>{const source=fixtureDB({bills:Array.from({length:60},(_,i)=>({id:String(i).padStart(3,'0'),data:{n:i}}))});await assert.rejects(()=>capture(source,{readLimit:30}),/allowance reached/);assert.equal(source.calls.length,1);assert.equal(source.calls[0].limit,30);assert.equal(source.metadataWrites.length,0)});
  await test('Allowance can fail on second pass without marking backup saved',async()=>{const source=fixtureDB(seed);await assert.rejects(()=>capture(source,{readLimit:30}),/allowance reached/);assert.equal(source.metadataWrites.length,0)});
@@ -97,7 +97,8 @@ async function main() {
  await test('Comparison rejects reversed chronological order',async()=>{const older=clone(backup);older.startedAt='2020-01-01T00:00:00.000Z';older.exportedAt='2020-01-01T00:00:00.000Z';await resign(older);await assert.rejects(()=>engine.compareBackups(backup,older,'fixture-project'),/Swap/)});
  await test('Comparison rejects other projects',()=>assert.rejects(()=>engine.compareBackups(backup,newer,'another-project'),/same app project/));
  await test('Comparison rejects corrupted second copy',async()=>{const bad=clone(newer);bad.data.bills=[];await assert.rejects(()=>engine.compareBackups(backup,bad,'fixture-project'),/checksum/)});
- const oldEntry={projectId:'fixture-project',hash:'a'.repeat(64),exportedAt:'2020-01-01T00:00:00.000Z',documents:5,collections:15,filename:'old.json'},newEntry={...oldEntry,hash:'b'.repeat(64),exportedAt:'2020-02-01T00:00:00.000Z',filename:'new.json'};
+ const oldEntry={projectId:'fixture-project',hash:'a'.repeat(64),exportedAt:'2020-01-01T00:00:00.000Z',documents:5,collections:18,filename:'old.json'},newEntry={...oldEntry,hash:'b'.repeat(64),exportedAt:'2020-02-01T00:00:00.000Z',filename:'new.json'};
+ await test('Older 15-collection backup retained but requires fresh copy',()=>{const info=health.mergeVerified({}, {...oldEntry,collections:15});const result=health.health(info,'fixture-project',1,Date.parse(oldEntry.exportedAt));assert.equal(result.due,true);assert.equal(result.copies.length,1)});
  const history=health.mergeVerified(health.mergeVerified({},newEntry),oldEntry);
  await test('Verifying an old file never rolls back latest backup date',()=>{assert.equal(history.lastVerifiedExportedAt,newEntry.exportedAt);assert.equal(history.verifiedCopies.length,2)});
  await test('Re-verification does not invent another retained version',()=>assert.equal(health.mergeVerified(history,newEntry).verifiedCopies.length,2));
@@ -125,7 +126,7 @@ async function main() {
  await test('Malformed timestamp rejected even with recomputed checksum',async()=>{const bad=clone(backup);bad.data.bills[0].data.entries.push(['bad',{type:'timestamp',seconds:0,nanoseconds:1e9}]);bad.manifest.bills.sha256=await engine.hash(engine.canonical(bad.data.bills));await resign(bad);await assert.rejects(()=>engine.verify(bad),/timestamp/)});
  await test('No unverified hash fallback',async()=>{const bad=clone(backup);bad.integrity.payloadHash='unavailable';await assert.rejects(()=>engine.verify(bad),/checksum/)});
  const legacy={format:engine.FORMAT,version:2,exportedAt:new Date().toISOString(),collections:['bills','payments','parties','orders','settings'],bills:[],payments:[],parties:[],orders:[],settings:[]};legacy.integrity={algorithm:'SHA-256',payloadHash:await engine.hash(JSON.stringify(legacy,null,2))};
- await test('Old v2 copy validated but marked incomplete',async()=>{const result=await engine.verify(legacy);assert.equal(result.legacy,true);assert.equal(result.missingCollections.length,10)});
+ await test('Old v2 copy validated but marked incomplete',async()=>{const result=await engine.verify(legacy);assert.equal(result.legacy,true);assert.equal(result.missingCollections.length,13)});
  const password='sample-test-password-only', encrypted=await engine.encrypt(JSON.stringify(backup),password);
  await test('Encrypted copy decrypts and verifies',async()=>assert.equal((await engine.verify(await engine.decrypt(encrypted,password))).totalDocuments,7));
  await test('Fresh encryption uses fresh salt and IV',async()=>{const other=await engine.encrypt(JSON.stringify(backup),password);assert.notEqual(other.iv,encrypted.iv);assert.notEqual(other.salt,encrypted.salt)});
@@ -160,13 +161,13 @@ async function main() {
  const archiveSource=fs.readFileSync(path.join(__dirname,'../js/features/backup.js'),'utf8');
  const archiveSeed={bills:{b:{'Final Total':100,amountPaid:0,paymentStatus:'Unpaid',customerId:'p'}},parties:{p:{currentBalance:100}},auditLogs:{}};
  function archiveContext(failure=null,seed=archiveSeed){const store=new MockFirestore(seed),run=store.runTransaction.bind(store);store.runTransaction=fn=>run(fn,{failAt:failure});const ctx={db:store,billsCollection:store.collection('bills'),window:{currentUserProfile:{role:'admin'}},firebase:{auth:()=>({currentUser:{uid:'u'}}),firestore:{FieldValue:{serverTimestamp:()=>123}}},hasRole:()=>true,billAuditSnapshot:x=>x,roundCurrency:x=>Math.round(x*100)/100,Swal:{fire(){}},document:{},console};vm.createContext(ctx);vm.runInContext(archiveSource,ctx);return{ctx,store}}
- const archived=archiveContext();assert.equal(await archived.ctx.changeBillArchive('b',false),true);assert.equal(await archived.ctx.changeBillArchive('b',false),false);
+ const archived=archiveContext();assert.equal((await archived.ctx.changeBillArchive('b',false)).changed,true);assert.equal((await archived.ctx.changeBillArchive('b',false)).changed,false);
  await test('Archive retries adjust balance only once',()=>{assert.equal(archived.store.store.parties.p.currentBalance,0);assert.equal(Object.keys(archived.store.store.auditLogs).length,1)});
- assert.equal(await archived.ctx.changeBillArchive('b',true),true);assert.equal(await archived.ctx.changeBillArchive('b',true),false);
+ assert.equal((await archived.ctx.changeBillArchive('b',true)).changed,true);assert.equal((await archived.ctx.changeBillArchive('b',true)).changed,false);
  await test('Restore retries adjust balance only once',()=>assert.equal(archived.store.store.parties.p.currentBalance,100));
  for(const failure of ['get:1','get:2','update:1','update:2','set:1','commit'])await test('Atomic archive failure '+failure,async()=>{const fixture=archiveContext(failure);await assert.rejects(()=>fixture.ctx.changeBillArchive('b',false));assert.deepEqual(fixture.store.store,archiveSeed)});
  await test('Paid bill cannot archive',async()=>{const seed=clone(archiveSeed);seed.bills.b.amountPaid=25;const fixture=archiveContext(null,seed);await assert.rejects(()=>fixture.ctx.changeBillArchive('b',false),/payment evidence/);assert.deepEqual(fixture.store.store,seed)});
- await test('Locked bill cannot archive',async()=>{const seed=clone(archiveSeed);seed.bills.b.locked=true;await assert.rejects(()=>archiveContext(null,seed).ctx.changeBillArchive('b',false),/Locked/)});
+ await test('Locked bill cannot archive',async()=>{const seed=clone(archiveSeed);seed.bills.b.locked=true;await assert.rejects(()=>archiveContext(null,seed).ctx.changeBillArchive('b',false),/Approved bills cannot be archived/)});
  await test('Missing linked party blocks archive without writes',async()=>{const seed=clone(archiveSeed);seed.parties={};const fixture=archiveContext(null,seed);await assert.rejects(()=>fixture.ctx.changeBillArchive('b',false),/party is missing/);assert.deepEqual(fixture.store.store,seed)});
  if(process.env.MANDIBOOK_TEST_OUTPUT) fs.writeFileSync(process.env.MANDIBOOK_TEST_OUTPUT,JSON.stringify(backup,null,2));
  console.log(`\n${passed} backup checks passed; no live data changed.`);

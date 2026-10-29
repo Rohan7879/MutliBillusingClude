@@ -1,0 +1,50 @@
+const fs=require('node:fs'),path=require('node:path'),assert=require('node:assert/strict');
+const {chromium}=require(process.env.PLAYWRIGHT_MODULE||'playwright');
+const read=p=>fs.readFileSync(path.join(__dirname,'..',p),'utf8');
+const html=p=>read(p).replace(/<script\b[^>]*>[\s\S]*?<\/script>/gi,'');
+(async()=>{
+ const browser=await chromium.launch({headless:true,executablePath:process.env.CHROME_EXECUTABLE});
+ try {
+  const page=await browser.newPage(); await page.route('**/*',route=>route.abort());
+  await page.setContent(html('final.html'));
+  await page.evaluate(()=>{window.currentUserProfile={role:'admin',status:'active'};window.Swal={fire:async options=>{window.lastDialog=options;return {isConfirmed:false}}};});
+  await page.addScriptTag({content:read('js/features/bill-view.js')});
+  await page.evaluate(()=>renderBillWorkflowControls('b',{workflowStatus:'approved'}));
+  await page.getByRole('button',{name:'Request correction',exact:true}).click();
+  assert.equal(await page.evaluate(()=>lastDialog.input),'textarea');
+  await page.evaluate(()=>renderBillWorkflowControls('b',{workflowStatus:'draft',revisionPending:true,revisionNumber:1}));
+  assert.equal(await page.getByRole('button',{name:'Edit pending revision'}).count(),1);
+  assert.equal(await page.getByRole('button',{name:'Version history'}).count(),1);
+  assert.equal(await page.evaluate(()=>approvalRequiredFor({workflowStatus:'draft',revisionPending:true})),true);
+  console.log('PASS revision UI: required-reason dialog, pending notice, edit/history buttons and release block');
+  await page.setContent(html('bill-create.html'));
+  await page.evaluate(()=>{window.updateSeriesPreview=()=>{};window.editModeLastUpdatedAt=null;});
+  const source=read('js/features/bill-form.js');
+  await page.addScriptTag({content:source.slice(source.indexOf('function populateFormForEdit('),source.indexOf('function updateTotalBags('))});
+  await page.evaluate(()=>populateFormForEdit({id:'paid',Date:'17/10/2026','Bill Type':'Loose','Serial No':'W-2627-1',amountPaid:1255,workflowStatus:'draft',revisionPending:true,revisionNumber:1,revisionReason:'Correct mistaken date'}));
+  assert.equal(await page.locator('#bill_date_input').isEnabled(),true);
+  assert.equal(await page.locator('textarea[name="bill_remarks"]').isEnabled(),true);
+  assert.equal(await page.locator('input[name="loose_price"]').isDisabled(),true);
+  assert.equal(await page.locator('#estimateForm button[type="submit"]').isEnabled(),true);
+  console.log('PASS paid revision form: date/remarks editable; financial inputs disabled; save enabled');
+  await page.setContent(html('financial-years.html'));
+  await page.addScriptTag({content:read('js/core/financial-year.js')});
+  await page.addScriptTag({content:read('js/core/year-close.js')});
+  await page.evaluate(()=>{
+    window.currentUserProfile={role:'admin',status:'active'};window.firebase={auth:()=>({currentUser:{uid:'admin'}})};
+    const rows={parties:[{id:'p',name:'Farmer',type:'Farmer'}],bills:[{id:'b',Date:'17/10/2025',customerId:'p','Final Total':1000,workflowStatus:'approved'}],payments:[],broker_payments:[],yearCloseEvents:[]};
+    window.db={collection:name=>({get:async()=>({docs:(rows[name]||[]).map(row=>({id:row.id,data:()=>row}))}),doc:()=>({get:async()=>({exists:false})})})};
+  });
+  await page.addScriptTag({content:read('js/features/financial-years.js')});
+  await page.evaluate(()=>window.dispatchEvent(new Event('mandibook:access-ready')));
+  await page.waitForFunction(()=>!document.getElementById('fy-select').disabled);
+  await page.locator('#fy-select').selectOption('2025-2026');
+  assert.equal(await page.locator('#fy-close').isEnabled(),true);
+  assert.match(await page.locator('#fy-parties').innerText(),/1,000/);
+  await page.locator('#fy-select').selectOption(await page.evaluate(()=>MandiFinancialYear.financialYearId(new Date())));
+  assert.equal(await page.locator('#fy-close').isDisabled(),true);
+  await page.setViewportSize({width:390,height:844});
+  assert.equal(await page.locator('#fy-select').isVisible(),true);
+  console.log('PASS financial-year UI: server preview, year selection, totals, past-year close, unfinished-year block');
+ }finally{await browser.close()}
+})().catch(e=>{console.error(e);process.exitCode=1});

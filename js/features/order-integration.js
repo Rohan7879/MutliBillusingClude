@@ -19,6 +19,8 @@ async function loadPendingOrdersIntoDropdown() {
       .orderBy("createdAt", "desc")
       .get();
 
+    const previous = select.value;
+    while (select.options.length > 1) select.remove(1);
     snap.forEach((doc) => {
       const o = doc.data();
       const opt = document.createElement("option");
@@ -26,223 +28,156 @@ async function loadPendingOrdersIntoDropdown() {
       opt.textContent = `#${o.orderNo} — ${o.date}${o.supplierName ? " | " + o.supplierName : ""} (${o.status})`;
       select.appendChild(opt);
     });
+    select.value = previous;
   } catch (e) {
     console.warn("Could not load orders:", e);
   }
 }
 
 // ── AUTO-FILL FORM FROM ORDER ─────────────────────────────────────────────────
+let orderImportRequest = 0;
+const orderText = value => String(value ?? "").replace(/[&<>"']/g, c => ({
+  "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;",
+}[c]));
 async function loadOrderIntoForm() {
   const select = document.getElementById("order-select");
   const orderId = select?.value;
   if (!orderId) return;
-
+  const form = document.getElementById("estimateForm");
+  if (form.dataset.editId) {
+    await Swal.fire("Existing linked bill", "An edit keeps its original order link. Create a new bill for another order.", "info");
+    return;
+  }
+  const request = ++orderImportRequest;
+  const current = () => request === orderImportRequest && select.value === orderId;
   try {
     const doc = await db.collection("orders").doc(orderId).get();
-    if (!doc.exists) return;
-
-    // Yahan order pehli baar define ho raha hai
+    if (!current()) return;
+    if (!doc.exists) throw new Error("This order no longer exists. Refresh the order list.");
     const order = doc.data();
-    selectedOrderId = orderId;
-
-    // ✅ FIX: Print layout mein Order Number set karna (Ab order variable define ho chuka hai)
-    const refContainer = document.getElementById("print_ref_order_container");
-    const refText = document.getElementById("print_ref_order_no");
-
-    if (refContainer && refText) {
-      refText.innerText = order.orderNo || "";
-      refContainer.style.display = "block";
-    }
-    // -------------------------------------------------------------
-
-    // One truck can carry several varieties. Let the biller select up to the
-    // five Vakal rows available on the bill instead of forcing one supplier.
-    if (order.suppliers && order.suppliers.length > 1) {
-      const options = order.suppliers
-        .map(
-          (s, i) =>
-            `<label style="display:flex;gap:10px;align-items:center;text-align:left;padding:9px;border-bottom:1px solid #edf2f7;cursor:pointer;">
-              <input type="checkbox" class="swal-supplier-check" value="${i}" ${i === 0 ? "checked" : ""}>
-              <span><strong>${s.variety || s.supplierName || "Item"}</strong> — ${s.product || "-"}<br><small>${
-              s.quantity
-            } ${s.unit} @ ₹${s.price}/${s.priceUnit}</small></span>
-            </label>`
-        )
-        .join("");
-
-      const { value: selected } = await Swal.fire({
+    if (!["Pending", "Partial"].includes(order.status)) throw new Error("Only Pending or Partial orders can be imported.");
+    if (!order.suppliers?.length) throw new Error("This order has no items.");
+    let indices = [0];
+    if (order.suppliers.length > 1) {
+      const options = order.suppliers.map((s, i) =>
+        `<label style="display:flex;gap:10px;align-items:center;text-align:left;padding:9px;border-bottom:1px solid #edf2f7;">
+          <input type="checkbox" class="swal-supplier-check" value="${i}" ${i === 0 ? "checked" : ""}>
+          <span><strong>${orderText(s.variety || s.supplierName || "Item")}</strong> — ${orderText(s.product || "-")}<br>
+          <small>${orderText(s.quantity)} ${orderText(s.unit)} @ ₹${orderText(s.price)}/${orderText(s.priceUnit)}</small></span></label>`
+      ).join("");
+      const result = await Swal.fire({
         title: "Select varieties for this truck",
-        html: `<p style="font-size:13px;color:#64748b;margin-top:0;">Select up to 5 varieties. Their variety and rate will fill separate Vakal rows.</p><div style="max-height:300px;overflow:auto;border:1px solid #e2e8f0;border-radius:8px;">${options}</div>`,
-        confirmButtonText: "Auto-Fill",
-        confirmButtonColor: "#005a9e",
+        html: `<p>Select up to 5 varieties of the same product. Enter actual truck bags/weight after import.</p><div style="max-height:300px;overflow:auto;">${options}</div>`,
+        showCancelButton: true, confirmButtonText: "Auto-Fill", confirmButtonColor: "#005a9e",
         preConfirm: () => {
-          const values = Array.from(document.querySelectorAll(".swal-supplier-check:checked")).map((input) =>
-            Number(input.value)
-          );
-          if (!values.length) Swal.showValidationMessage("Select at least one variety.");
-          if (values.length > 5) Swal.showValidationMessage("A bill has only 5 Vakal rows. Select up to 5 varieties.");
+          const values = Array.from(document.querySelectorAll(".swal-supplier-check:checked"), input => Number(input.value));
+          if (!values.length || values.length > 5) { Swal.showValidationMessage("Select 1 to 5 varieties."); return false; }
           return values;
         },
       });
-      if (!selected) return;
-      selectedSupplierIds = selected;
-    } else {
-      selectedSupplierIds = [0];
+      if (!current() || !result.isConfirmed) return;
+      indices = result.value;
     }
-
-    selectedSupplierId = selectedSupplierIds[0]; // compatibility with older linked bills
-    const selectedSuppliers = selectedSupplierIds.map((index) => ({ ...order.suppliers[index], index }));
-    const supplier = selectedSuppliers[0] || {};
-    const distinctProducts = [
-      ...new Set(
-        selectedSuppliers
-          .map((item) =>
-            String(item.product || "")
-              .trim()
-              .toLowerCase()
-          )
-          .filter(Boolean)
-      ),
-    ];
-    const templateWasSelected =
-      distinctProducts.length === 1 &&
-      typeof window.selectProductTemplateForBill === "function" &&
-      window.selectProductTemplateForBill({ id: supplier.productTemplateId || "", name: supplier.product || "" });
-    const rawCustomerText = order.supplierName || supplier.supplierName || order.broker || "";
-
-    let customerName = rawCustomerText;
-    let villageName = "";
-
-    // 1. Agar order ke naam mein hi bracket (Village) hai toh tod do
-    if (rawCustomerText.includes("(") && rawCustomerText.includes(")")) {
-      const parts = rawCustomerText.split("(");
-      customerName = parts[0].trim();
-      villageName = parts[1].replace(")", "").trim();
-    } else {
-      // 2. Agar order mein sirf naam hai (jaise MANSUKH), toh Firestore ki 'customers' collection se village dhoond lo!
-      try {
-        const custSnap = await db.collection("customers").where("name", "==", customerName.toUpperCase()).get();
-        if (!custSnap.empty) {
-          const custData = custSnap.docs[0].data();
-          if (custData.village) {
-            villageName = custData.village;
-          }
-        }
-      } catch (err) {
-        console.warn("Village fetch error:", err);
+    if (!Array.isArray(indices) || !indices.length || indices.length > 5 ||
+        indices.some(i => !Number.isInteger(i) || !order.suppliers[i]) || new Set(indices).size !== indices.length) {
+      throw new Error("Select 1 to 5 different order items.");
+    }
+    const items = indices.map(i => order.suppliers[i]);
+    const products = new Set(items.map(s => String(s.product || "").trim().toLowerCase()));
+    if (products.size > 1) throw new Error("A bill has one product template. Import different products into separate bills.");
+    const rates = items.map(item => {
+      const rate = Number(item.price);
+      if (!Number.isFinite(rate) || rate <= 0 || !["20kg", "100kg"].includes(item.priceUnit || "20kg")) {
+        throw new Error("Review the order's rate and price unit first.");
       }
-    }
-
-    // Fill Customer Name box
-    const nameInput = document.querySelector('input[name="customer_name"]');
-    if (nameInput) {
-      nameInput.value = customerName.toUpperCase();
-      const party = (window.partiesMasterList || []).find(
-        (item) => (item.name || "").trim().toLowerCase() === customerName.trim().toLowerCase() && item.deleted !== true
-      );
-      if (party && typeof lockSelectedCustomer === "function") lockSelectedCustomer(party);
-    }
-
-    // Fill Village box
-    const villageInput =
-      document.querySelector('input[name="village"]') || document.querySelector('input[placeholder*="Village"]');
-    if (villageInput) {
-      villageInput.value = villageName ? villageName.toUpperCase() : "";
-      villageInput.dispatchEvent(new Event("input"));
-    } // Fill broker
-    if (order.broker) {
-      const brokerInput = document.querySelector('input[name="broker_name"], input[name="broker"]');
-      if (brokerInput) brokerInput.value = order.broker.toUpperCase();
-    }
-
-    // Each selected order variety gets its own Vakal row. Quantity is NOT
-    // copied because an order's Man/Khadi quantity is not necessarily bag count.
-    selectedSuppliers.forEach((item, rowIndex) => {
-      const rowNo = rowIndex + 1;
-      const varietyInput = document.querySelector(`input[name="vakal_${rowNo}_variety"]`);
-      const rateInput = document.querySelector(`input[name="vakal_${rowNo}_bhav"]`);
-      if (varietyInput) varietyInput.value = item.variety || "";
-      if (rateInput)
-        rateInput.value =
-          item.priceUnit === "100kg" ? Math.round(Number(item.price || 0) / 5) : Number(item.price || 0);
+      return item.priceUnit === "100kg" ? Number((rate / 5).toFixed(6)) : rate;
     });
-
-    // Show info banner
+    const rawName = String(order.supplierName || items[0].supplierName || "");
+    // Orders created from the Party Master are displayed as "Party (Village)".
+    // Parse that display label back into the real party name before matching it;
+    // otherwise the imported bill looks like free text and cannot lock/select the
+    // existing Party Master record.
+    const match = /^(.*?)\s*\((.*?)\)\s*$/.exec(rawName);
+    const customerName = (match ? match[1] : rawName).trim();
+    const party = (window.partiesMasterList || []).find(p =>
+      p.deleted !== true && String(p.name || "").trim().toLowerCase() === customerName.toLowerCase());
+    let village = order.village || (match && match[2]) || party?.village || party?.address || "";
+    if (!village && customerName) {
+      const customers = await db.collection("customers").where("name", "==", customerName.toUpperCase()).get();
+      if (!customers.empty) village = customers.docs[0].data().village || "";
+    }
+    if (!current()) return;
+    // No form/link/template mutation until every asynchronous step and selection
+    // is complete. Cancel, Clear or a later import cannot leave half an old link.
+    const templateSelected = typeof window.selectProductTemplateForBill === "function" &&
+      window.selectProductTemplateForBill({ id: items[0].productTemplateId || "", name: items[0].product || "" });
+    if (!templateSelected) {
+      const template = document.getElementById("product-template-select");
+      if (template) { template.value = ""; template.dispatchEvent(new Event("change", { bubbles: true })); }
+      window.activeTemplate = null;
+    }
+    if (typeof unlockCustomerSelection === "function") unlockCustomerSelection();
+    const set = (name, value) => { const field = form.querySelector(`[name="${name}"]`); if (field) field.value = value; };
+    set("customer_id", "");
+    set("customer_name", customerName.toUpperCase());
+    set("village", String(village).toUpperCase());
+    if (party && typeof lockSelectedCustomer === "function") lockSelectedCustomer(party);
+    set("broker_name", String(order.broker || "").toUpperCase());
+    set("broker_commission_per_bag", "0");
+    const commission = document.getElementById("broker-commission-toggle");
+    if (commission) { commission.checked = false; commission.dispatchEvent(new Event("change", { bubbles: true })); }
+    // Replacing an import must not retain bags/rates/moisture from unused rows.
+    for (let row = 1; row <= 5; row++) {
+      set(`vakal_${row}_variety`, items[row - 1]?.variety || "");
+      set(`vakal_${row}_bhav`, rates[row - 1] ?? "");
+      set(`vakal_${row}_katta`, "");
+      set(`vakal_${row}_moisture`, "0");
+    }
+    set("loose_price", items.length === 1 ? rates[0] : "");
+    if (items.length > 1 || items.some(s => s.unit === "Bag")) {
+      const loose = form.querySelector('[name="is_loose_supply"]');
+      if (loose) { loose.checked = false; loose.dispatchEvent(new Event("change", { bubbles: true })); }
+    }
+    selectedOrderId = orderId;
+    selectedSupplierIds = indices;
+    selectedSupplierId = indices[0];
+    const fields = [
+      ["linked-order-id", "linked_order_id", orderId],
+      ["linked-supplier-idx", "linked_supplier_idx", indices[0]],
+      ["linked-order-supplier-links", "linked_order_supplier_links", JSON.stringify(indices.map((supplierIdx, i) => ({ supplierIdx, vakalIndex: i + 1 })))],
+    ];
+    for (const [id, name, value] of fields) {
+      let field = document.getElementById(id);
+      if (!field) { field = document.createElement("input"); field.type = "hidden"; field.id = id; field.name = name; form.appendChild(field); }
+      field.value = value;
+    }
+    const refContainer = document.getElementById("print_ref_order_container");
+    const refText = document.getElementById("print_ref_order_no");
+    if (refContainer && refText) { refText.textContent = order.orderNo || ""; refContainer.style.display = "block"; }
     const info = document.getElementById("order-link-info");
     if (info) {
       info.style.display = "block";
-      info.innerHTML = `📦 <strong>Order #${order.orderNo}</strong> linked &nbsp;|&nbsp;
-        🌾 ${selectedSuppliers.map((item) => item.variety || item.product || "Item").join(", ")} &nbsp;|&nbsp;
-        👤 Broker: <strong>${order.broker || "—"}</strong>
-        ${
-          templateWasSelected
-            ? `<br><small style="color:#198754;font-weight:700;">✓ Product template and bill prefix selected automatically</small>`
-            : `<br><small style="color:#8a5a00;">⚠ No matching product template — choose the bill prefix manually</small>`
-        }
-        <br><small style="color:#6c757d;">Selected varieties ke rate alag Vakal rows me fill ho gaye hain; bags actual truck ke hisaab se bharo.</small>`;
+      info.innerHTML = `📦 <strong>Order #${orderText(order.orderNo)}</strong> · ${items.map(s => orderText(s.variety || s.product || "Item")).join(", ")}
+        <br><small>${templateSelected ? "✓ Product template and prefix selected." : "⚠ Choose a matching product template / bill prefix manually."}
+        Rates imported. Enter actual bags/weight; review deductions and broker commission. Keep Close this Order OFF for automatic delivery tracking.</small>`;
     }
-
-    // Phase 4 (item #17): show the manual "Close this Order" override checkbox
-    const closeOrderWrap = document.getElementById("close-order-wrap");
-    if (closeOrderWrap) closeOrderWrap.style.display = "flex";
-
-    // Store order link in hidden field
-    let hiddenOrder = document.getElementById("linked-order-id");
-    if (!hiddenOrder) {
-      hiddenOrder = document.createElement("input");
-      hiddenOrder.type = "hidden";
-      hiddenOrder.id = "linked-order-id";
-      hiddenOrder.name = "linked_order_id";
-      document.getElementById("estimateForm").appendChild(hiddenOrder);
-    }
-    hiddenOrder.value = orderId;
-
-    let hiddenSupplier = document.getElementById("linked-supplier-idx");
-    if (!hiddenSupplier) {
-      hiddenSupplier = document.createElement("input");
-      hiddenSupplier.type = "hidden";
-      hiddenSupplier.id = "linked-supplier-idx";
-      hiddenSupplier.name = "linked_supplier_idx";
-      document.getElementById("estimateForm").appendChild(hiddenSupplier);
-    }
-    hiddenSupplier.value = selectedSupplierId;
-
-    let hiddenLinks = document.getElementById("linked-order-supplier-links");
-    if (!hiddenLinks) {
-      hiddenLinks = document.createElement("input");
-      hiddenLinks.type = "hidden";
-      hiddenLinks.id = "linked-order-supplier-links";
-      hiddenLinks.name = "linked_order_supplier_links";
-      document.getElementById("estimateForm").appendChild(hiddenLinks);
-    }
-    hiddenLinks.value = JSON.stringify(
-      selectedSupplierIds.map((supplierIdx, index) => ({ supplierIdx, vakalIndex: index + 1 }))
-    );
+    const closeWrap = document.getElementById("close-order-wrap");
+    if (closeWrap) closeWrap.style.display = "flex";
+    const close = document.getElementById("close_order_checkbox");
+    if (close) close.checked = false;
+    form.dispatchEvent(new Event("input", { bubbles: true }));
     if (typeof billDraft !== "undefined") billDraft?.touch();
-
-    Swal.fire({
-      icon: "success",
-      title: "✅ Order linked!",
-      toast: true,
-      position: "top-end",
-      showConfirmButton: false,
-      timer: 1500,
-    });
-  } catch (e) {
-    console.error(e);
-    Swal.fire({
-      icon: "error",
-      title: "Could not load order.",
-      toast: true,
-      position: "top-end",
-      showConfirmButton: false,
-      timer: 2000,
-    });
+    await Swal.fire({ icon: "success", title: "Order linked — review truck quantities", toast: true, position: "top-end", showConfirmButton: false, timer: 2000 });
+  } catch (error) {
+    if (!current()) return;
+    console.error("Order import failed:", error);
+    await Swal.fire("Could not import order", error.message || "Please retry after checking your connection.", "error");
   }
 }
 
 // ── CLEAR ORDER LINK ──────────────────────────────────────────────────────────
 function clearOrderLink() {
+  orderImportRequest++;
   selectedOrderId = null;
   selectedSupplierId = null;
   selectedSupplierIds = [];
@@ -261,6 +196,11 @@ function clearOrderLink() {
   const closeOrderCheckbox = document.getElementById("close_order_checkbox");
   if (closeOrderWrap) closeOrderWrap.style.display = "none";
   if (closeOrderCheckbox) closeOrderCheckbox.checked = false;
+  const ref = document.getElementById("print_ref_order_container");
+  const refText = document.getElementById("print_ref_order_no");
+  if (ref) ref.style.display = "none";
+  if (refText) refText.textContent = "";
+  if (typeof billDraft !== "undefined") billDraft?.touch();
 }
 
 // ── UPDATE ORDER AFTER BILL SAVED ─────────────────────────────────────────────
@@ -272,94 +212,13 @@ function clearOrderLink() {
  *   math (user manually checked "Close this Order" on the bill form).
  */
 async function updateOrderDeliveredQty(billData, closeOrderOverride = false) {
-  const orderId = billData["LinkedOrderId"];
-  if (!orderId) return;
-
-  try {
-    const orderRef = db.collection("orders").doc(orderId);
-
-    // Read once first (read-only, cheap) just to know which bill serials
-    // to look up — Firestore transactions can't run a collection query
-    // (.where().get()), only direct document reads, so this part has to
-    // stay outside the transaction below.
-    const initialSnap = await orderRef.get();
-    if (!initialSnap.exists) return;
-    const initialOrder = initialSnap.data();
-
-    let billSerials = [];
-    if (initialOrder.linkedBillNos && Array.isArray(initialOrder.linkedBillNos)) {
-      billSerials = initialOrder.linkedBillNos.map((b) => (b.billNo || b).toString().trim());
-    } else if (initialOrder.linkedBillNo) {
-      billSerials = initialOrder.linkedBillNo.split(",").map((s) => s.trim());
-    }
-
-    const currentBillSerial = billData["Serial No"] || billData["billNo"] || "";
-    if (currentBillSerial && !billSerials.includes(currentBillSerial)) {
-      billSerials.push(currentBillSerial);
-    }
-
-    // Read linked bills once. New multi-variety bills keep a Vakal-row →
-    // supplier mapping; older single-variety bills retain LinkedSupplierIdx.
-    const linkedBills = [];
-    if (billSerials.length > 0) {
-      for (let i = 0; i < billSerials.length; i += 10) {
-        const chunk = billSerials.slice(i, i + 10);
-        const snap = await db.collection("bills").where("Serial No", "in", chunk).get();
-        snap.forEach((doc) => {
-          const bData = doc.data();
-          if (bData.deleted !== true) linkedBills.push(bData);
-        });
-      }
-    }
-
-    // 🔒 The actual race this fixes: two bills saved against the same
-    // order at nearly the same moment used to each read the order, both
-    // compute an update independently, then whichever write landed last
-    // silently won — potentially discarding an unrelated concurrent edit
-    // to the order (e.g. someone editing order notes/quantity at the same
-    // time). Re-reading the order fresh INSIDE the transaction, right
-    // before writing, means Firestore detects if it changed since our
-    // first read and automatically retries this whole block — so the
-    // write can never be based on stale data.
-    await db.runTransaction(async (transaction) => {
-      const orderDoc = await transaction.get(orderRef);
-      if (!orderDoc.exists) return;
-      const order = orderDoc.data();
-
-      // Recalculate delivery independently for EVERY supplier/variety in
-      // the order. This prevents a multi-variety truck from being counted
-      // entirely against only the first selected variety.
-      const suppliers = [...(order.suppliers || [])];
-      suppliers.forEach((supplier, supplierIdx) => {
-        let deliveredKg = 0;
-        linkedBills.forEach((linkedBill) => {
-          const links = Array.isArray(linkedBill.OrderSupplierLinks) ? linkedBill.OrderSupplierLinks : [];
-          if (links.length) {
-            links
-              .filter((link) => Number(link.supplierIdx) === supplierIdx)
-              .forEach((link) => {
-                deliveredKg += Number(linkedBill[`Vakal ${Number(link.vakalIndex)} Kilo`] || 0);
-              });
-          } else if (Number(linkedBill["LinkedSupplierIdx"]) === supplierIdx) {
-            deliveredKg += Number(linkedBill["Net Weight"] || 0);
-          }
-        });
-        const divisor = supplier.unit === "Khadi" ? 400 : 20;
-        supplier.delivered = Math.round((deliveredKg / divisor) * 100) / 100;
-      });
-
-      const hasDelivery = suppliers.some((supplier) => Number(supplier.delivered || 0) > 0);
-      const allDelivered =
-        suppliers.length > 0 &&
-        suppliers.every((supplier) => Number(supplier.delivered || 0) >= Number(supplier.quantity || 0));
-      const newStatus = closeOrderOverride || allDelivered ? "Completed" : hasDelivery ? "Partial" : order.status;
-      transaction.update(orderRef, { suppliers, status: newStatus, linkedBillNos: billSerials, updatedAt: Date.now() });
-    });
-
-    console.log(`Order ${orderId} delivery successfully synced for ${linkedBills.length} linked bills.`);
-  } catch (e) {
-    console.error("Could not update order delivered qty:", e);
-  }
+  if (!billData.LinkedOrderId) return;
+  if (!window.MandiOrderSync) throw new Error("Order sync module is unavailable. Reload before retrying.");
+  return MandiOrderSync.sync(billData.LinkedOrderId, {
+    delivery: true,
+    extraSerial: billData["Serial No"] || billData.billNo || "",
+    closeOrder: closeOrderOverride,
+  });
 }
 window.loadOrderIntoForm = loadOrderIntoForm;
 window.clearOrderLink = clearOrderLink;

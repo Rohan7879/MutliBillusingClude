@@ -181,82 +181,40 @@ async function loadBrokerLedger() {
   }
 }
 
-// Add New Broker Modal
+// Keep existing callers compatible; all new brokers are created in Party Master.
 window.openAddBrokerModal = function () {
-  Swal.fire({
-    title: "➕ Add New Broker",
-    html: `
-      <input type="text" id="swal-broker-name" class="swal2-input" placeholder="Enter Broker Name" style="margin:0; width:100%; box-sizing:border-box;">
-    `,
-    showCancelButton: true,
-    confirmButtonText: "Save Broker",
-    confirmButtonColor: "#005a9e",
-    preConfirm: () => {
-      const name = document.getElementById("swal-broker-name").value.trim();
-      if (!name) {
-        Swal.showValidationMessage("Please enter broker name");
-      }
-      return name;
-    },
-  }).then(async (result) => {
-    if (result.isConfirmed) {
-      showLoading("Saving broker...");
-      try {
-        const name = result.value;
-        const upper = name.toUpperCase();
-
-        const check = await db.collection("brokers").where("nameUpper", "==", upper).get();
-        if (!check.empty) {
-          hideLoading();
-          Swal.fire("Error", "Broker already exists in master list!", "error");
-          return;
-        }
-
-        await db.collection("brokers").add({
-          name: name,
-          nameUpper: upper,
-          createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-
-        hideLoading();
-        Swal.fire("Success!", "Broker added to master list.", "success");
-        loadBrokerLedger();
-      } catch (e) {
-        hideLoading();
-        console.error(e);
-        Swal.fire("Error", "Could not save broker.", "error");
-      }
-    }
-  });
+  window.location.href = "party-master.html?type=Broker#partyForm";
 };
 
 window.openBrokerPaymentModal = function (brokerName, defaultAmount) {
   if (!hasRole("admin", "accountant")) { Swal.fire("Not allowed", "Only an Admin or Accountant can record payouts.", "error"); return; }
   Swal.fire({
-    titleText: `Pay to ${brokerName}`,
-    html: `
-      <label style="display:block; text-align:left; font-weight:700; font-size:13px; margin-bottom:5px;">Payment Amount (₹)</label>
-      <input type="number" id="swal-pay-amount" class="swal2-input" placeholder="Enter amount" value="${
-        defaultAmount > 0 ? defaultAmount : ""
-      }" style="margin:0 0 12px 0; width:100%; box-sizing:border-box;">
-      
-      <label style="display:block; text-align:left; font-weight:700; font-size:13px; margin-bottom:5px;">Payment Date</label>
-      <input type="date" id="swal-pay-date" class="swal2-input" value="${
-        WorkspaceUI.localDate()
-      }" style="margin:0; width:100%; box-sizing:border-box;">
-    `,
+    titleText: `Record payment — ${brokerName}`,
+    customClass: { popup: 'mb-payment-popup' },
+    html: window.MandiPaymentUI.fields(true),
+    didOpen: () => {
+      document.getElementById('bulk-payment-cash').value = defaultAmount > 0 ? defaultAmount : '';
+      // Broker payouts settle commission; customer settlement deductions do not apply.
+      ['bulk-payment-deduction', 'bulk-payment-deduction-reason'].forEach(id => {
+        document.querySelector('label[for="' + id + '"]')?.remove();
+        document.getElementById(id)?.remove();
+      });
+    },
     focusConfirm: false,
     showCancelButton: true,
     confirmButtonText: "Save Payment",
     confirmButtonColor: "#28a745",
     preConfirm: () => {
-      const amount = document.getElementById("swal-pay-amount").value;
-      const date = document.getElementById("swal-pay-date").value;
+      const amount = document.getElementById("bulk-payment-cash").value;
+      const date = document.getElementById("bulk-payment-date").value;
+      const reference = document.getElementById("bulk-payment-reason").value.trim();
+      const paymentMethod = document.getElementById("bulk-payment-method").value;
+      if (!reference) { Swal.showValidationMessage("Enter a payment reference."); return false; }
       if (!Number.isFinite(Number(amount)) || Number(amount) <= 0 || !date) {
         Swal.showValidationMessage("Please enter a valid amount");
         return false;
       }
-      return { amount: Number(amount), date };
+      return { amount: Number(amount), date, reference, paymentMethod };
     },
   }).then(async (result) => {
     if (result.isConfirmed) {
@@ -265,9 +223,13 @@ window.openBrokerPaymentModal = function (brokerName, defaultAmount) {
         const [yyyy, mm, dd] = result.value.date.split("-");
         const formattedDate = `${dd}/${mm}/${yyyy}`;
 
+        await MandiFinancialYear.assertPostingOpen(db, null, [formattedDate]);
+
         await db.collection("broker_payments").add({
           brokerName: brokerName.toUpperCase(),
           amount: result.value.amount,
+          reference: result.value.reference,
+          paymentMethod: result.value.paymentMethod,
           date: formattedDate,
           timestamp: firebase.firestore.FieldValue.serverTimestamp(),
         });
@@ -377,34 +339,9 @@ async function recordBrokerPayment(brokerId) {
 }
 
 // ── UPDATE BROKER RECORD WHEN BILL SAVED ─────────────────────────────────────
-async function updateBrokerCommission(billData) {
-  const brokerName = billData["Broker"];
-  const commission = billData["BrokerCommission"] || 0;
-  if (!brokerName || !commission) return;
-
-  try {
-    const brokerId = brokerName.toLowerCase().replace(/\s+/g, "_");
-    const brokerRef = brokersCollection.doc(brokerId);
-    const doc = await brokerRef.get();
-
-    if (doc.exists) {
-      await brokerRef.update({
-        totalCommission: (doc.data().totalCommission || 0) + commission,
-        totalBills: (doc.data().totalBills || 0) + 1,
-        updatedAt: Date.now(),
-      });
-    } else {
-      await brokerRef.set({
-        name: brokerName,
-        totalCommission: commission,
-        paidAmount: 0,
-        totalBills: 1,
-        createdAt: Date.now(),
-      });
-    }
-  } catch (e) {
-    console.warn("Broker update failed:", e);
-  }
+async function updateBrokerCommission() {
+  // Commission is derived from active bills by loadBrokerLedger().
+  // Never create a second name-only directory or increment duplicate totals here.
 }
 
 window.loadBrokerLedger = loadBrokerLedger;

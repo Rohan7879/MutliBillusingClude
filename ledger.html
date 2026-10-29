@@ -15,6 +15,10 @@
     <script src="js/core/core-engine.js"></script>
     <script src="js/core/form-safety.js"></script>
     <script src="js/features/company-profile.js"></script>
+    <script src="js/core/order-sync.js" defer></script>
+    <script src="js/core/payment-reversal.js" defer></script>
+    <script src="js/core/payment-ui.js" defer></script>
+    <script src="js/core/financial-year.js" defer></script>
     <script src="js/features/ledger.js" defer></script>
     <link rel="stylesheet" href="css/main.css" />
     <link rel="stylesheet" href="css/dashboard.css" />
@@ -296,6 +300,20 @@
         box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
         transition: all 0.2s;
       }
+      .reversal-visibility {
+        display: flex;
+        flex-wrap: wrap;
+        align-items: center;
+        gap: 12px;
+        margin-bottom: 16px;
+        color: #52677b;
+        font-size: 14px;
+      }
+      .reversal-visibility label { cursor: pointer; font-weight: 600; }
+      .reversal-visibility input { accent-color: #005a9e; }
+      @media screen {
+        #ledger-table-body.hide-reversed .reversed-entry { display: none; }
+      }
       .ledger-table tbody tr:hover {
         transform: translateY(-1px);
         box-shadow: 0 4px 14px rgba(0, 90, 158, 0.1);
@@ -541,9 +559,11 @@
         <!-- Toolbar -->
         <div class="ledger-toolbar no-print">
           <button id="back-to-list-btn" class="filter-btn btn-back">← Back</button>
-          <input type="date" id="start_date" />
+          <label for="financial-year-select">Financial year</label>
+          <select id="financial-year-select" class="filter-btn"><option value="all">All dates</option></select>
+          <input type="date" id="start_date" aria-label="Start date" />
           <span style="font-weight: 700; color: #6c757d">to</span>
-          <input type="date" id="end_date" />
+          <input type="date" id="end_date" aria-label="End date" />
           <button
             class="filter-btn"
             id="date-filter-btn"
@@ -561,16 +581,18 @@
         <div class="section-card" style="text-align: center; padding: 20px">
           <h2 id="ledger-customer-name" style="color: #005a9e; margin: 0 0 4px"></h2>
           <p id="ledger-customer-village" style="color: #6c757d; margin: 0"></p>
+          <p id="ledger-period-label" aria-live="polite"></p>
+          <p style="font-size:12px;color:#6c757d">Opening = Party Master initial balance + all earlier transactions. Positive: payable by customer; negative: customer advance. No yearly carry-forward entry is added.</p>
         </div>
 
         <!-- Summary Stats -->
         <div class="supplier-summary-grid">
           <div class="summary-card">
-            <div class="summary-label">🧾 Total Bills</div>
+            <div class="summary-label">🧾 All-time Total Bills</div>
             <div class="summary-value" id="summary-total-bills">0</div>
           </div>
           <div class="summary-card">
-            <div class="summary-label">📈 Avg. Bill Value</div>
+            <div class="summary-label">📈 All-time Avg. Bill Value</div>
             <div class="summary-value" id="summary-avg-bill">₹0</div>
           </div>
           <div class="summary-card">
@@ -590,7 +612,7 @@
             <div class="kpi-value" id="kpi-total-credit" style="color: #28a745">₹0</div>
           </div>
           <div class="kpi-card balance-card">
-            <div class="kpi-label">Balance Due (બાકી રકમ)</div>
+            <div class="kpi-label">Closing: Payable by customer / Advance</div>
             <div class="kpi-value" id="kpi-balance-due">₹0</div>
           </div>
         </div>
@@ -598,6 +620,10 @@
         <!-- Ledger Table -->
         <div class="section-card">
           <div class="section-card-title"><span>📋</span> Transaction History</div>
+          <div class="reversal-visibility no-print">
+            <label><input type="checkbox" id="hide-reversed-payments" checked /> Hide reversed payments</label>
+            <span id="reversal-visibility-note" aria-live="polite">Balances and printed/exported statements include full history.</span>
+          </div>
           <table class="ledger-table bill-list-table">
             <thead>
               <tr>
@@ -626,6 +652,14 @@
         </p>
         <label for="payment-amount-input">Cash Paid Amount (રોકડ ચુકવણી)</label>
         <input type="number" id="payment-amount-input" step="any" placeholder="Enter amount..." />
+        <label for="payment-method-input">Payment Method (ચુકવણી પ્રકાર)</label>
+        <select id="payment-method-input">
+          <option value="Cash">Cash</option>
+          <option value="UPI">UPI</option>
+          <option value="Bank Transfer">Bank Transfer</option>
+          <option value="Cheque">Cheque</option>
+          <option value="Other">Other</option>
+        </select>
         <label for="payment-date-input">Payment Date (ચુકવણી તારીખ)</label>
         <input type="date" id="payment-date-input" required />
         <hr class="modal-divider" />

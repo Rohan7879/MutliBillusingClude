@@ -9,7 +9,7 @@
   function validEntry(entry, project, now = Date.now()) {
     return entry && typeof project === "string" && project.length > 0 && entry.projectId === project && /^[a-f0-9]{64}$/.test(entry.hash || "") &&
       Number.isFinite(Date.parse(entry.exportedAt)) && Date.parse(entry.exportedAt) <= now + 300000 &&
-      Number.isSafeInteger(entry.documents) && entry.documents >= 0 && entry.collections === 15;
+      Number.isSafeInteger(entry.documents) && entry.documents >= 0 && [15, 18].includes(entry.collections);
   }
   function entries(info, project) {
     const legacy = { projectId: info?.lastVerifiedProjectId, hash: info?.lastVerifiedHash,
@@ -34,6 +34,7 @@
     const copies = entries(info, project), newest = copies[0];
     const days = [1, 3, 7].includes(Number(intervalDays)) ? Number(intervalDays) : 1;
     if (!newest) return { due: true, copies, message: "No verified recovery copy recorded. Prepare, save and verify a backup." };
+    if (newest.collections !== 18) return { due: true, copies, message: "Your older backup does not include revision and year-close history. Keep it and prepare a new full recovery copy." };
     const dueAt = Date.parse(newest.exportedAt) + days * DAY;
     const when = new Date(newest.exportedAt).toLocaleString("en-IN");
     return { due: now >= dueAt, dueAt, copies, message: now >= dueAt ? `Backup due · latest verified data: ${when}.` : `Latest verified backup data: ${when}. Next reminder: ${new Date(dueAt).toLocaleString("en-IN")}.` };

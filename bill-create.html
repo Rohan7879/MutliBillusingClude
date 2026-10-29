@@ -17,10 +17,12 @@
     <script src="js/core/utils.js"></script>
     <script src="js/core/core-engine.js"></script>
     <script src="js/core/form-safety.js"></script>
+    <script src="js/core/financial-year.js"></script>
     <script src="js/features/company-profile.js"></script>
     <script src="js/features/bill-form.js" defer></script>
     <script src="js/features/bill-list.js" defer></script>
     <script src="js/features/product-templates.js" defer></script>
+    <script src="js/core/order-sync.js" defer></script>
     <script src="js/features/order-integration.js" defer></script>
     <script src="js/features/broker.js" defer></script>
     <link rel="stylesheet" href="css/main.css" />
@@ -1511,30 +1513,29 @@
                     </div>
                   </td>
                 </tr>
-                <tr>
-                  <td colspan="5" style="padding: 6px 0">
-                    <div class="trow">
-                      <div class="trow-label">
-                        📉 કાંટા કસર<span class="badge" id="kasar-percentage-display"></span>
-                      </div>
-                      <label class="switch"
-                        ><input type="checkbox" name="deduct_kasar" checked /><span class="slider"></span
-                      ></label>
-                    </div>
-                  </td>
-                </tr>
-                <tr>
-                  <td colspan="5" style="padding: 6px 0">
-                    <div class="trow">
-                      <div class="trow-label">🚛 ઉતરાઈ<span class="badge" id="utrai-value-display"></span></div>
-                      <label class="switch"
-                        ><input type="checkbox" name="deduct_utrai" checked /><span class="slider"></span
-                      ></label>
-                    </div>
-                  </td>
-                </tr>
               </tbody>
             </table>
+          </div>
+          <!-- These apply to both Bag and Loose bills, so never hide them with bag inputs. -->
+          <div class="sc bill-step" id="common-deductions-section">
+            <div class="sc-title">📉 સામાન્ય કપાત (Common Deductions)</div>
+            <div class="trow">
+              <div class="trow-label">
+                📉 કાંટા કસર<span class="badge" id="kasar-percentage-display"></span>
+              </div>
+              <label class="switch"
+                ><input type="checkbox" name="deduct_kasar" checked /><span class="slider"></span
+              ></label>
+            </div>
+            <div class="trow" style="margin-top: 10px">
+              <div class="trow-label">🚛 ઉતરાઈ<span class="badge" id="utrai-value-display"></span></div>
+              <label class="switch"
+                ><input type="checkbox" name="deduct_utrai" checked /><span class="slider"></span
+              ></label>
+            </div>
+            <p style="margin: 11px 2px 0; color: #64748b; font-size: 12px; line-height: 1.45">
+              Bag aur Loose dono bills mein ye cuts apply hote hain. Save se pehle required toggles check karo.
+            </p>
           </div>
           <!-- WEIGHBRIDGE MOISTURE -->
           <div class="sc bill-step moisture-card">

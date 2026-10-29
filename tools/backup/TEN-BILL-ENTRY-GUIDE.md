@@ -72,6 +72,19 @@ Order date `15/10/2026`, supplier/village exact party ke hisab se. Notes mein ne
 
 New Bill mein corresponding saved order select karke uske saare vakals import karo. Weight/bags/deduction switches phir neeche ke bill se match karo. Order amount aur bill final freight/expense/commission ki wajah se alag ho sakte hain. Order-linked bill ko direct entry se dobara mat banao.
 
+### Order integration ke checkpoints — ye zaroor check karo
+
+1. **Orders → New Order** mein upar ke 3 orders save karo. Har order ka actual generated number note karo. Initially delivery `Pending`, delivered `0`, payment `Unpaid` hona chahiye.
+2. **New Bill → Order dropdown → Import to Bill**. B05/B10 mein **dono varieties select** karo. Product/prefix QW ya QM, party/village, broker aur dono rates verify karo. Import actual truck weight/bag counts nahi bharta; neeche ke bill inputs manually bharo. Purane Vakal bags clear hote hain.
+3. **Close this Order checkbox OFF rakho.** ON karne se quantity poori na hone par bhi manual completion ho jayega aur automatic-delivery test nahi hoga.
+4. Bill save ke baad Orders mein **All/Completed** filter kholkar actual order number dekho. Completed order Pending list/dropdown se hatna normal hai. Linked Bills mein generated bill number **sirf ek baar** dikhna chahiye.
+5. B03/O03: delivered **10 Bag**, remaining **0**, delivery **Completed**. Payment se pehle **Unpaid**; ₹15,000 payment ke baad **Paid**, due **₹0**.
+6. B05/O05: STANDARD delivered **12 Bag**, PREMIUM **8 Bag**, dono remaining **0**, delivery **Completed**. ₹10,000 cash + ₹500 deduction ke baad payment **Partial**, due **₹16,500**. Delivery Completed + Payment Partial **sahi result hai**.
+7. B10/O10: STANDARD delivered **10 Bag**, PREMIUM **6 Bag**, dono remaining **0**, delivery **Completed**. ₹20,000 cash + ₹1,620 deduction ke baad payment **Paid**, due **₹0**.
+8. Order reopen/refresh karne se delivered quantity ya linked bills double nahi hone chahiye. Agar warning “bill/payment saved; follow-up needs review” aaye, bill/payment dobara mat banao; uska actual number aur warning note karo.
+
+Bag ko kg ÷ 20 se compare **mat** karo. Bag = actual Vakal Katta; Man = saved delivered kg ÷ 20, Khadi = kg ÷ 400, Quintal = kg ÷ 100. Cash + deduction milkar credited amount banta hai.
+
 ## 4. Exact bill entries — B01 se B10
 
 ### QA15-B01 — Unpaid
@@ -316,9 +329,21 @@ Reports/Dashboard/Daily Closing mein same date aur filters compare karo. Existin
 - Kaunsa step fail hua: save, reopen, order link, payment, PDF, mobile ya backup verify.
 - Backup inspect karwana ho to local file path do; private backup Git mein mat daalna.
 
+## 10. Optional split-delivery check — baseline complete hone KE BAAD
+
+Ye **2 extra bills + 1 extra order** hain; upar ke 10-bill totals mein include mat karo. Pehle baseline totals/backup note kar lo. Sirf apne confirmed test database mein karo, real business entries mein nahi.
+
+- Naya order: Notes **QA15 O11 SPLIT**, party **QA15 FARMER A**, village **QA15 VILLAGE A**, product **QA15 WHEAT**, variety **QA STANDARD**, **10 Bag @ ₹500/20kg**, delivered `0`, broker blank, date **15/10/2026**.
+- Truck 1: us order ko import; Remarks **QA15-X01**, Bag mode, Kantan filled **4**, empty/plastic `0`, Vakal 1 **4 bags @500**, weight **200 kg**. Sab deductions/commission OFF; expense/freight `0`; manual close OFF. Final **₹5,000**. Order delivered **4**, remaining **6**, delivery **Partial**. Is bill par cash **₹2,500**, deduction `0` → payment **Partial**, due **₹2,500**.
+- Truck 2: New Bill mein **usi order** ko dobara import; Remarks **QA15-X02**, Kantan filled **6**, Vakal 1 **6 bags @500**, weight **300 kg**, baaki switches same. Final **₹7,500**. Order total delivered **10**, remaining **0**, delivery **Completed**. Dono generated bill numbers linked hon; combined payment **Partial**, combined due **₹10,000**.
+- Ab X01 ka remaining **₹2,500** aur X02 ka **₹7,500** cash pay karo, deductions `0`. Combined due **₹0**, order payment **Paid**, delivered ab bhi **10**.
+- Refresh/reopen par counts same rahen. B01/B02 ke existing dues ko is split order ke due se mix mat karo; **sirf X01/X02** compare karo. Extra bills/transactions delete karke baseline match mat karna.
+
 ## Verification scope
 
-`node tools/backup/check-entry-plan.cjs` local source ka actual calculateBillData/customRound chalata hai; expected final/net/commission values se compare karta hai. Installment arithmetic, party balances aur aggregate targets bhi assert hote hain. Ye Firebase writes, actual payment-save implementation, authentication, UI order import ya browser downloads ka end-to-end test nahi hai.
+`node tools/backup/check-entry-plan.cjs` actual calculateBillData/customRound aur Order delivery/payment sync functions ko offline fixtures par chalata hai. B03/B05/B10 quantities, payment checkpoints, split deliveries, Bag/Man/Khadi/Quintal, edits, archived bills, legacy links, missing data, concurrent-link changes aur visible failures assert hote hain. JSON aur HTML guide bhi identical honi chahiye. Ye actual Firebase/Google login ya production end-to-end test nahi hai.
 
-Ye baseline intentionally Kasar/Utrai/bag-weight/template deductions OFF rakhta hai. In sab configurable rules, rounding edge cases aur partial order fulfillment ko alag scenarios mein test karna baaki hai. B07 decimal payment/due test hai; current bill calculator line amounts whole rupees mein round karta hai.
+`ui-tests/order-import.cjs` actual local HTML/import functions ko mocked data ke saath browser mein check karta hai. `ui-tests/form-safety.cjs` actual save handlers ke local transaction checks cover karta hai. Real phone, Firebase permissions, PDF aur downloaded-backup checks ab bhi alag se karne hain.
+
+Ye baseline intentionally Kasar/Utrai/bag-weight/template deductions OFF rakhta hai. Sab configurable combinations aur rounding edge cases is plan mein covered nahi hain. Partial fulfillment ka optional scenario upar diya hai; actual app entry user karega. B07 decimal payment/due test hai; current bill calculator line amounts whole rupees mein round karta hai.
 

@@ -5,7 +5,7 @@
   else root.MandiBackup = api;
 })(typeof globalThis !== "undefined" ? globalThis : this, function () {
   "use strict";
-  const COLLECTIONS = Object.freeze(["bills", "payments", "parties", "orders", "settings", "brokers", "broker_payments", "products", "varieties", "customers", "counters", "users", "mobileDirectory", "auditLogs", "sharedBills"]);
+  const COLLECTIONS = Object.freeze(["bills", "payments", "parties", "orders", "settings", "brokers", "broker_payments", "products", "varieties", "customers", "counters", "users", "mobileDirectory", "auditLogs", "sharedBills", "billRevisions", "billRevisionApprovals", "yearCloseEvents"]);
   const FORMAT = "mandibook-firestore-backup";
   const MAX_FILE_BYTES = 200 * 1024 * 1024;
   const own = (value, key) => Object.prototype.hasOwnProperty.call(value, key);

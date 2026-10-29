@@ -16,6 +16,7 @@
     <script src="js/core/firebase-init.js?v=14"></script>
     <script src="js/core/utils.js"></script>
     <script src="js/core/core-engine.js?v=16"></script>
+    <script src="js/core/order-sync.js?v=1"></script>
     <script src="js/core/form-safety.js"></script>
     <script src="js/core/pwa.js?v=14" defer></script>
     <script src="js/features/company-profile.js"></script>
@@ -1475,7 +1476,7 @@
         </div>
         <div class="backup-overview">
           <div><span>Records in selected copy</span><strong id="backup-document-count">—</strong></div>
-          <div><span>Collections</span><strong id="backup-collection-count">15</strong></div>
+          <div><span>Collections</span><strong id="backup-collection-count">18</strong></div>
           <div><span>Source project</span><strong id="backup-source">Not prepared</strong></div>
           <div><span>Data exported at</span><strong id="backup-exported-at">Not prepared</strong></div>
         </div>
@@ -1516,7 +1517,7 @@
         <details class="backup-details"><summary>Collection inventory and recovery limits</summary>
           <div id="backup-manifest" class="backup-manifest"><p>Counts appear after preparation or verification, including empty collections.</p></div>
           <div id="backup-review" class="backup-review"></div>
-          <p>Scope: all 15 known app root collections, with original document IDs and Firestore data types. Unknown collections/subcollections, Firebase Auth login accounts/passwords, uploaded Storage files, rules and hosting assets are not part of this JSON.</p>
+          <p>Scope: all 18 known app root collections, including bill revisions, revision approvals and year-close events, with original document IDs and Firestore data types. Unknown collections/subcollections, Firebase Auth login accounts/passwords, uploaded Storage files, rules and hosting assets are not part of this JSON.</p>
           <p>This is a two-pass content check, not an atomic point-in-time snapshot. Keep all staff writes paused. Automatic cloud backups and point-in-time recovery require paid Firebase services and are not enabled by this workflow. Login accounts need a separate owner-controlled Auth export.</p>
           <p>Free Firestore quota is shared by the whole app. Check usage before repeating a large export. The read allowance stops an oversized preparation without presenting a partial file as a complete backup.</p>
           <p>Restore is deliberately not a browser button. Verify first, rehearse recovery in an isolated environment and check record counts/balances before any owner-approved production recovery. Checksums detect corruption; they do not prove who created a file.</p>
@@ -1591,7 +1592,7 @@
     <script id="backup-health-script" src="js/core/backup-health.js?v=16" defer></script>
     <script src="js/core/backup-engine.js?v=16" defer></script>
     <script src="js/features/backup-center.js?v=16" defer></script>
-    <script src="js/features/backup.js?v=15" defer></script>
+    <script src="js/features/backup.js?v=16" defer></script>
     <script src="js/features/themes.js" defer></script>
 
     <!-- Theme Panel -->

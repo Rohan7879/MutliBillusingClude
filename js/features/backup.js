@@ -15,14 +15,16 @@ function archiveAudit(action, id, before, after) {
 async function changeBillArchive(docId, restore) {
   if (restore && !hasRole("admin")) throw new Error("Only an Admin can restore an archived accounting record.");
   const billRef = billsCollection.doc(docId), auditRef = db.collection("auditLogs").doc();
-  return db.runTransaction(async transaction => {
+  let linkedOrder = null;
+  const changed = await db.runTransaction(async transaction => {
     // Read the bill INSIDE the transaction: double-clicks/retries cannot
     // subtract/add a balance twice using an old pre-transaction snapshot.
     const snapshot = await transaction.get(billRef);
     if (!snapshot.exists) return false;
     const bill = snapshot.data();
+    if (bill.revisionPending) throw new Error("A revision of an approved bill cannot be archived. Finish reviewing and re-approve the correction first.");
     if (restore ? bill.deleted !== true : bill.deleted === true) return false;
-    if (!restore && (bill.locked === true || bill.workflowStatus === "locked")) throw new Error("Locked bills cannot be archived. Use an owner-approved correction.");
+    if (!restore && (bill.locked === true || ['approved', 'locked'].includes(bill.workflowStatus))) throw new Error("Approved bills cannot be archived. Keep the original record and use a reviewed correction.");
     const paid = Number(bill.amountPaid ?? 0);
     if (!Number.isFinite(paid) || paid < 0) throw new Error("Recorded payment amount is invalid. Nothing was changed.");
     if (paid > 0 || ["paid", "partial", "partially paid"].includes(String(bill.paymentStatus || "").toLowerCase())) throw new Error("Bills with payment evidence need owner-led reconciliation, not archive/restore.");
@@ -37,21 +39,37 @@ async function changeBillArchive(docId, restore) {
     transaction.update(billRef, fields);
     if (partyRef) transaction.update(partyRef, { currentBalance: roundCurrency(balance + (restore ? total : -total)), lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp() });
     transaction.set(auditRef, archiveAudit(restore ? "bill.restored" : "bill.deleted", docId, bill, { ...bill, ...fields }));
+    linkedOrder = bill.LinkedOrderId ? { id: bill.LinkedOrderId, serial: bill["Serial No"] || "" } : null;
     return true;
   });
+  // Delivery, payment status and visible linked-bill badges are derived from
+  // active bills. Rebuild them immediately after archive or restore. The
+  // accounting transaction above has already committed, so a follow-up sync
+  // issue must never be presented as "archive/restore failed".
+  let syncWarning = "";
+  if (changed && linkedOrder) {
+    try {
+      if (!window.MandiOrderSync) throw new Error("Order sync module is unavailable");
+      await window.MandiOrderSync.sync(linkedOrder.id, { delivery: true, extraSerial: linkedOrder.serial });
+    } catch (error) {
+      console.error("Bill archive changed, but linked Order needs reconciliation:", error);
+      syncWarning = "The bill change was saved. Reload the Orders page once to refresh its delivery figures.";
+    }
+  }
+  return { changed, syncWarning };
 }
 async function softDeleteBill(docId) {
   try {
-    const changed = await changeBillArchive(docId, false);
-    if (changed) Swal.fire({ icon: "success", title: "Bill archived", text: "The bill, balance adjustment and audit record were committed together.", timer: 2000, showConfirmButton: false });
-    return changed;
+    const result = await changeBillArchive(docId, false);
+    if (result.changed) Swal.fire({ icon: result.syncWarning ? "warning" : "success", title: "Bill archived", text: result.syncWarning || "The bill, balance adjustment and audit record were committed together.", timer: 2500, showConfirmButton: false });
+    return result.changed;
   } catch (error) { Swal.fire({ icon: "error", title: "Archive did not complete", text: error.message }); return false; }
 }
 async function restoreBill(docId) {
   try {
-    const changed = await changeBillArchive(docId, true);
-    if (changed) Swal.fire({ icon: "success", title: "Bill restored", text: "The bill, balance adjustment and audit record were committed together.", timer: 2000, showConfirmButton: false });
-    return changed;
+    const result = await changeBillArchive(docId, true);
+    if (result.changed) Swal.fire({ icon: result.syncWarning ? "warning" : "success", title: "Bill restored", text: result.syncWarning || "The bill, balance adjustment and audit record were committed together.", timer: 2500, showConfirmButton: false });
+    return result.changed;
   } catch (error) { Swal.fire({ icon: "error", title: "Restore did not complete", text: error.message }); return false; }
 }
 

@@ -3,6 +3,10 @@
   "use strict";
   const operations = new Map();
   const drafts = new Set();
+  // A bill/payment that the server has already confirmed may deliberately open
+  // its receipt while the final UI cleanup is still running. Consume this once
+  // at beforeunload so Chrome does not call that safe navigation "unsaved".
+  let confirmedNavigation = false;
   const prefix = "mandibook:form-draft:v1:";
   const identity = () => {
     const user = window.firebase?.auth().currentUser;
@@ -193,7 +197,12 @@
     }
     resume.addEventListener("click", async () => {
       if (!current() || !candidate || operations.size) return;
-      if (dirty && !window.confirm("Replace the inputs currently on this page with the saved draft?")) return;
+      if (dirty) {
+        const confirmed = window.Swal?.fire
+          ? (await window.Swal.fire({ title: "Restore saved draft?", text: "This replaces the current form inputs. No saved bill or payment will be changed.", icon: "question", showCancelButton: true, confirmButtonText: "Restore draft", cancelButtonText: "Keep current inputs", confirmButtonColor: "#005a9e" })).isConfirmed
+          : window.confirm("Replace the inputs currently on this page with the saved draft?");
+        if (!confirmed || !current() || !candidate || operations.size) return;
+      }
       restoring = true;
       try {
         await restore(candidate.data);
@@ -250,6 +259,10 @@
   }
   window.addEventListener("beforeunload", event => {
     drafts.forEach(draft => draft.flush());
+    if (confirmedNavigation) {
+      confirmedNavigation = false;
+      return;
+    }
     if (operations.size || [...drafts].some(draft => draft.dirty)) {
       event.preventDefault(); event.returnValue = "";
     }
@@ -260,5 +273,6 @@
   });
   window.addEventListener("pagehide", () => drafts.forEach(draft => draft.flush()));
   window.MandiFormSafety = { begin, isBusy: key => operations.has(key), errorMessage,
-    fields, restoreFields, createDraft, identity };
+    fields, restoreFields, createDraft, identity,
+    allowConfirmedNavigation: () => { confirmedNavigation = true; } };
 })();

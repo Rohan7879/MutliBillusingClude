@@ -9,26 +9,57 @@ let currentCustomer = null;
 let allTransactions = [];
 let displayedTransactions = [];
 let ledgerAsTableData = [];
+let hideReversedPayments = true;
+let selectedFinancialYear = window.MandiFinancialYear.financialYearId(new Date());
+let appliedPeriodLabel = "";
+
+function ledgerBalanceLabel(cents) {
+  const amount = (Math.abs(cents) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return `₹${amount} — ${cents > 0 ? "Payable by customer" : cents < 0 ? "Customer advance (credit)" : "Settled"}`;
+}
+
+function assertLedgerBillPayable(bill) {
+  if (bill.revisionPending === true) throw new Error("Revision awaiting approval — payment is blocked until this bill is approved.");
+}
+
+function populateFinancialYears() {
+  const selector = document.getElementById("financial-year-select");
+  selector.innerHTML = '<option value="all">All dates</option>';
+  const years = window.MandiFinancialYear.availableYears(allTransactions, new Date());
+  if (selectedFinancialYear !== "all" && !years.includes(selectedFinancialYear)) years.push(selectedFinancialYear);
+  years.sort().reverse().forEach(id => {
+    const option = document.createElement("option");
+    option.value = id;
+    option.textContent = `FY ${id}`;
+    selector.appendChild(option);
+  });
+  selector.value = selectedFinancialYear;
+}
+
+function updateReversalVisibility() {
+  const toggle = document.getElementById("hide-reversed-payments");
+  if (toggle) hideReversedPayments = toggle.checked;
+  const body = document.getElementById("ledger-table-body");
+  if (body) body.className = hideReversedPayments ? "hide-reversed" : "";
+  const count = displayedTransactions.filter(tx => tx.reversed || tx.type === "reversal").length;
+  const note = document.getElementById("reversal-visibility-note");
+  if (note) note.textContent = `${count} reversed entries ${hideReversedPayments ? "hidden" : "shown"}. Balances and printed/exported statements include full history.`;
+}
 
 let paymentModal,
   modalTitle,
   modalDescription,
   modalCustomerName,
   amountInput,
+  paymentMethodInput,
   dateInput,
   deductionAmountInput,
   deductionReasonInput,
   saveBtn;
 
 function ledgerDate(value) {
-  if (!value) return new Date(0);
-  if (value && typeof value.toDate === "function") return value.toDate();
-  if (typeof value === "string" && /^\d{2}\/\d{2}\/\d{4}$/.test(value)) {
-    const [day, month, year] = value.split("/").map(Number);
-    return new Date(year, month - 1, day);
-  }
-  const parsed = new Date(value);
-  return Number.isNaN(parsed.getTime()) ? new Date(0) : parsed;
+  if (value && typeof value.toDate === "function") value = value.toDate();
+  return window.MandiFinancialYear.parseDate(value) || new Date(NaN);
 }
 
 function setLedgerSyncStatus(message, isError = false) {
@@ -39,11 +70,14 @@ function setLedgerSyncStatus(message, isError = false) {
 }
 
 function initializeLedgerPage() {
+  window.MandiPaymentUI.mount();
+  document.getElementById("hide-reversed-payments")?.addEventListener("change", updateReversalVisibility);
   paymentModal = document.getElementById("payment-modal");
   modalTitle = document.getElementById("modal-title");
   modalDescription = document.getElementById("modal-description");
   modalCustomerName = document.getElementById("modal-customer-name");
   amountInput = document.getElementById("payment-amount-input");
+  paymentMethodInput = document.getElementById("payment-method-input");
   dateInput = document.getElementById("payment-date-input");
   deductionAmountInput = document.getElementById("payment-deduction-amount");
   deductionReasonInput = document.getElementById("payment-deduction-reason");
@@ -70,6 +104,14 @@ function initializeLedgerPage() {
     const startDate = document.getElementById("start_date").value;
     const endDate = document.getElementById("end_date").value;
     renderLedgerTable(allTransactions, startDate, endDate);
+  });
+
+  document.getElementById("financial-year-select").addEventListener("change", (event) => {
+    selectedFinancialYear = event.target.value;
+    // Choosing a FY resets custom dates; Apply may narrow that FY further.
+    document.getElementById("start_date").value = "";
+    document.getElementById("end_date").value = "";
+    renderLedgerTable(allTransactions);
   });
 
   document.getElementById("print-ledger-btn").addEventListener("click", printLedger);
@@ -128,6 +170,8 @@ async function fetchUniqueCustomers() {
             name: name,
             village: village,
             customerId: doc.id,
+            opBal: pData.opBal,
+            opBalType: pData.opBalType,
           });
           partyKeyById.set(doc.id, key);
         }
@@ -298,6 +342,7 @@ async function showCustomerLedger(customer) {
     let billDates = [];
 
     const paidBillIds = new Set();
+    const reversedPaymentIds = new Set(paymentsSnapshot.docs.map(doc => doc.data().reversalOf).filter(Boolean));
     paymentsSnapshot.docs.forEach((doc) => {
       const payment = doc.data();
       if (payment.appliedToBills) {
@@ -310,7 +355,7 @@ async function showCustomerLedger(customer) {
       const billDate = ledgerDate(bill.Date || bill.date || bill.billDate || bill.createdAt);
       const billTotal = Number(bill["Final Total"] || bill.total || bill.amount || 0);
 
-      billDates.push(billDate);
+      if (!Number.isNaN(billDate.getTime())) billDates.push(billDate);
       totalBillValue += billTotal;
       billIdToSerialMap.set(doc.id, bill["Serial No"]);
 
@@ -318,7 +363,8 @@ async function showCustomerLedger(customer) {
         id: doc.id,
         type: "bill",
         date: billDate,
-        particulars: `Bill No: ${bill["Serial No"]}`,
+        particulars: `Bill No: ${bill["Serial No"]}${bill.revisionPending === true ? " — Revision awaiting approval (working amount, not final)" : ""}`,
+        revisionPending: bill.revisionPending === true,
         debit: billTotal,
         credit: 0,
         sortKey: billDate.getTime(),
@@ -343,12 +389,13 @@ async function showCustomerLedger(customer) {
       const paymentDate = ledgerDate(payment.paymentDate || payment.createdAt);
       const cashAmount = Number(payment.cashAmount || 0);
       const deductionAmount = Number(payment.deductionAmount || 0);
+      const paymentMethod = payment.paymentMethod || "Cash";
 
       let particulars = "General Payment";
       if (payment.appliedToBills && payment.appliedToBills.length > 0) {
         const serials = payment.appliedToBills.map((id) => billIdToSerialMap.get(id) || id.slice(0, 4)).join(", #");
         if (cashAmount > 0 && deductionAmount > 0) {
-          particulars = `Bill #${serials} | Cash: ₹${formatNumber(cashAmount)} | Kapat: ₹${formatNumber(
+          particulars = `Bill #${serials} | ${paymentMethod}: ₹${formatNumber(cashAmount)} | Kapat: ₹${formatNumber(
             deductionAmount
           )} (${payment.deductionReason || "Kapat"})`;
         } else if (deductionAmount > 0) {
@@ -356,10 +403,10 @@ async function showCustomerLedger(customer) {
             payment.deductionReason || "Kapat"
           })`;
         } else {
-          particulars = `Payment for Bill #${serials}`;
+          particulars = `Bill #${serials} | ${paymentMethod}: ₹${formatNumber(cashAmount)}`;
         }
       } else if (cashAmount > 0 && deductionAmount > 0) {
-        particulars = `Cash: ₹${formatNumber(cashAmount)} + Kapat: ₹${formatNumber(deductionAmount)} (${
+        particulars = `${paymentMethod}: ₹${formatNumber(cashAmount)} + Kapat: ₹${formatNumber(deductionAmount)} (${
           payment.deductionReason || "Kapat"
         })`;
       } else if (deductionAmount > 0) {
@@ -368,9 +415,12 @@ async function showCustomerLedger(customer) {
 
       allTransactions.push({
         id: doc.id,
-        type: "payment",
+        type: payment.reversalOf ? "reversal" : "payment",
+        reversed: reversedPaymentIds.has(doc.id),
         date: paymentDate,
-        particulars: particulars,
+        particulars: payment.reversalOf
+          ? `Payment reversed | ${particulars} | Reason: ${payment.reason || ""}`
+          : `${particulars}${reversedPaymentIds.has(doc.id) ? " | Reversed" : ""}`,
         debit: 0,
         credit: Number(payment.totalCredit || cashAmount + deductionAmount),
         sortKey: paymentDate.getTime(),
@@ -378,7 +428,8 @@ async function showCustomerLedger(customer) {
     });
 
     allTransactions.sort((a, b) => a.sortKey - b.sortKey);
-    renderLedgerTable(allTransactions);
+    populateFinancialYears();
+    renderLedgerTable(allTransactions, document.getElementById("start_date").value, document.getElementById("end_date").value);
 
     const totalBills = mergedBillDocs.length;
     document.getElementById("summary-total-bills").textContent = totalBills;
@@ -402,87 +453,89 @@ async function showCustomerLedger(customer) {
 }
 
 function renderLedgerTable(transactions, startDateStr = null, endDateStr = null) {
+  const fy = window.MandiFinancialYear;
+  let report;
+  try {
+    report = fy.summarize(transactions, {
+      fyId: selectedFinancialYear === "all" ? null : selectedFinancialYear,
+      start: startDateStr, end: endDateStr,
+      initialOpeningCents: fy.partyOpeningCents(currentCustomer || {}),
+    });
+  } catch (error) {
+    alert(error.message);
+    return; // Keep the previously applied statement and print period intact.
+  }
   const tableBody = document.getElementById("ledger-table-body");
   tableBody.innerHTML = "";
   displayedTransactions = [];
   ledgerAsTableData = [];
 
-  const startDate = startDateStr ? new Date(startDateStr) : null;
-  const endDate = endDateStr ? new Date(endDateStr) : null;
-  if (startDate) startDate.setHours(0, 0, 0, 0);
-  if (endDate) endDate.setHours(23, 59, 59, 999);
-
-  let openingBalance = 0;
-  if (startDate) {
-    transactions.forEach((tx) => {
-      if (tx.date < startDate) {
-        openingBalance += (tx.debit || 0) - (tx.credit || 0);
-      }
-    });
-  }
+  const startDate = report.start ? fy.parseDate(report.start) : null;
+  appliedPeriodLabel = `${selectedFinancialYear === "all" ? "All dates" : `FY ${selectedFinancialYear}`} · ${report.start || "Beginning"} to ${report.end || "Latest"}`;
+  if (report.invalidDateCount) appliedPeriodLabel += ` · Warning: ${report.invalidDateCount} invalid-date entries excluded; balances may be incomplete`;
+  document.getElementById("ledger-period-label").textContent = appliedPeriodLabel;
 
   const openingRow = document.createElement("tr");
   openingRow.innerHTML = `<td class="no-print"></td><td>${
     startDate ? startDate.toLocaleDateString("en-IN") : "-"
-  }</td><td><strong>Opening Balance</strong></td><td colspan="2"></td><td><strong>${formatNumber(
-    openingBalance
-  )}</strong></td>`;
+  }</td><td><strong>Opening Balance (initial + prior activity)</strong></td><td colspan="2"></td><td><strong>${ledgerBalanceLabel(report.openingCents)}</strong></td>`;
   tableBody.appendChild(openingRow);
 
   ledgerAsTableData.push({
     Date: startDate ? startDate.toLocaleDateString("en-IN") : "-",
-    Particulars: "Opening Balance",
+    Particulars: "Opening Balance (initial + prior activity)",
     Debit: "",
     Credit: "",
-    Balance: formatNumber(openingBalance),
+    Balance: ledgerBalanceLabel(report.openingCents),
   });
 
-  let runningBalance = openingBalance;
-  let periodDebit = 0;
-  let periodCredit = 0;
-
-  transactions.forEach((tx) => {
-    const isAfterStart = startDate ? tx.date >= startDate : true;
-    const isBeforeEnd = endDate ? tx.date <= endDate : true;
-    if (isAfterStart && isBeforeEnd) {
+  report.rows.forEach(({ transaction: tx, balanceCents, debitCents, creditCents }) => {
       displayedTransactions.push(tx);
-      runningBalance += (tx.debit || 0) - (tx.credit || 0);
-      periodDebit += tx.debit || 0;
-      periodCredit += tx.credit || 0;
 
       let checkboxHtml = '<td class="no-print"></td>';
       if (tx.type === "bill") {
-        const isDisabled = tx.amountDue <= 0.01;
+        const isDisabled = tx.amountDue <= 0.01 || tx.revisionPending;
         checkboxHtml = `<td class="no-print"><input type="checkbox" class="bill-checkbox-ledger" value="${
           tx.id
-        }" data-amount="${tx.amountDue}" onchange="updateSelectionSummary()" ${isDisabled ? "disabled" : ""}></td>`;
-      } else if (tx.type === "payment" && tx.id) {
-        // 🗑️ Payment entry ke liye delete button
-        checkboxHtml = `<td class="no-print"><button onclick="deletePaymentEntry('${tx.id}')" style="background:#dc3545; color:white; border:none; padding:3px 8px; border-radius:4px; cursor:pointer; font-size:11px; font-weight:bold;">Delete</button></td>`;
+        }" data-amount="${tx.amountDue}" onchange="updateSelectionSummary()" ${isDisabled ? "disabled" : ""} ${tx.revisionPending ? 'title="Revision awaiting approval — payment blocked"' : ""}></td>`;
+      } else if (tx.type === "payment" && tx.id && !tx.reversed && hasRole("admin", "accountant")) {
+        checkboxHtml = `<td class="no-print"><button onclick="reversePaymentEntry('${tx.id}')" style="background:#dc3545; color:white; border:none; padding:5px 8px; border-radius:6px; cursor:pointer; font-size:11px; font-weight:bold;">Reverse</button></td>`;
       }
 
       const row = document.createElement("tr");
-      row.innerHTML = `${checkboxHtml}<td>${tx.date.toLocaleDateString("en-IN")}</td><td>${escapeHtml(tx.particulars)}</td><td>${
-        tx.debit > 0 ? formatNumber(tx.debit) : "-"
-      }</td><td>${tx.credit > 0 ? formatNumber(tx.credit) : "-"}</td><td>${formatNumber(runningBalance)}</td>`;
+      if (tx.reversed || tx.type === "reversal") row.className = "reversed-entry";
+      const particularsHtml = tx.type === "bill"
+        ? `<a href="final.html?id=${encodeURIComponent(tx.id)}" style="color:#005a9e;text-decoration:underline">${escapeHtml(tx.particulars)} ↗</a>`
+        : escapeHtml(tx.particulars);
+      row.innerHTML = `${checkboxHtml}<td>${tx.date.toLocaleDateString("en-IN")}</td><td>${particularsHtml}</td><td>${
+        debitCents !== 0 ? formatNumber(debitCents / 100) : "-"
+      }</td><td>${creditCents !== 0 ? formatNumber(creditCents / 100) : "-"}</td><td>${ledgerBalanceLabel(balanceCents)}</td>`;
       tableBody.appendChild(row);
       ledgerAsTableData.push({
         Date: tx.date.toLocaleDateString("en-IN"),
         Particulars: tx.particulars,
-        Debit: tx.debit > 0 ? formatNumber(tx.debit) : "",
-        Credit: tx.credit > 0 ? formatNumber(tx.credit) : "",
-        Balance: formatNumber(runningBalance),
+        Debit: debitCents !== 0 ? formatNumber(debitCents / 100) : "",
+        Credit: creditCents !== 0 ? formatNumber(creditCents / 100) : "",
+        Balance: ledgerBalanceLabel(balanceCents),
       });
-    }
   });
 
   const balanceCard = document.querySelector(".balance-card");
   const balanceValue = document.getElementById("kpi-balance-due");
-  balanceCard.style.backgroundColor = runningBalance > 0 ? "#fbeaea" : "#eafbf0";
-  balanceValue.style.color = runningBalance > 0 ? "#dc3545" : "#28a745";
-  document.getElementById("kpi-total-debit").textContent = `₹${formatNumber(periodDebit)}`;
-  document.getElementById("kpi-total-credit").textContent = `₹${formatNumber(periodCredit)}`;
-  balanceValue.textContent = `₹${formatNumber(runningBalance)}`;
+  balanceCard.style.backgroundColor = report.closingCents > 0 ? "#fbeaea" : "#eafbf0";
+  balanceValue.style.color = report.closingCents > 0 ? "#dc3545" : "#28a745";
+  document.getElementById("kpi-total-debit").textContent = `₹${(report.debitCents / 100).toLocaleString("en-IN")}`;
+  document.getElementById("kpi-total-credit").textContent = `₹${(report.creditCents / 100).toLocaleString("en-IN")}`;
+  balanceValue.textContent = ledgerBalanceLabel(report.closingCents);
+  const selectAll = document.getElementById("select-all-bills-ledger");
+  if (selectAll) selectAll.checked = false;
+  updateSelectionSummary();
+  // Visibility only: never remove corrections from balances, date ranges or exports.
+  const table = document.getElementById("ledger-table-body");
+  table.className = hideReversedPayments ? "hide-reversed" : "";
+  const note = document.getElementById("reversal-visibility-note");
+  const count = displayedTransactions.filter(tx => tx.reversed || tx.type === "reversal").length;
+  if (note) note.textContent = `${count} reversed entries ${hideReversedPayments ? "hidden" : "shown"}. Balances and printed/exported statements include full history.`;
 }
 
 function updateSelectionSummary() {
@@ -535,8 +588,10 @@ function openPaymentModal() {
 
   if (modalCustomerName) modalCustomerName.textContent = currentCustomer.name;
   if (amountInput) amountInput.value = "";
+  if (paymentMethodInput) paymentMethodInput.value = "Cash";
   if (deductionAmountInput) deductionAmountInput.value = "";
   if (deductionReasonInput) deductionReasonInput.value = "";
+  document.getElementById("payment-reason-input").value = "";
   if (dateInput) {
     const today = new Date();
     const year = today.getFullYear();
@@ -583,9 +638,21 @@ function closePaymentModal(saved = false) {
 async function savePayment() {
   if (window.MandiFormSafety.isBusy("payment")) return;
   const selectedCheckboxes = document.querySelectorAll(".bill-checkbox-ledger:checked");
+  try {
+    Array.from(selectedCheckboxes).forEach(cb => {
+      const bill = allTransactions.find(tx => tx.type === "bill" && tx.id === cb.value);
+      if (bill) assertLedgerBillPayable(bill);
+    });
+  } catch (error) {
+    Swal.fire("Payment blocked", error.message, "warning");
+    return;
+  }
   const cashAmount = Number(amountInput.value);
+  const paymentMethod = paymentMethodInput?.value || "Cash";
   const deductionAmount = Number(deductionAmountInput.value);
   const deductionReason = deductionReasonInput.value;
+  const paymentReason = document.getElementById("payment-reason-input").value.trim();
+  if (!paymentReason) { Swal.fire("Add a reference", "Enter a payment reference before saving.", "warning"); return; }
   const dateStr = dateInput.value;
   const totalCredit = cashAmount + deductionAmount;
 
@@ -625,6 +692,7 @@ async function savePayment() {
   try {
     const paymentDate = firebase.firestore.Timestamp.fromDate(new Date(dateStr));
     const affectedOrderIds = new Set();
+    const directOrderIds = new Set();
     const selectedBillIds = Array.from(selectedCheckboxes).map((cb) => cb.value);
     const partyRef =
       currentCustomer && currentCustomer.customerId ? db.collection("parties").doc(currentCustomer.customerId) : null;
@@ -638,6 +706,7 @@ async function savePayment() {
     // (or vice versa) — this is what caused the mismatch you saw.
     await db.runTransaction(async (transaction) => {
       // --- READS FIRST (Firestore transactions require this) ---
+      await MandiFinancialYear.assertPostingOpen(db, transaction, [dateStr]);
       const existingPayment = await transaction.get(paymentRef);
       if (existingPayment.exists) return;
       const billRefs = selectedBillIds.map((id) => billsCollection.doc(id));
@@ -650,8 +719,10 @@ async function savePayment() {
         customerVillage: currentCustomer.village,
         customerId: currentCustomer.customerId || null,
         cashAmount,
+        paymentMethod,
         deductionAmount,
         deductionReason,
+        reason: paymentReason,
         totalCredit,
         paymentDate,
         createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -664,6 +735,8 @@ async function savePayment() {
         billDocs.forEach((billDoc, i) => {
           if (!billDoc.exists || billDoc.data().deleted === true) throw new Error("A selected bill is no longer available. Refresh the ledger before paying.");
           const billData = billDoc.data();
+          // Re-check the server snapshot: revision may have started since this page loaded.
+          assertLedgerBillPayable(billData);
           const currentAmountPaid = Number(billData.amountPaid || 0);
           const billTotal = Number(
             billData["Final Total"] ||
@@ -681,6 +754,7 @@ async function savePayment() {
           billUpdates.push({
             ref: billRefs[i],
             billSerial: billData["Serial No"] || billData.serialNo,
+            orderId: billData.LinkedOrderId || "",
             fields: { amountPaid: newAmountPaid, amountDue: newAmountDue, paymentStatus: newStatus },
           });
           remainingCredit -= paymentForThisBill;
@@ -699,8 +773,11 @@ async function savePayment() {
         });
       }
 
-      billUpdates.forEach(({ billSerial }) => {
-        if (billSerial) affectedOrderIds.add(billSerial);
+      affectedOrderIds.clear();
+      directOrderIds.clear();
+      billUpdates.forEach(({ billSerial, orderId }) => {
+        if (orderId) directOrderIds.add(orderId);
+        else if (billSerial) affectedOrderIds.add(billSerial);
       });
     });
     committed = true;
@@ -712,6 +789,10 @@ async function savePayment() {
     // failure here behind a console.warn. If it fails, the payment itself
     // is still safely saved (see above), and you get a visible heads-up
     // to go check that specific order instead of finding out by accident.
+    for (const orderId of directOrderIds) {
+      try { await recalculateAndUpdateOrderPaymentStatus(orderId); }
+      catch (error) { console.error("Linked order payment sync failed:", error); orderSyncFailed = true; }
+    }
     if (affectedOrderIds.size > 0) {
       for (const billSerial of affectedOrderIds) {
         try {
@@ -724,10 +805,7 @@ async function savePayment() {
             ...matchingOrders.docs.map((d) => d.id),
             ...matchingOrdersArray.docs.map((d) => d.id),
           ]);
-          if (orderIds.size === 0) {
-            console.warn(`No order found linking bill ${billSerial} — Order Book status not updated.`);
-            orderSyncFailed = true;
-          }
+          // No match is normal for a direct bill; legacy links still use this lookup.
           for (const ordId of orderIds) {
             await recalculateAndUpdateOrderPaymentStatus(ordId);
           }
@@ -768,12 +846,7 @@ async function savePayment() {
   }
 }
 function printLedger() {
-  const startDate = document.getElementById("start_date").value;
-  const endDate = document.getElementById("end_date").value;
-  const dateRange =
-    startDate && endDate
-      ? `From ${new Date(startDate).toLocaleDateString("en-IN")} to ${new Date(endDate).toLocaleDateString("en-IN")}`
-      : "For all transactions";
+  const dateRange = appliedPeriodLabel;
 
   let tableRowsHtml = "";
   ledgerAsTableData.forEach((row) => {
@@ -781,7 +854,7 @@ function printLedger() {
     tableRowsHtml += `
         <tr class="${isOpening ? "opening-balance-row" : ""}">
           <td>${row.Date}</td>
-          <td>${row.Particulars}</td>
+          <td>${escapeHtml(row.Particulars)}</td>
           <td class="text-right">${row.Debit}</td>
           <td class="text-right">${row.Credit}</td>
           <td class="text-right">${row.Balance}</td>
@@ -915,21 +988,31 @@ function printLedger() {
     document.body.removeChild(printFrame);
   }, 500);
 }
-window.deletePaymentEntry = async function (paymentId) {
-  // 🛑 Strict Security Check
+let paymentReversalBusy = false;
+window.reversePaymentEntry = async function (paymentId) {
+  if (paymentReversalBusy) return;
+  if (!hasRole("admin", "accountant")) {
+    await Swal.fire("Access required", "Only an Admin or Accountant can reverse a payment.", "info");
+    return;
+  }
+  const entry = allTransactions.find(tx => tx.id === paymentId && tx.type === "payment" && !tx.reversed);
+  if (!entry) return;
+  paymentReversalBusy = true;
+  try {
   const confirm = await Swal.fire({
-    title: "⚠️ Security Check: Delete Payment?",
-    text: "Yeh ek critical action hai! Galti ya fraud se bachne ke liye niche box mein 'DELETE' type karein.",
+    title: `Reverse ₹${Number(entry.credit).toLocaleString("en-IN", { minimumFractionDigits: 2 })} payment?`,
+    text: "This cancels the payment's effect and increases the balance due. The original payment and correction will both remain in history.",
     input: "text",
-    inputPlaceholder: "Yahan 'DELETE' likhein...",
+    inputPlaceholder: "Reason, e.g. payment entered by mistake",
     icon: "warning",
     showCancelButton: true,
-    confirmButtonText: "Confirm & Delete",
+    confirmButtonText: "Reverse payment",
     confirmButtonColor: "#dc3545",
     cancelButtonColor: "#6c757d",
     preConfirm: (inputValue) => {
-      if (inputValue !== "DELETE") {
-        Swal.showValidationMessage("Aage badhne ke liye 'DELETE' likhna anivarya (mandatory) hai!");
+      if (!inputValue || inputValue.trim().length < 3 || inputValue.trim().length > 500) {
+        Swal.showValidationMessage("Enter a correction reason (3–500 characters).");
+        return false;
       }
       return inputValue;
     },
@@ -937,73 +1020,24 @@ window.deletePaymentEntry = async function (paymentId) {
 
   if (!confirm.isConfirmed) return;
 
-  showLoading("Deleting payment securely...");
+  showLoading("Reversing payment...");
   let orderSyncFailed = false;
   try {
-    const paymentRef = paymentsCollection.doc(paymentId);
     const affectedBillSerials = new Set();
-
-    // 🔒 ATOMIC WRITE — same reasoning as savePayment(): the bill reversal,
-    // the party-balance reversal, and the payment delete itself now happen
-    // in one transaction. A dropped connection mid-delete used to be able
-    // to leave a bill "un-refunded" while the payment record vanished (or
-    // vice versa) — that can't happen now.
-    await db.runTransaction(async (transaction) => {
-      const paymentDoc = await transaction.get(paymentRef);
-      if (!paymentDoc.exists) throw new Error("Payment record not found.");
-
-      const paymentData = paymentDoc.data();
-      const totalCredit = Number(paymentData.totalCredit || 0);
-      const appliedBills = paymentData.appliedToBills || [];
-      // Reverse against the customer this payment was actually recorded
-      // for — not whichever ledger happens to be open right now.
-      const partyRef = paymentData.customerId ? db.collection("parties").doc(paymentData.customerId) : null;
-
-      const billRefs = appliedBills.map((id) => billsCollection.doc(id));
-      const billDocs = await Promise.all(billRefs.map((ref) => transaction.get(ref)));
-      const partyDoc = partyRef ? await transaction.get(partyRef) : null;
-
-      let remainingRefund = totalCredit;
-      billDocs.forEach((billDoc, i) => {
-        if (!billDoc.exists || remainingRefund <= 0) return;
-        const billData = billDoc.data();
-        const currentPaid = Number(billData.amountPaid || 0);
-        const billTotal = Number(
-          billData["Final Total"] ||
-            billData.total ||
-            billData.amount ||
-            Number(billData.amountDue || 0) + currentPaid ||
-            0
-        );
-        const refundForThisBill = Math.min(remainingRefund, currentPaid);
-        const newAmountPaid = currentPaid - refundForThisBill;
-        const newAmountDue = billTotal - newAmountPaid;
-        const newStatus = newAmountDue <= 0.01 ? "Paid" : newAmountPaid > 0 ? "Partial" : "Unpaid";
-
-        transaction.update(billRefs[i], {
-          amountPaid: newAmountPaid,
-          amountDue: newAmountDue,
-          paymentStatus: newStatus,
-        });
-        remainingRefund -= refundForThisBill;
-
-        const billSerial = billData["Serial No"] || billData.serialNo;
-        if (billSerial) affectedBillSerials.add(billSerial);
-      });
-
-      if (partyRef && partyDoc && partyDoc.exists) {
-        const currentBalance = Number(partyDoc.data().currentBalance || 0);
-        transaction.update(partyRef, {
-          currentBalance: currentBalance + totalCredit,
-          lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
-        });
-      }
-
-      transaction.delete(paymentRef);
+    const directOrderIds = new Set();
+    const correction = await MandiPaymentReversal.reverse({
+      db, paymentId, reason: confirm.value, uid: firebase.auth().currentUser?.uid,
+      timestamp: () => firebase.firestore.FieldValue.serverTimestamp(),
     });
+    if (correction.orderId) directOrderIds.add(correction.orderId);
+    else if (correction.billSerial) affectedBillSerials.add(correction.billSerial);
 
     // Order-status recalculation — same visible-failure treatment as
     // savePayment() instead of a silent console.warn.
+    for (const orderId of directOrderIds) {
+      try { await recalculateAndUpdateOrderPaymentStatus(orderId); }
+      catch (error) { console.error("Linked order reversal sync failed:", error); orderSyncFailed = true; }
+    }
     for (const billSerial of affectedBillSerials) {
       try {
         const matchingOrders = await db.collection("orders").where("linkedBillNo", "==", billSerial).get();
@@ -1027,73 +1061,35 @@ window.deletePaymentEntry = async function (paymentId) {
     hideLoading();
     if (orderSyncFailed) {
       Swal.fire(
-        "Deleted",
-        "Payment safely reverse ho gaya. Lekin linked order ka status Order Book mein sync nahi ho paya — please check manually.",
+        "Payment reversed",
+        "Payment correction was saved. The linked order's payment status still needs refreshing. Do not enter the correction again.",
         "warning"
       );
     } else {
-      Swal.fire("Deleted!", "Payment entry successfully removed.", "success");
+      Swal.fire(correction.alreadyReversed ? "Already reversed" : "Payment reversed",
+        correction.alreadyReversed ? "This payment was already corrected; no duplicate correction was created."
+          : "Balance updated. The original payment and reversal are both preserved in history.", "success");
     }
 
     // Ledger ko refresh karke wapas load karo
     showCustomerLedger(currentCustomer);
   } catch (error) {
-    console.error("Error deleting payment:", error);
+    console.error("Error reversing payment:", error);
     hideLoading();
-    Swal.fire("Error", error.message || "Could not delete payment. Please try again.", "error");
+    Swal.fire("Payment reversal was not saved",
+      error.code === "permission-denied"
+        ? "Your account or the deployed Firebase rules do not allow this correction yet. Ask the Admin to check reversal access."
+        : error.message || "Could not reverse payment. Refresh the ledger before retrying.", "error");
   }
+  } finally { paymentReversalBusy = false; }
 };
 // Payment delete hone ke baad order ka status wapas update karne ke liye:
 
 // 🔄 Order ke saare linked bills ko check karke sahi payment status calculate karne ka function
 async function recalculateAndUpdateOrderPaymentStatus(orderId) {
   if (!orderId) return;
-  try {
-    const orderRef = db.collection("orders").doc(orderId);
-    const orderDoc = await orderRef.get();
-    if (!orderDoc.exists) return;
-    const order = orderDoc.data();
-
-    // Is order ke saare linked bills nikal lo
-    let billSerials = [];
-    if (order.linkedBillNos && Array.isArray(order.linkedBillNos)) {
-      billSerials = order.linkedBillNos.map((b) => (b.billNo || b).toString().trim());
-    } else if (order.linkedBillNo) {
-      billSerials = order.linkedBillNo.split(",").map((s) => s.trim());
-    }
-    if (billSerials.length === 0) return;
-
-    // Bills collection se inke records fetch karo
-    let allLinkedBills = [];
-    for (let i = 0; i < billSerials.length; i += 10) {
-      const chunk = billSerials.slice(i, i + 10);
-      const snap = await db.collection("bills").where("Serial No", "in", chunk).get();
-      snap.forEach((d) => allLinkedBills.push(d.data()));
-    }
-
-    if (allLinkedBills.length === 0) return;
-
-    let totalFinal = 0;
-    let totalPaid = 0;
-    allLinkedBills.forEach((b) => {
-      totalFinal += Number(b["Final Total"] || 0);
-      totalPaid += Number(b.amountPaid || 0);
-    });
-
-    // Logical Status Calculation
-    let newPayStatus = "Unpaid";
-    if (totalPaid >= totalFinal && totalFinal > 0) {
-      newPayStatus = "Paid";
-    } else if (totalPaid > 0) {
-      newPayStatus = "Partial";
-    }
-
-    // Order update kar do
-    await orderRef.update({
-      paymentStatus: newPayStatus,
-      updatedAt: Date.now(),
-    });
-  } catch (e) {
-    console.error("Error updating consolidated order payment status:", e);
-  }
+  if (!window.MandiOrderSync) throw new Error("Order sync module is unavailable. Reload before retrying.");
+  // Only paymentStatus/updatedAt are written: accountant permissions stay intact.
+  // Let failures reach the caller's already-saved warning, never report false success.
+  return MandiOrderSync.sync(orderId);
 }

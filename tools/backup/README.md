@@ -107,6 +107,9 @@ Official references:
 ```sh
 node ui-tests/backup-tests.cjs
 node ui-tests/workspace-tests.cjs
+node tools/backup/check-entry-plan.cjs
+# Chrome/Playwright available ho to:
+node ui-tests/order-import.cjs
 node payment-tests/test/test-atomicity.js
 node payment-tests/test/test-rules.js
 ```

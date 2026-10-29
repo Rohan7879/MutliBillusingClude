@@ -1,4 +1,24 @@
+function showBillMessage({ icon = "info", title, text = "", toast = false } = {}) {
+  if (window.Swal?.fire) {
+    return Swal.fire({
+      icon,
+      title,
+      text,
+      toast,
+      position: toast ? "top-end" : "center",
+      showConfirmButton: !toast,
+      timer: toast ? 3600 : undefined,
+      timerProgressBar: toast,
+      confirmButtonColor: "#075a9c",
+      customClass: { popup: "mandibook-bill-alert" },
+    });
+  }
+  window.alert([title, text].filter(Boolean).join("\n"));
+  return Promise.resolve();
+}
+
 document.addEventListener("DOMContentLoaded", () => {
+  window.MandiPaymentUI.mount();
   const urlParams = new URLSearchParams(window.location.search);
   const shareToken = urlParams.get("share");
   const billId = urlParams.get("id") || urlParams.get("billId");
@@ -13,13 +33,31 @@ document.addEventListener("DOMContentLoaded", () => {
   const paymentModal = document.getElementById("payment-modal");
   const closePaymentModalBtn = document.getElementById("close-payment-modal-btn");
   const savePaymentBtn = document.getElementById("save-payment-btn");
+  const paymentInput = document.getElementById("payment-amount-input");
+  const paymentMethodInput = document.getElementById("payment-method-input");
+  const paymentDateInput = document.getElementById("payment-date-input");
+  const deductionAmountInput = document.getElementById("payment-deduction-amount");
+  const deductionReasonInput = document.getElementById("payment-deduction-reason");
+  const today = () => {
+    const date = new Date();
+    return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  };
   if (recordPaymentBtn) {
     recordPaymentBtn.addEventListener("click", () => {
       if (approvalRequiredFor(window.currentBillData)) {
         showApprovalRequired("record a payment");
         return;
       }
+      const bill = window.currentBillData || {};
+      document.getElementById("modal-description").textContent = `Bill ${bill["Serial No"] || ""} — ${bill["Customer Name"] || bill.customer_name || ""}. Review the amount and payment date before saving.`;
+      if (paymentInput) paymentInput.value = "";
+      if (paymentMethodInput) paymentMethodInput.value = "Cash";
+      if (paymentDateInput) paymentDateInput.value = today();
+      if (deductionAmountInput) deductionAmountInput.value = "";
+      if (deductionReasonInput) deductionReasonInput.value = "";
+      document.getElementById("payment-reason-input").value = "";
       if (paymentModal) paymentModal.style.display = "flex";
+      paymentInput?.focus();
     });
   }
   if (closePaymentModalBtn) {
@@ -30,27 +68,39 @@ document.addEventListener("DOMContentLoaded", () => {
   if (savePaymentBtn) {
     savePaymentBtn.addEventListener("click", async () => {
       if (!hasRole("admin", "accountant")) {
-        alert("Only an Admin or Accountant can record payments.");
+        showBillMessage({ icon: "error", title: "Payment access denied", text: "Only an Admin or Accountant can record payments." });
         return;
       }
-      const paymentInput = document.getElementById("payment-amount-input"); // ya jo bhi aapke input ka ID ho
       const cashAmount = Number(paymentInput ? paymentInput.value : 0) || 0;
+      const deductionAmount = Number(deductionAmountInput ? deductionAmountInput.value : 0) || 0;
+      const totalCredit = cashAmount + deductionAmount;
+      const paymentMethod = paymentMethodInput?.value || "Cash";
+      const paymentDate = paymentDateInput?.value || "";
       const reasonInput = document.getElementById("payment-reason-input");
       const paymentReason = reasonInput ? reasonInput.value.trim() : "";
+      const deductionReason = deductionReasonInput ? deductionReasonInput.value.trim() : "";
 
-      if (cashAmount <= 0) {
-        alert("Please enter a valid amount.");
+      if (paymentInput?.validity.badInput || deductionAmountInput?.validity.badInput || cashAmount < 0 || deductionAmount < 0 || totalCredit <= 0) {
+        showBillMessage({ icon: "warning", title: "Enter an amount", text: "Enter a received amount or settlement deduction greater than zero." });
+        return;
+      }
+      if (!/^\d{4}-\d{2}-\d{2}$/.test(paymentDate) || !Number.isFinite(new Date(`${paymentDate}T12:00:00`).getTime())) {
+        showBillMessage({ icon: "warning", title: "Choose a payment date", text: "Select the date on which this payment was received." });
+        return;
+      }
+      if (deductionAmount > 0 && !deductionReason) {
+        showBillMessage({ icon: "warning", title: "Add deduction reason", text: "Explain the settlement deduction before saving it." });
         return;
       }
       if (!paymentReason) {
-        alert("Please enter a payment reason or reference.");
+        showBillMessage({ icon: "warning", title: "Add a reference", text: `For example: ${paymentMethod} - QA15-B02-P1.` });
         return;
       }
 
       const urlParams = new URLSearchParams(window.location.search);
       const billId = urlParams.get("id") || urlParams.get("billId");
       if (!billId) {
-        alert("Bill ID not found.");
+        showBillMessage({ icon: "error", title: "Bill not found", text: "Open the bill again from the Bills page and retry." });
         return;
       }
 
@@ -65,6 +115,7 @@ document.addEventListener("DOMContentLoaded", () => {
         // together in one transaction instead of as three separate awaited
         // calls, so a mid-flow failure can't leave them out of sync.
         await db.runTransaction(async (transaction) => {
+          await MandiFinancialYear.assertPostingOpen(db, transaction, [paymentDate]);
           const billDoc = await transaction.get(billRef);
           if (!billDoc.exists) throw new Error("Bill not found.");
           billData = billDoc.data();
@@ -76,10 +127,10 @@ document.addEventListener("DOMContentLoaded", () => {
           const currentAmountPaid = Number(billData.amountPaid || 0);
           const finalTotal = Number(billData["Final Total"] || 0);
           const amountDue = Math.max(0, finalTotal - currentAmountPaid);
-          if (cashAmount > amountDue + 0.01) {
+          if (totalCredit > amountDue + 0.01) {
             throw new Error(`Payment cannot exceed the pending amount (₹${amountDue.toFixed(2)}).`);
           }
-          newAmountPaid = currentAmountPaid + cashAmount;
+          newAmountPaid = currentAmountPaid + totalCredit;
           newAmountDue = Math.max(0, finalTotal - newAmountPaid);
           newStatus = newAmountDue <= 0.01 ? "Paid" : "Partial";
 
@@ -94,9 +145,11 @@ document.addEventListener("DOMContentLoaded", () => {
             customerVillage: billData["Village"] || billData.customerVillage || "N/A",
             customerId: billData.customerId || null,
             cashAmount: cashAmount,
-            deductionAmount: 0,
-            totalCredit: cashAmount,
-            paymentDate: firebase.firestore.Timestamp.fromDate(new Date()),
+            paymentMethod,
+            deductionAmount,
+            deductionReason: deductionAmount > 0 ? deductionReason : "",
+            totalCredit,
+            paymentDate: firebase.firestore.Timestamp.fromDate(new Date(`${paymentDate}T12:00:00`)),
             appliedToBills: [billId],
             reason: paymentReason,
             createdAt: firebase.firestore.FieldValue.serverTimestamp(),
@@ -105,7 +158,7 @@ document.addEventListener("DOMContentLoaded", () => {
           if (partyRef && partyDoc && partyDoc.exists) {
             const currentBalance = Number(partyDoc.data().currentBalance || 0);
             transaction.update(partyRef, {
-              currentBalance: currentBalance - cashAmount,
+            currentBalance: currentBalance - totalCredit,
               lastUpdatedAt: firebase.firestore.FieldValue.serverTimestamp(),
             });
           }
@@ -117,6 +170,9 @@ document.addEventListener("DOMContentLoaded", () => {
             billId,
             serialNo: billData["Serial No"] || "",
             cashAmount,
+            paymentMethod,
+            deductionAmount,
+            totalCredit,
             amountPaid: newAmountPaid,
             amountDue: newAmountDue,
             paymentStatus: newStatus,
@@ -124,9 +180,14 @@ document.addEventListener("DOMContentLoaded", () => {
           reason: paymentReason,
         });
 
-        hideLoading();
-        alert("Payment saved successfully!");
         if (paymentModal) paymentModal.style.display = "none";
+        hideLoading();
+        void showBillMessage({
+          icon: "success",
+          title: "Payment recorded",
+          text: `₹${cashAmount.toLocaleString("en-IN")} via ${paymentMethod}${deductionAmount ? ` + ₹${deductionAmount.toLocaleString("en-IN")} settlement` : ""}. Remaining due: ₹${newAmountDue.toLocaleString("en-IN")}.`,
+          toast: true,
+        });
         fetchBillAndDisplay(billId); // Page refresh / reload data
       } catch (error) {
         console.error("Error saving payment from bill view:", error);
@@ -134,9 +195,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (error.message === "APPROVAL_REQUIRED") {
           showApprovalRequired("record a payment");
         } else if (error.message === "Bill not found." || error.message.startsWith("Payment cannot exceed")) {
-          alert(error.message);
+          showBillMessage({ icon: "warning", title: "Payment was not saved", text: error.message });
         } else {
-          alert("Could not save the payment.");
+          showBillMessage({ icon: "error", title: "Payment was not saved", text: "Please check your connection and try again. No payment was recorded." });
         }
       }
     });
@@ -200,7 +261,7 @@ window.billPrintPolicy = "allow_draft";
 window.billItemLabelMode = "vakal";
 function approvalRequiredFor(bill) {
   const status = bill?.workflowStatus || (bill?.locked ? "locked" : "draft");
-  return window.billPrintPolicy === "approved_only" && !["approved", "locked"].includes(status);
+  return (bill?.revisionPending === true || window.billPrintPolicy === "approved_only") && !["approved", "locked"].includes(status);
 }
 
 function showApprovalRequired(action) {
@@ -234,8 +295,31 @@ function renderBillWorkflowControls(billId, billData) {
   statusBadge.textContent = `Workflow: ${status.charAt(0).toUpperCase()}${status.slice(1)}`;
   statusBadge.style.cssText = "align-self:center;font-weight:700;color:#005a9e;padding:8px 4px;";
   container.appendChild(statusBadge);
+  if (billData.revisionPending) statusBadge.textContent = "Revision awaiting approval — not final";
+  const action = (label, callback) => {
+    const button = document.createElement("button");
+    button.className = "button workflow-control";
+    button.textContent = label; button.addEventListener("click", callback); container.appendChild(button);
+  };
+  if ((billData.revisionNumber || 0) > 0) action("Version history", () => showBillVersions(billId, billData));
 
   const role = window.currentUserProfile && window.currentUserProfile.role;
+  if (status === "approved" && !billData.locked && !billData.deleted && ["admin", "manager"].includes(role)) {
+    action("Request correction", async () => {
+      const result = await Swal.fire({ title: "Why does this bill need correction?", input: "textarea",
+        text: "The approved version will be preserved. Payments and release stay blocked until re-approval. Paid bills allow date/remarks corrections only.",
+        inputAttributes: { maxlength: "1000" }, showCancelButton: true, confirmButtonText: "Create revision",
+        inputValidator: value => value.trim().length < 10 ? "Give a reason of at least 10 characters." : undefined });
+      if (!result.isConfirmed) return;
+      try {
+        await revisionClient().request(billId, result.value, billData);
+        location.href = `bill-create.html?editId=${encodeURIComponent(billId)}`;
+      } catch (error) { Swal.fire("Correction not started", error.message, "error"); }
+    });
+  }
+  if (billData.revisionPending && status === "draft" && ["admin", "manager", "biller"].includes(role)) {
+    action("Edit pending revision", () => { location.href = `bill-create.html?editId=${encodeURIComponent(billId)}`; });
+  }
   if (status === "draft" && ["admin", "manager"].includes(role)) {
     const approveButton = document.createElement("button");
     approveButton.className = "button workflow-control";
@@ -266,6 +350,10 @@ function renderBillWorkflowControls(billId, billData) {
 }
 
 async function changeBillWorkflow(billId, nextStatus) {
+  const reviewed = window.currentBillData;
+  if (nextStatus === "approved" && reviewed?.revisionPending) {
+    if (!await showBillVersions(billId, reviewed, true)) return;
+  }
   const actionLabel = nextStatus === "approved" ? "approve" : "lock";
   const confirmation = await Swal.fire({
     icon: "warning",
@@ -282,6 +370,11 @@ async function changeBillWorkflow(billId, nextStatus) {
 
   const billRef = billsCollection.doc(billId);
   try {
+    if (nextStatus === "approved") {
+      await revisionClient().approve(billId, reviewed);
+      await fetchBillAndDisplay(billId);
+      return;
+    }
     const beforeDoc = await billRef.get();
     if (!beforeDoc.exists) throw new Error("Bill not found.");
     const before = beforeDoc.data();
@@ -316,6 +409,36 @@ async function changeBillWorkflow(billId, nextStatus) {
   } catch (error) {
     Swal.fire({ icon: "error", title: "Workflow update failed", text: error.message || String(error) });
   }
+}
+
+function revisionClient() {
+  return MandiBillRevision.client(db, firebase.auth().currentUser.uid, () => firebase.firestore.FieldValue.serverTimestamp());
+}
+async function showBillVersions(billId, current, reviewing = false) {
+  try {
+    const records = await db.collection("billRevisions").where("billId", "==", billId).get({ source: "server" });
+    const box = document.createElement("div"); box.style.cssText = "text-align:left;max-height:55vh;overflow:auto;font-size:14px";
+    const ignored = new Set(["id", "lastUpdatedAt", "workflowStatus", "revisionPending", "revisionNumber", "revisionSnapshotId", "revisionReason", "revisionRequestedBy", "revisionRequestedAt", "approvedAt", "approvedBy"]);
+    for (const doc of records.docs.sort((a,b) => b.data().revisionNumber - a.data().revisionNumber)) {
+      const version = doc.data(), heading = document.createElement("h3"), detail = document.createElement("p");
+      heading.textContent = `Revision ${version.revisionNumber}`;
+      detail.textContent = `${version.reason} — requested by ${version.createdBy}`;
+      box.append(heading, detail);
+      const approval = await db.collection("billRevisionApprovals").doc(doc.id).get({ source: "server" });
+      const after = approval.exists ? approval.data().snapshot : current;
+      const state = document.createElement("p"); state.textContent = approval.exists ? `Approved by ${approval.data().approvedBy}` : "Awaiting approval"; box.append(state);
+      let count = 0;
+      for (const key of new Set([...Object.keys(version.snapshot), ...Object.keys(after)])) {
+        if (ignored.has(key) || JSON.stringify(version.snapshot[key]) === JSON.stringify(after[key])) continue;
+        const row = document.createElement("p"); row.textContent = `${key}: ${JSON.stringify(version.snapshot[key]) ?? "(empty)"} → ${JSON.stringify(after[key]) ?? "(empty)"}`;
+        box.append(row); count++;
+      }
+      if (!count) { const p = document.createElement("p"); p.textContent = "No bill-field changes."; box.append(p); }
+    }
+    const result = await Swal.fire({ title: reviewing ? "Review correction before approval" : "Preserved bill versions", html: box, width: 800,
+      showCancelButton: reviewing, confirmButtonText: reviewing ? "Changes reviewed — continue" : "Close" });
+    return result.isConfirmed;
+  } catch (error) { await Swal.fire("History unavailable", error.message, "error"); return false; }
 }
 
 window.addEventListener("mandibook:access-ready", () => {

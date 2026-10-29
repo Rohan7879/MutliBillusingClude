@@ -20,6 +20,7 @@ const code = section(core, 'function customRound(', '\n/**') + '\n' +
 const cents = value => Math.round(value * 100);
 let final = 0, cash = 0, deductions = 0, due = 0, netKg = 0, grossKg = 0, paymentRecords = 0, commission = 0;
 const states = { Unpaid: 0, Partial: 0, Paid: 0 };
+const calculatedBills = [];
 for (const bill of plan.bills) {
   const fields = new Map(Object.entries({ supply_type: bill.supplyType, weighbridge_weight: bill.weighbridgeKg,
     loose_price: bill.looseRatePer20kg, bharela_600: bill.kantanFilled, khali_600: 0, bharela_200: bill.plasticFilled, khali_200: 0,
@@ -37,6 +38,7 @@ for (const bill of plan.bills) {
     getActiveTemplateDeductionValues: () => [], formData: { get: key => fields.has(key) ? fields.get(key) : null } };
   vm.createContext(context); vm.runInContext(code, context);
   const calculated = vm.runInContext('calculateBillData(formData)', context);
+  calculatedBills.push(JSON.parse(JSON.stringify(calculated)));
   assert.equal(calculated['Final Total'], bill.expected.final, `${bill.ref} final`);
   assert.equal(calculated['Net Weight'], bill.expected.netKg, `${bill.ref} net kg`);
   assert.equal(calculated.BrokerCommission, bill.expected.brokerCommission, `${bill.ref} commission`);
@@ -73,3 +75,9 @@ assert.equal(netKg, totals.netKg); assert.equal(grossKg, totals.grossKg); assert
 assert.deepEqual(states, { Unpaid: totals.unpaid, Partial: totals.partial, Paid: totals.paid });
 assert.equal(commission, plan.broker.expectedCommission); assert.equal(commission - plan.broker.payout, plan.broker.expectedBalance);
 console.log('PASS all 10 calculator cases, installments, party balances, statuses and aggregate targets. No database writes.');
+module.exports = { plan, calculatedBills };
+if (require.main === module) {
+  require('../../ui-tests/order-integration.cjs').run({ plan, calculatedBills }).catch(error => {
+    console.error(error); process.exitCode = 1;
+  });
+}
