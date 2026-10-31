@@ -11,11 +11,13 @@ let displayedTransactions = [];
 let ledgerAsTableData = [];
 let hideReversedPayments = true;
 let selectedFinancialYear = window.MandiFinancialYear.financialYearId(new Date());
+const requestedLedgerYear = new URLSearchParams(window.location?.search || "").get("fy");
+if (requestedLedgerYear) { window.MandiFinancialYear.boundaries(requestedLedgerYear); selectedFinancialYear = requestedLedgerYear; }
 let appliedPeriodLabel = "";
 
 function ledgerBalanceLabel(cents) {
   const amount = (Math.abs(cents) / 100).toLocaleString("en-IN", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return `₹${amount} — ${cents > 0 ? "Payable by customer" : cents < 0 ? "Customer advance (credit)" : "Settled"}`;
+  return `₹${amount} — ${cents > 0 ? "Supplier ko dena baaki" : cents < 0 ? "Supplier ko diya advance" : "Settled"}`;
 }
 
 function assertLedgerBillPayable(bill) {
@@ -161,11 +163,11 @@ async function fetchUniqueCustomers() {
     // 🚀 Safe mapping with deleted !== true filter
     partiesSnapshot.docs.forEach((doc) => {
       const pData = doc.data();
-      if (pData.deleted !== true && (pData.type === "Farmer" || pData.type === "Vepari")) {
+      if (pData.deleted !== true && String(pData.type || "").toLowerCase() !== "broker") {
         const name = (pData.name || "").trim();
         if (name) {
           const village = (pData.address || "N/A").trim();
-          const key = `${name.toLowerCase()}|${village.toLowerCase()}`;
+          const key = `${name.toLowerCase()}|${village.toLowerCase()}|${doc.id}`;
           customerMap.set(key, {
             name: name,
             village: village,
@@ -229,6 +231,13 @@ async function fetchUniqueCustomers() {
     const token = urlParams.get("token");
     let targetName = "";
     let targetVillage = "";
+    const requestedPartyId = urlParams.get("partyId");
+    if (requestedPartyId) {
+      const party = allUniqueCustomers.find(c => c.customerId === requestedPartyId);
+      if (!party) throw new Error("This Party Master account was not found. Return to Financial Years and refresh.");
+      await showCustomerLedger(party);
+      return;
+    }
 
     if (token) {
       try {
@@ -319,15 +328,22 @@ async function showCustomerLedger(customer) {
     ];
     if (customer.customerId) {
       queries.push(billsCollection.where("customerId", "==", customer.customerId).get());
+      queries.push(paymentsCollection.where("customerId", "==", customer.customerId).get());
     }
     const results = await Promise.all(queries);
     const billsSnapshot = results[0];
-    const paymentsSnapshot = results[1];
+    const belongs = data => data.customerId ? data.customerId === customer.customerId
+      : allUniqueCustomers.filter(c => c.name.trim().toLowerCase() === customer.name.trim().toLowerCase()).length === 1;
+    const paymentDocs = new Map();
+    [results[1], results[3]].filter(Boolean).forEach(snapshot => snapshot.docs.forEach(doc => {
+      if (doc.data().deleted !== true && belongs(doc.data())) paymentDocs.set(doc.id, doc);
+    }));
+    const paymentsSnapshot = { docs: [...paymentDocs.values()] };
     const extraBillsSnapshot = results[2];
 
     const billDocsById = new Map();
     billsSnapshot.docs.forEach((doc) => {
-      if (doc.data().deleted !== true) billDocsById.set(doc.id, doc);
+      if (doc.data().deleted !== true && belongs(doc.data())) billDocsById.set(doc.id, doc);
     });
     if (extraBillsSnapshot) {
       extraBillsSnapshot.docs.forEach((doc) => {
@@ -556,8 +572,14 @@ function updateSelectionSummary() {
   }
 }
 
-function openPaymentModal() {
+async function openPaymentModal() {
   if (window.MandiFormSafety?.isBusy("payment")) return;
+  const selectedIds = Array.from(document.querySelectorAll('.bill-checkbox-ledger:checked')).map(cb => cb.value);
+  if (selectedIds.length) {
+    if (!currentCustomer?.customerId) { await Swal.fire('Payment blocked','Link this account to Party Master first.','warning'); return; }
+    if (await MandiPaymentUI.paySelected(selectedIds, currentCustomer.customerId)) await showCustomerLedger(currentCustomer);
+    return;
+  }
   // 🛡️ Safety Fix: Agar currentCustomer missing ho toh URL se naam nikal kar set kar lo
   if (!currentCustomer) {
     const urlParams = new URLSearchParams(window.location.search);
@@ -638,6 +660,11 @@ function closePaymentModal(saved = false) {
 async function savePayment() {
   if (window.MandiFormSafety.isBusy("payment")) return;
   const selectedCheckboxes = document.querySelectorAll(".bill-checkbox-ledger:checked");
+  if (selectedCheckboxes.length) {
+    closePaymentModal();
+    await openPaymentModal();
+    return;
+  }
   try {
     Array.from(selectedCheckboxes).forEach(cb => {
       const bill = allTransactions.find(tx => tx.type === "bill" && tx.id === cb.value);

@@ -42,6 +42,7 @@
     const report = (collection, row, message) => issues.push({ collection, id: row.id || "(missing ID)", message });
     const parties = (data.parties || []).filter(active);
     const resolve = (id, name, broker = false) => {
+      if (broker) return FY.resolveBroker(parties, id, name);
       const candidates = parties.filter(p => (norm(p.type) === "broker") === broker && (id ? p.id === id : norm(p.name) === norm(name)));
       return candidates.length === 1 && (id || norm(name)) ? candidates[0] : null;
     };

@@ -414,6 +414,30 @@ async function changeBillWorkflow(billId, nextStatus) {
 function revisionClient() {
   return MandiBillRevision.client(db, firebase.auth().currentUser.uid, () => firebase.firestore.FieldValue.serverTimestamp());
 }
+// Object field order is not a bill change; array order and value types are.
+function billRevisionChanges(before, after, path = []) {
+  if (Object.is(before, after)) return [];
+  const kind = value => Array.isArray(value) ? "array" : value !== null && typeof value === "object" ? "object" : typeof value;
+  const type = kind(before);
+  if (before != null && after != null && type === kind(after) && (type === "array" || type === "object")) {
+    return [...new Set([...Object.keys(before), ...Object.keys(after)])].flatMap(key =>
+      billRevisionChanges(before[key], after[key], [...path, type === "array" ? Number(key) : key]));
+  }
+  return [{ path, before, after }];
+}
+function billRevisionFieldLabel(path) {
+  const labels = { Date: "Bill date", items: "Item", OrderSupplierLinks: "Order link", product: "Product", variety: "Variety", quantity: "Quantity", unit: "Unit", rate: "Rate", amount: "Amount", vakalIndex: "Item number", supplierIdx: "Supplier index", brokerId: "Broker identity", BrokerCommission: "Broker commission" };
+  return path.map(key => typeof key === "number" ? String(key + 1) : labels[key] || key.replace(/([a-z])([A-Z])/g, "$1 $2").replace(/_/g, " ")).join(" · ");
+}
+function billRevisionValue(value) {
+  if (value === undefined) return "Not set";
+  if (value === null) return "Empty (null)";
+  if (value === "") return "Blank";
+  if (typeof value === "boolean") return value ? "Yes" : "No";
+  if (Array.isArray(value)) return value.length ? value.map((item, i) => `${i + 1}. ${billRevisionValue(item)}`).join("\n") : "Empty list";
+  if (typeof value === "object") return Object.entries(value).map(([key, item]) => `${billRevisionFieldLabel([key])}: ${billRevisionValue(item)}`).join("\n") || "Empty record";
+  return String(value);
+}
 async function showBillVersions(billId, current, reviewing = false) {
   try {
     const records = await db.collection("billRevisions").where("billId", "==", billId).get({ source: "server" });
@@ -429,11 +453,21 @@ async function showBillVersions(billId, current, reviewing = false) {
       const state = document.createElement("p"); state.textContent = approval.exists ? `Approved by ${approval.data().approvedBy}` : "Awaiting approval"; box.append(state);
       let count = 0;
       for (const key of new Set([...Object.keys(version.snapshot), ...Object.keys(after)])) {
-        if (ignored.has(key) || JSON.stringify(version.snapshot[key]) === JSON.stringify(after[key])) continue;
-        const row = document.createElement("p"); row.textContent = `${key}: ${JSON.stringify(version.snapshot[key]) ?? "(empty)"} → ${JSON.stringify(after[key]) ?? "(empty)"}`;
-        box.append(row); count++;
+        if (ignored.has(key)) continue;
+        for (const change of billRevisionChanges(version.snapshot[key], after[key], [key])) {
+          const card = document.createElement("div"), label = document.createElement("strong");
+          card.style.cssText = "padding:12px;margin:10px 0;border:1px solid #d8e3ef;border-radius:10px;background:#f8fbff;overflow-wrap:anywhere";
+          label.textContent = billRevisionFieldLabel(change.path); card.append(label);
+          for (const [title, value] of [["Pehle (Before)", change.before], ["Ab (After)", change.after]]) {
+            const row = document.createElement("p"); row.style.cssText = "margin:6px 0;white-space:pre-wrap";
+            row.textContent = `${title}: ${billRevisionValue(value)}`;
+            if (typeof change.before !== typeof change.after && value != null) row.textContent += ` (${typeof value})`;
+            card.append(row);
+          }
+          box.append(card); count++;
+        }
       }
-      if (!count) { const p = document.createElement("p"); p.textContent = "No bill-field changes."; box.append(p); }
+      if (!count) { const p = document.createElement("p"); p.textContent = "No bill-field changes. Sirf fields ka order badalne ko change nahi maana gaya hai."; box.append(p); }
     }
     const result = await Swal.fire({ title: reviewing ? "Review correction before approval" : "Preserved bill versions", html: box, width: 800,
       showCancelButton: reviewing, confirmButtonText: reviewing ? "Changes reviewed — continue" : "Close" });

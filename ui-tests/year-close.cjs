@@ -20,3 +20,13 @@ for (const patch of [{workflowStatus:'draft'},{revisionPending:true},{Date:'31/0
 const unallocated = structuredClone(data); unallocated.payments[0].appliedToBills = [];
 assert.equal(Y.preview(unallocated,'2025-2026',today).canClose,false);
 console.log('PASS year preview: carry-forward, cents, broker balances, date boundaries, close/reopen cutoff, invalid/draft/revision/allocation blockers');
+const FY = require('../js/core/financial-year');
+const legacy = structuredClone(data); legacy.bills[0].brokerId = 'BROKER';
+assert.equal(Y.preview(legacy,'2025-2026',today).brokers[0].openingCents,5000);
+assert.deepEqual(Y.preview(legacy,'2025-2026',today).issues,[]);
+legacy.parties.push({id:'duplicate',name:'Broker',type:'Broker'});
+assert(Y.preview(legacy,'2025-2026',today).issues.some(issue=>issue.message.includes('broker party identity')));
+assert.equal(FY.resolveBroker(data.parties,'unknown-id','Broker'),null);
+assert.equal(FY.resolveBroker(data.parties,'b','Broker').id,'b');
+assert.equal(Object.is(FY.partyOpeningCents({opBal:0,opBalType:'Cr'}),-0),false);
+console.log('PASS legacy broker ID resolves only unique known name; ambiguous/unknown links stay blocked; no negative-zero opening');

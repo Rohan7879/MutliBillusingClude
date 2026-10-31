@@ -3,7 +3,7 @@
   const FY = window.MandiFinancialYear, Close = window.MandiYearClose;
   const $ = id => document.getElementById(id);
   let data = null, control = {}, prepared = null, busy = false, started = false;
-  const money = cents => (cents / 100).toLocaleString("en-IN", { style: "currency", currency: "INR" });
+  const money = cents => ((cents || 0) / 100).toLocaleString("en-IN", { style: "currency", currency: "INR" });
   const cutoffLabel = value => value ? `31 March ${String(value).slice(0, 4)}` : "No cutoff";
   const admin = () => window.currentUserProfile?.status === "active" && window.currentUserProfile?.role === "admin";
   function message(text, error = false) { $("fy-message").textContent = text; $("fy-message").dataset.error = String(error); }
@@ -31,7 +31,12 @@
     }
     values.sort((a, b) => a.name.localeCompare(b.name)).forEach(row => {
       const tr = document.createElement("tr");
-      [row.name, ...["openingCents", "debitCents", "creditCents", "closingCents"].map(field => money(row[field]))].forEach(value => {
+      const nameCell = document.createElement("td"), link = document.createElement("a");
+      link.textContent = row.name;
+      link.href = `${id === "fy-brokers" ? "broker-detail.html" : "ledger.html"}?partyId=${encodeURIComponent(row.id)}&fy=${encodeURIComponent(prepared.fyId)}`;
+      link.title = `Open ${row.name} ledger · FY ${prepared.fyId}`;
+      nameCell.append(link); tr.append(nameCell);
+      ["openingCents", "debitCents", "creditCents", "closingCents"].map(field => money(row[field])).forEach(value => {
         const td = document.createElement("td"); td.textContent = value; tr.append(td);
       }); body.append(tr);
     });
@@ -51,7 +56,15 @@
     $("fy-validation-title").textContent = prepared.issues.length ? `${prepared.issues.length} issue(s) block close · preview may be incomplete` : "Validation: no record issues found";
     $("fy-issues").replaceChildren();
     const issues = prepared.issues.length ? prepared.issues.map(issue => `${issue.collection}/${issue.id}: ${issue.message}`) : [prepared.canClose ? "Ready for gated server validation. This preview itself does not lock any records." : "The selected financial year has not ended. Closing is unavailable."];
-    issues.forEach(text => { const li = document.createElement("li"); li.textContent = text; $("fy-issues").append(li); });
+    issues.forEach((text, index) => {
+      const li = document.createElement("li"), issue = prepared.issues[index];
+      if (issue?.collection === "bills") {
+        const bill = data.bills.find(b => b.id === issue.id), link = document.createElement("a");
+        link.href = `final.html?id=${encodeURIComponent(issue.id)}`; link.textContent = bill?.["Serial No"] || issue.id;
+        li.append(link, document.createTextNode(`: ${issue.message}`));
+      } else li.textContent = text;
+      $("fy-issues").append(li);
+    });
     buttons();
   }
   async function refresh() {

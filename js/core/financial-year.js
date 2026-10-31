@@ -65,7 +65,7 @@
     // Party Master defaults missing opBalType to Cr (Jama), not Dr.
     const type = String(party.opBalType || "Cr").trim().toUpperCase();
     if (type !== "DR" && type !== "CR") throw new TypeError("Invalid opening balance type");
-    return toCents(party.opBal) * (type === "DR" ? 1 : -1);
+    return (toCents(party.opBal) * (type === "DR" ? 1 : -1)) || 0;
   }
 
   function availableYears(transactions, currentDate) {
@@ -118,5 +118,18 @@
       if (key <= cutoff) throw new Error(`This date is in a closed financial year (locked through 31 March ${String(cutoff).slice(0,4)}). Ask an administrator to review/reopen the year; no entry was saved.`);
     }
   }
-  return Object.freeze({ parseDate, dateKey, financialYearId, boundaries, toCents, partyOpeningCents, availableYears, summarize, assertPostingOpen });
+  function resolveBroker(parties, id, name) {
+    const norm = value => String(value || "").trim().toUpperCase();
+    const brokers = parties.filter(p => p.deleted !== true && norm(p.type) === "BROKER");
+    if (id) {
+      const exact = brokers.find(p => p.id === id);
+      if (exact) return exact;
+      // Older bills used a name-derived ID, not the Party Master document ID.
+      // Only that known legacy shape may fall back to an unambiguous name.
+      if (id !== norm(name).replace(/\s+/g, "_")) return null;
+    }
+    const matches = brokers.filter(p => norm(name) && norm(p.name) === norm(name));
+    return matches.length === 1 ? matches[0] : null;
+  }
+  return Object.freeze({ parseDate, dateKey, financialYearId, boundaries, toCents, partyOpeningCents, availableYears, summarize, assertPostingOpen, resolveBroker });
 });

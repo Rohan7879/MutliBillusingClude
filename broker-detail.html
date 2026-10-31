@@ -31,7 +31,9 @@
         <div><span id="broker-detail-sync" class="workspace-sync" aria-live="polite">Loading account…</span><button id="broker-detail-pay" class="workspace-action" hidden>Record payout</button></div>
       </header>
       <div class="broker-overview" id="broker-detail-summary"></div>
+      <label for="broker-fy">Financial year</label><select id="broker-fy"><option value="all">All dates</option></select>
       <nav class="settings-nav" aria-label="Broker account views">
+        <button type="button" data-broker-view="ledger" aria-pressed="false">Full ledger</button>
         <button type="button" data-broker-view="bills" aria-pressed="true">Commission bills</button>
         <button type="button" data-broker-view="payments" aria-pressed="false">Payout history</button>
       </nav>

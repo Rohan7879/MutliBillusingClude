@@ -999,7 +999,9 @@ Vakal total bags (${totalVakalEntered}) cannot be more than Bharela bags (${tota
   data["Village"] = formData.get("village");
   data["Broker"] = formData.get("broker_name");
   const brokerName = formData.get("broker_name") ? formData.get("broker_name").trim() : "";
-  data["brokerId"] = brokerName ? brokerName.toUpperCase().replace(/\s+/g, "_") : "";
+  const brokerParty = brokerName ? MandiFinancialYear.resolveBroker(window.partiesMasterList || [], "", brokerName) : null;
+  if (brokerName && !brokerParty) throw new Error("VALIDATION_ERROR: Select a unique active broker from Party Master.");
+  data["brokerId"] = brokerParty?.id || "";
   data["Net Weight"] = net_vajan;
   data["Total Amount"] = total;
   data["Utrāī"] = finalutrai;

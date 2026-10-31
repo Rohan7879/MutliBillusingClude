@@ -83,7 +83,7 @@ async function test(name, action) { await action(); passed++; console.log("PASS"
     const elements = new Map();
     const element = () => ({ style: {}, children: [], appendChild(child) { this.children.push(child); } });
     const get = id => { if (!elements.has(id)) elements.set(id, element()); return elements.get(id); };
-    const ctx = { Date, db: { collection: () => ({}) }, console, hasRole: () => true,
+    const ctx = { Date, URLSearchParams, db: { collection: () => ({}) }, console, hasRole: () => true,
       escapeHtml: value => String(value), formatNumber: value => Number(value).toLocaleString("en-IN"),
       document: { addEventListener() {}, getElementById: get, createElement: element, querySelector: get, querySelectorAll: () => [] } };
     ctx.window = ctx;
@@ -96,7 +96,7 @@ async function test(name, action) { await action(); passed++; console.log("PASS"
       { id: "reversal_payment", type: "reversal", date: new Date(), particulars: "Payment reversed", debit: 0, credit: -1255 },
     ]);
     assert.equal(get("kpi-total-credit").textContent, "₹0");
-    assert.equal(get("kpi-balance-due").textContent, "₹5,255.00 — Payable by customer");
+    assert.equal(get("kpi-balance-due").textContent, "₹5,255.00 — Supplier ko dena baaki");
     const html = get("ledger-table-body").children.map(row => row.innerHTML).join("");
     assert.match(html, /-1,255/);
     assert.doesNotMatch(html, /onclick=/);
@@ -110,7 +110,7 @@ async function test(name, action) { await action(); passed++; console.log("PASS"
     ctx.updateReversalVisibility();
     assert.equal(get("ledger-table-body").className, "");
     assert.match(get("reversal-visibility-note").textContent, /2 reversed entries shown/);
-    assert.equal(get("kpi-balance-due").textContent, "₹5,255.00 — Payable by customer");
+    assert.equal(get("kpi-balance-due").textContent, "₹5,255.00 — Supplier ko dena baaki");
     assert.equal(vm.runInContext("ledgerAsTableData.length", ctx), 4);
     get("hide-reversed-payments").checked = true;
     ctx.updateReversalVisibility();
